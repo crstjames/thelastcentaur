@@ -1,12 +1,106 @@
-take user input
+# THE LAST CENTAUR - Agent Design Specification
+Version: 1.0.0
 
-generate 3 saerch queries based on user input using gpt-4o-mini
+## AGENT WORKFLOW
+Each cycle follows this sequence:
 
-perplexity search for query 1 + query 2 + query 3
+1. INPUT HANDLING
+   - Take user input
+   - Validate and sanitize input
+   - Store raw input for context
 
-write to single json file
+2. QUERY GENERATION [MODEL: gpt-4o-mini]
+   - Generate 3 search queries from user input
+   - Optimize queries for semantic search
+   - Format: list[str]
 
-summarize response(flash model) + bullet points of response(CLAUDE) + single sentence take away(flash model) + structured entity extraction(openai model)
-write all these to file
+3. PARALLEL SEARCH [MODEL: llama-3.1-sonar-large-128k-online]
+   Execute concurrently (+):
+   - Perplexity search for query 1
+   - Perplexity search for query 2
+   - Perplexity search for query 3
 
-take user input again in a loop
+4. DATA AGGREGATION
+   - Combine search results
+   - Write to JSON file
+   Format:
+   {
+     "queries": list[str],
+     "results": list[dict],
+     "timestamp": str
+   }
+
+5. PARALLEL ANALYSIS
+   Execute concurrently (+):
+   - Summary [MODEL: google/gemini-flash-1.5-8b]
+   - Bullet points [MODEL: claude-3-5-sonnet-latest]
+   - Key takeaway [MODEL: google/gemini-flash-1.5-8b]
+   - Entity extraction [MODEL: gpt-4o]
+
+6. OUTPUT GENERATION
+   - Write all analyses to structured file
+   Format:
+   {
+     "summary": str,
+     "bullet_points": list[str],
+     "key_takeaway": str,
+     "entities": dict
+   }
+
+7. CYCLE CONTROL
+   - Check for exit conditions
+   - Maintain conversation context
+   - Loop back to step 1
+
+## DATA FLOW
+Input → Queries → Search Results → Analysis → Output
+                   ↑__________________________|
+                   (Context for next cycle)
+
+## ERROR HANDLING
+- Input validation failures
+- API rate limits/failures
+- Model errors
+- File I/O errors
+
+## CONTEXT MANAGEMENT
+- Maintain conversation history
+- Track search context
+- Store analysis history
+
+## PERFORMANCE CONSIDERATIONS
+- Concurrent API calls
+- Response caching
+- Rate limiting
+- Memory management
+
+## MODELS AND ENDPOINTS
+1. Query Generation:
+   - Model: gpt-4o-mini
+   - Purpose: Generate focused search queries
+
+2. Search:
+   - Model: llama-3.1-sonar-large-128k-online
+   - Purpose: Web search via Perplexity
+
+3. Analysis:
+   - Summary: google/gemini-flash-1.5-8b
+   - Bullet Points: claude-3-5-sonnet-latest
+   - Takeaway: google/gemini-flash-1.5-8b
+   - Entity Extraction: gpt-4o
+
+## FILE STRUCTURE
+1. results/
+   - search_results.json
+   - analysis_output.json
+   - conversation_history.json
+
+2. cache/
+   - query_cache.json
+   - model_cache.json
+
+## MONITORING
+- Track API usage
+- Log performance metrics
+- Monitor error rates
+- Record user interactions
