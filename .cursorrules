@@ -1,0 +1,243 @@
+# THE LAST CENTAUR - Development Rules and Guidelines
+
+## MODEL CONFIGURATION
+PRIMARY_MODEL: claude-3-5-sonnet-latest
+SEARCH_MODEL: llama-3.1-sonar-large-128k-online (Perplexity)
+
+## DEVELOPMENT WORKFLOW
+1. SPECIFICATION REVIEW
+   - Check specs.txt for existing requirements
+   - Add new requirements before implementation
+   - Update requirement status during development
+
+2. IMPLEMENTATION PROCESS
+   - Sequential tasks: Written on separate lines
+   - Parallel tasks: Connected with + signs
+   - Always use async/await for API calls
+   - Document all major functions
+
+3. CODE ORGANIZATION
+   - Use clear directory structure
+   - Implement separation of concerns
+   - Follow Python best practices
+   - Use type hints and docstrings
+
+4. ERROR HANDLING
+   - Use try/except with descriptive messages
+   - Log errors with context
+   - Include error recovery steps
+   - Use termcolor for status messages
+
+5. FILE OPERATIONS
+   - Use UTF-8 encoding
+   - Handle file operations safely
+   - Validate file contents
+   - Backup critical files
+
+6. API INTEGRATION
+   - Use environment variables for keys
+   - Implement rate limiting
+   - Handle API errors gracefully
+   - Cache responses when appropriate
+
+## DOCUMENTATION STANDARDS
+1. SPECS.TXT
+   - Use consistent ID format: [TYPE-NUM]
+   - Include status indicators
+   - Track dependencies
+   - Update change log
+
+2. CODE COMMENTS
+   - Document complex logic
+   - Explain architectural decisions
+   - Include usage examples
+   - Mark TODOs with priority
+
+3. README
+   - Keep installation steps updated
+   - Document dependencies
+   - Include troubleshooting guide
+   - Add development setup guide
+
+## REVIEW PROCESS
+1. Code Review Checklist:
+   - Specification compliance
+   - Error handling
+   - Performance considerations
+   - Security checks
+   - Documentation updates
+
+2. Testing Requirements:
+   - Unit tests for core functions
+   - Integration tests for APIs
+   - Performance benchmarks
+   - Security validation
+
+## VERSION CONTROL
+1. Commit Guidelines:
+   - Clear commit messages
+   - Reference requirement IDs
+   - Include test coverage
+   - Document breaking changes
+
+2. Branch Strategy:
+   - feature/* for new features
+   - fix/* for bug fixes
+   - doc/* for documentation
+   - main for stable code
+
+You are a LLM based agent systems designer. 
+You will use only these types of API calls:
+
+Use the model names exactly as shown:
+DEFAULT OPENAI MODEL: gpt-4o
+DEFAULT ANTROPIC MODEL: claude-3-5-sonnet-latest
+DEFAULT PERPLEXITY MODEL: llama-3.1-sonar-large-128k-online
+DFAULT OPENROUTER MODEL: google/gemini-flash-1.5-8b
+
+IMPORTANT: ALWAYS USE GPT-4o model for each part that requires API calls unless otherwise specified by the user
+
+API KEYS: When setting api keys, set them from OS environment variables. using os.getenv("KEY_NAME")
+
+YOUR ACTION CYCLE STEPS:
+1- read the agent_design.txt file and understand the tasks
+2- make a detailed plan for the tasks including details such as model names
+3- WRITE the flowchart file before you start writing the code
+4- write the code in agent.py file
+5- Perform review/disgnosis step at the end and write out checking if everything looks good with checkmark emojis
+
+
+REGULAR CALL: ( we will use by default this unless otherwise specified)
+from openai import AsyncOpenAI
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+completion = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "user",
+            "content": "Write a haiku about recursion in programming."
+        }
+    ]
+)
+
+print(completion.choices[0].message)
+
+JSON MODE: (Must use word JSON in messages) (MUST INCLUDE JSON SCHEMA IN SYSTEM MESSAGE) can only be used with gpt-4o and gpt-4o-mini
+from openai import AsyncOpenAIOpenAI
+
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+
+completion = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": """Extract the event information in JSON format.
+        JSON SCHEMA:
+        {
+            "name": str,
+            "date": str,
+            "participants": list[str]
+        }
+        """},
+        {"role": "user", "content": "Alice and Bob are going to a science fair on Friday."},
+        response_format= { "type": "json_object" }
+    ],
+)
+
+event = completion.choices[0].message 
+
+
+
+CLAUDE CALL:
+from anthropic import AsyncAnthropic
+
+client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+message = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1000,
+    temperature=0,
+    system="You are a world-class poet. Respond only with short poems.", (antrophic takes the system message as a parameter)
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Why is the ocean salty?"
+                }
+            ]
+        }
+    ]
+)
+print(message.content[0].text)
+
+PERPLEXITY WEB SEARCH API CALL:
+Same as openai api call using AsyncOpenAI but with base url: AsyncOpenAI(base_url="https://api.perplexity.ai", api_key=os.getenv("PERPLEXITY_API_KEY"))
+
+OPENROUTER CALL:
+
+same as regular call but with base url: AsyncOpenAI(base_url="https://openrouter.ai/api/v1")
+you also must set the api key as an environment variable: OPENROUTER_API_KEY
+
+
+check agent_design.txt for specification and built it. 
+
+always create a generic and modular LLM call function(one for openai and one for anthropic) which you can reuse for different tasks. 
+
+if tasks are explained in new lines that means sequential processing. one after another.
+
+such as:
+take user input
+generate response
+write to file
+...
+etc
+
+if user uses + sign in the same line between tasks that means parallel processing using aysncio for those tasks. plus(+) sign always separates multiple parallel tasks. This is very important to understand and remember. 
+
+such as:
+summary of doc 1 + summary of doc 2 + summary of doc 3 + analysis etc...
+
+before beginning to write the projects think out loud the sequential and parallel steps as described in agent_design.txt paying attention to plus(+) sign separating parallel tasks. 
+
+write the agent code in agent.py file. 
+
+IGNORE: write a flow-chart of the agent logic in flow.html file.  dark mode, daisy yu beautifully artistic
+write a flow-chart of the agent logic as a mermaid chart in flow.md file.
+
+IMPORTANT:
+PAY CLOSE ATTENTION: you must always treat each line as a sequential code and any line that contains plus sign(+) as concurrent code to be executed with asyncio.gather. 
+
+ALWAYS FOLLOW THIS PROCESS WHEN PLANNING:
+- check each new line and for + signs for sequencial and parallel tasks. 
+- create the flowchart 
+- user can ignore any one of your instrufctions by wrtiting "IGNORE" in the beginning of the line. 
+- write the code and await all async calls in the respective functions.
+- always use json mode ONLY when structured response formats are needed. always define a clear schema in the system message. and always mention JSON in messages.
+
+
+GENERAL RULES:
+have termcolor printing every step of the way to inform the user
+every time we use with open use encoding="utf-8"
+always use try except blocks with descriptive prints where necessary. have informative error printing(incuding the error itself)
+lets implement every project with seperations of concerns in mind
+create and update requirements.txt without version numbers
+ALWAYS MAKE SURE TO AWAIT ALL ASYNC TASKS
+always create a generic and modular ASYNC LLM call function(one for openai and one for anthropic when neeeded) which you can reuse for different tasks and models 
+make sure all async calls are awaited in theie respective functions
+
+
+YOUR ACTION CYCLE REITERATED:
+1- read the agent_design.txt file and understand the tasks
+2- make a detailed plan for the tasks including details such as model names
+3- WRITE the flowchart file before you start writing the code
+4- write the code in agent.py file
+5- Perform review/disgnosis step at the end and write out checking if everything looks good with checkmark emojis
+
+final checks you should perform after all:
+- check if you created all necessary functions and compoments
+- check if you have created the flowchart correctly

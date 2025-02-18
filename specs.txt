@@ -1,0 +1,69 @@
+# THE LAST CENTAUR - Game Specifications
+Version: 0.1.0
+Last Updated: [Current Date]
+
+## ORGANIZATION
+This file is organized into the following sections:
+1. Core Game Mechanics
+2. User Interface
+3. Game World
+4. Characters
+5. Technical Requirements
+6. Implementation Status
+
+Each requirement follows this format:
+[ID] [Status] [Priority] Requirement Description
+- Implementation Notes
+- Dependencies
+- Completion Criteria
+
+Status Codes:
+🔲 Not Started
+🔄 In Progress
+✅ Completed
+⚠️ Blocked
+❌ Rejected
+
+Priority Levels:
+P0: Critical
+P1: High
+P2: Medium
+P3: Low
+
+## 1. CORE GAME MECHANICS
+[GM-001] 🔲 P0 Initial game setup and engine selection
+- Implementation Notes: TBD
+- Dependencies: None
+- Completion Criteria: TBD
+
+## 2. USER INTERFACE
+[UI-001] 🔲 P0 Basic game window and rendering setup
+- Implementation Notes: TBD
+- Dependencies: [GM-001]
+- Completion Criteria: TBD
+
+## 3. GAME WORLD
+[GW-001] 🔲 P1 Initial world layout and boundaries
+- Implementation Notes: TBD
+- Dependencies: [GM-001]
+- Completion Criteria: TBD
+
+## 4. CHARACTERS
+[CH-001] 🔲 P1 Player character basic implementation
+- Implementation Notes: TBD
+- Dependencies: [GM-001]
+- Completion Criteria: TBD
+
+## 5. TECHNICAL REQUIREMENTS
+[TR-001] 🔲 P0 Project structure and development environment
+- Implementation Notes: TBD
+- Dependencies: None
+- Completion Criteria: TBD
+
+## 6. IMPLEMENTATION STATUS
+Current Focus: Initial Setup
+Next Steps: TBD
+Blocked Items: None
+
+## CHANGE LOG
+[Current Date] - Initial specification file created 

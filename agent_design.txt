@@ -1,0 +1,12 @@
+take user input
+
+generate 3 saerch queries based on user input using gpt-4o-mini
+
+perplexity search for query 1 + query 2 + query 3
+
+write to single json file
+
+summarize response(flash model) + bullet points of response(CLAUDE) + single sentence take away(flash model) + structured entity extraction(openai model)
+write all these to file
+
+take user input again in a loop
