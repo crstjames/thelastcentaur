@@ -7,7 +7,7 @@ Commands are simple text inputs that control Centaur Prime's actions.
 
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .models import Direction
 from .player import Player
@@ -18,6 +18,7 @@ class CommandType(str, Enum):
     # Movement Commands
     MOVE = "move"
     MEDITATE = "meditate"
+    REST = "rest"
     
     # Information Commands
     LOOK = "look"
@@ -25,6 +26,9 @@ class CommandType(str, Enum):
     HELP = "help"
     INVENTORY = "inventory"
     MAP = "map"
+    ACHIEVEMENTS = "achievements"
+    TITLES = "titles"
+    LEADERBOARD = "leaderboard"
     
     # Item Commands
     TAKE = "take"      # Take item from ground
@@ -54,330 +58,230 @@ class CommandType(str, Enum):
 
 @dataclass
 class Command:
-    """Represents a parsed command."""
+    """Represents a parsed command with its type and arguments."""
     type: CommandType
-    args: List[str]
-    raw_input: str
+    args: List[str] = field(default_factory=list)
 
 class CommandParser:
     """Handles parsing and executing player commands."""
     
-    # Command aliases for easier input
-    MOVE_ALIASES = {
-        "n": "north",
-        "s": "south",
-        "e": "east",
-        "w": "west",
-        "north": "north",
-        "south": "south",
-        "east": "east",
-        "west": "west",
-        "go north": "north",
-        "go south": "south",
-        "go east": "east",
-        "go west": "west"
-    }
-    
+    # Command type to function mapping
     DIRECTION_MAP = {
+        "n": Direction.NORTH,
         "north": Direction.NORTH,
+        "s": Direction.SOUTH,
         "south": Direction.SOUTH,
+        "e": Direction.EAST,
         "east": Direction.EAST,
+        "w": Direction.WEST,
         "west": Direction.WEST
     }
     
-    # New command aliases
-    ITEM_ALIASES = {
-        "take": ["get", "pick", "grab", "pickup"],
-        "drop": ["put", "place", "discard"],
-        "gather": ["collect", "harvest", "forage"]
-    }
-    
-    ENVIRONMENT_ALIASES = {
-        "mark": ["sign", "symbol"],
-        "draw": ["sketch", "trace"],
-        "write": ["inscribe", "carve"],
-        "alter": ["change", "modify", "arrange"]
-    }
-    
-    COMBAT_ALIASES = {
-        "attack": ["strike", "hit", "slash"],
-        "defend": ["block", "guard", "shield"],
-        "dodge": ["evade", "avoid", "roll"],
-        "special": ["skill", "ability", "power"]
-    }
-    
-    ROLEPLAY_ALIASES = {
-        "emote": ["me", "action", "act"],
-        "say": ["speak", "tell", "talk"],
-        "think": ["ponder", "contemplate"]
-    }
-    
-    # Add test command aliases
-    TEST_ALIASES = {
-        "defeat": ["vanquish", "remove", "test_kill"]
-    }
-    
-    # Add NPC interaction aliases
-    NPC_ALIASES = {
-        "talk": ["speak", "chat", "converse", "interact"]
-    }
+    # NPC interaction aliases
+    NPC_ALIASES = ["talk", "speak", "converse"]
     
     def __init__(self, player: Player):
         self.player = player
     
-    def parse_command(self, user_input: str) -> Optional[Command]:
-        """Parse user input into a command."""
-        if not user_input:
+    def parse_command(self, command: str) -> Optional[Command]:
+        """Parse a command string into a Command object."""
+        if not command:
             return None
             
-        # Convert to lowercase and split into words
-        words = user_input.lower().strip().split()
-        if not words:
+        # Split command into parts
+        parts = command.lower().split()
+        if not parts:
             return None
             
-        # Handle NPC interaction first
-        if words[0] in self.NPC_ALIASES["talk"] or words[0] == "talk":
-            return Command(CommandType.TALK, words[1:], user_input)
+        # Check for movement commands
+        if parts[0] in self.DIRECTION_MAP:
+            return Command(type=CommandType.MOVE, args=[parts[0]])
             
-        # Handle movement commands
-        if words[0] in ["move", "go", "n", "s", "e", "w"] or words[0] in self.MOVE_ALIASES:
-            if words[0] in ["n", "s", "e", "w"]:
-                direction = self.MOVE_ALIASES[words[0]]
-                return Command(CommandType.MOVE, [direction], user_input)
-            elif words[0] in self.MOVE_ALIASES:
-                return Command(CommandType.MOVE, [self.MOVE_ALIASES[words[0]]], user_input)
-            elif len(words) > 1 and words[1] in self.MOVE_ALIASES:
-                return Command(CommandType.MOVE, [self.MOVE_ALIASES[words[1]]], user_input)
-        
-        # Handle meditation
-        if words[0] in ["meditate", "rest", "recover"]:
-            return Command(CommandType.MEDITATE, [], user_input)
-        
-        # Handle look command
-        if words[0] in ["look", "examine", "l"]:
-            direction = None
-            if len(words) > 1 and words[1] in self.MOVE_ALIASES:
-                direction = self.MOVE_ALIASES[words[1]]
-            return Command(CommandType.LOOK, [direction] if direction else [], user_input)
-        
-        # Handle status command
-        if words[0] in ["status", "stat", "stats"]:
-            return Command(CommandType.STATUS, [], user_input)
-        
-        # Handle inventory command
-        if words[0] in ["inventory", "inv", "i"]:
-            return Command(CommandType.INVENTORY, [], user_input)
-        
-        # Handle map command
-        if words[0] in ["map", "m"]:
-            return Command(CommandType.MAP, [], user_input)
-        
-        # Handle help command
-        if words[0] in ["help", "h", "?"]:
-            return Command(CommandType.HELP, [], user_input)
-        
-        # Handle item commands
-        if words[0] in self.ITEM_ALIASES["take"] or words[0] == "take":
-            return Command(CommandType.TAKE, words[1:], user_input)
-        if words[0] in self.ITEM_ALIASES["drop"] or words[0] == "drop":
-            return Command(CommandType.DROP, words[1:], user_input)
-        if words[0] in self.ITEM_ALIASES["gather"] or words[0] == "gather":
-            return Command(CommandType.GATHER, words[1:], user_input)
-        
-        # Handle environment commands
-        if words[0] in self.ENVIRONMENT_ALIASES["mark"] or words[0] == "mark":
-            return Command(CommandType.MARK, words[1:], user_input)
-        if words[0] in self.ENVIRONMENT_ALIASES["draw"] or words[0] == "draw":
-            return Command(CommandType.DRAW, words[1:], user_input)
-        if words[0] in self.ENVIRONMENT_ALIASES["write"] or words[0] == "write":
-            return Command(CommandType.WRITE, words[1:], user_input)
-        if words[0] in self.ENVIRONMENT_ALIASES["alter"] or words[0] == "alter":
-            return Command(CommandType.ALTER, words[1:], user_input)
-        
-        # Handle combat commands
-        if words[0] in self.COMBAT_ALIASES["attack"] or words[0] == "attack":
-            return Command(CommandType.ATTACK, words[1:], user_input)
-        if words[0] in self.COMBAT_ALIASES["defend"] or words[0] == "defend":
-            return Command(CommandType.DEFEND, words[1:], user_input)
-        if words[0] in self.COMBAT_ALIASES["dodge"] or words[0] == "dodge":
-            return Command(CommandType.DODGE, words[1:], user_input)
-        if words[0] in self.COMBAT_ALIASES["special"] or words[0] == "special":
-            return Command(CommandType.SPECIAL, words[1:], user_input)
-        
-        # Handle roleplay commands
-        if words[0] in self.ROLEPLAY_ALIASES["emote"] or words[0] == "emote":
-            return Command(CommandType.EMOTE, words[1:], user_input)
-        if words[0] in self.ROLEPLAY_ALIASES["say"] or words[0] == "say":
-            return Command(CommandType.SAY, words[1:], user_input)
-        if words[0] in self.ROLEPLAY_ALIASES["think"] or words[0] == "think":
-            return Command(CommandType.THINK, words[1:], user_input)
-        
-        # Handle test commands
-        if words[0] in self.TEST_ALIASES["defeat"] or words[0] == "defeat":
-            return Command(CommandType.DEFEAT, words[1:], user_input)
-        
+        # Check for look command
+        if parts[0] == "look":
+            if len(parts) > 1:
+                return Command(type=CommandType.LOOK, args=parts[1:])
+            return Command(type=CommandType.LOOK)
+            
+        # Check for inventory command
+        if parts[0] == "inventory" or parts[0] == "i":
+            return Command(type=CommandType.INVENTORY)
+            
+        # Check for take command
+        if parts[0] == "take" and len(parts) > 1:
+            return Command(type=CommandType.TAKE, args=parts[1:])
+            
+        # Check for drop command
+        if parts[0] == "drop" and len(parts) > 1:
+            return Command(type=CommandType.DROP, args=parts[1:])
+            
+        # Check for gather command
+        if parts[0] == "gather" and len(parts) > 1:
+            return Command(type=CommandType.GATHER, args=parts[1:])
+            
+        # Check for defeat command
+        if parts[0] == "defeat" and len(parts) > 1:
+            return Command(type=CommandType.DEFEAT, args=parts[1:])
+            
+        # Check for rest command
+        if parts[0] == "rest":
+            return Command(type=CommandType.REST)
+            
+        # Check for meditate command
+        if parts[0] == "meditate":
+            duration = int(parts[1]) if len(parts) > 1 else None
+            return Command(type=CommandType.MEDITATE, args=[str(duration)] if duration else [])
+            
+        # Check for achievements command
+        if parts[0] == "achievements":
+            return Command(type=CommandType.ACHIEVEMENTS)
+            
+        # Check for titles command
+        if parts[0] == "titles":
+            return Command(type=CommandType.TITLES, args=parts[1:] if len(parts) > 1 else [])
+            
+        # Check for select title command
+        if parts[0] == "select" and len(parts) > 2 and parts[1] == "title":
+            return Command(type=CommandType.TITLES, args=["select", " ".join(parts[2:])])
+            
+        # Check for status command
+        if parts[0] == "status" or parts[0] == "stats":
+            return Command(type=CommandType.STATUS)
+            
+        # Check for attack command
+        if parts[0] == "attack" and len(parts) > 1:
+            return Command(type=CommandType.ATTACK, args=parts[1:])
+            
+        # Check for NPC interactions
+        if parts[0] in self.NPC_ALIASES and len(parts) > 1:
+            npc_name = " ".join(parts[1:])
+            if self.player.state.current_tile and npc_name in self.player.state.current_tile.npcs:
+                return Command(type=CommandType.TALK, args=[npc_name])
+            return None
+            
         return None
     
     def execute_command(self, command: Command) -> str:
-        """Execute a parsed command and return the result message."""
-        if command.type == CommandType.MOVE:
-            if not command.args:
-                return "Move in which direction?"
-            direction = self.DIRECTION_MAP.get(command.args[0])
-            if not direction:
-                return f"Unknown direction: {command.args[0]}"
-            success, message = self.player.move(direction)
-            return message
-        
-        elif command.type == CommandType.MEDITATE:
-            success, message = self.player.meditate()
-            return message
-        
-        elif command.type == CommandType.LOOK:
-            if not command.args:
-                # Look at current tile
-                return self.get_current_tile_description()
-            # Look in direction
-            direction = self.DIRECTION_MAP.get(command.args[0])
-            if not direction:
-                return f"Cannot look {command.args[0]}"
-            return self.look_in_direction(direction)
-        
-        elif command.type == CommandType.STATUS:
-            return self.get_player_status()
-        
-        elif command.type == CommandType.INVENTORY:
-            return self.get_inventory_status()
-        
-        elif command.type == CommandType.MAP:
-            return self.get_map_view()
-        
-        elif command.type == CommandType.HELP:
-            return self.get_help_text()
-        
-        # Item Commands
-        elif command.type == CommandType.TAKE:
-            if not command.args:
-                return "Take what?"
-            return self.handle_take_command(command.args)
+        """Execute a parsed command."""
+        try:
+            if command.type == CommandType.MOVE:
+                # Get direction from first argument
+                direction_str = command.args[0] if command.args else None
+                if not direction_str:
+                    return "Which direction?"
+                
+                # Convert to Direction enum
+                try:
+                    direction = self.DIRECTION_MAP[direction_str.lower()]
+                except KeyError:
+                    return f"Unknown direction: {direction_str}"
+                
+                # Try to move
+                success, message = self.player.move(direction)
+                return message
+                
+            elif command.type == CommandType.LOOK:
+                current_tile = self.player.state.current_tile
+                if not current_tile:
+                    return "Nothing to see here."
+                description = current_tile.get_description()
+                time_desc = self.player.time_system.time.get_time_description()
+                return f"{description}\n\n{time_desc}"
+                
+            elif command.type == CommandType.TALK:
+                if not self.player.state.current_tile:
+                    return "You are in an unknown area."
+                    
+                npc_name = command.args[0] if command.args else None
+                if not npc_name:
+                    return "Talk to whom?"
+                    
+                if npc_name not in self.player.state.current_tile.npcs:
+                    return "There is no one here to talk to."
+                    
+                # Get NPC dialogue from world design
+                from .world_design import WORLD_NPCS
+                npc_data = next((npc for npc in WORLD_NPCS if npc.id == npc_name), None)
+                if not npc_data:
+                    return "That person seems unable to talk right now."
+                
+                # Give quest items to player
+                for item in npc_data.quest_items:
+                    if item not in self.player.state.inventory:
+                        self.player.state.inventory.append(item)
+                    
+                return npc_data.dialogue["start"]
+                
+            elif command.type == CommandType.STATUS:
+                return self.player.get_status()
             
-        elif command.type == CommandType.DROP:
-            if not command.args:
-                return "Drop what?"
-            return self.handle_drop_command(command.args)
+            elif command.type == CommandType.HELP:
+                return self._get_help_text()
             
-        elif command.type == CommandType.GATHER:
-            if not command.args:
-                return "Gather what?"
-            return self.handle_gather_command(command.args)
-        
-        # Environment Commands
-        elif command.type == CommandType.MARK:
-            if not command.args:
-                return "Mark what?"
-            return self.handle_environment_change(command.type, command.args)
+            elif command.type == CommandType.INVENTORY:
+                return "Inventory: " + ", ".join(self.player.state.inventory)
             
-        elif command.type == CommandType.DRAW:
-            if not command.args:
-                return "Draw what?"
-            return self.handle_environment_change(command.type, command.args)
+            elif command.type == CommandType.MAP:
+                return self.execute_map()
             
-        elif command.type == CommandType.WRITE:
-            if not command.args:
-                return "Write what?"
-            return self.handle_environment_change(command.type, command.args)
+            elif command.type == CommandType.ACHIEVEMENTS:
+                return self.player.get_achievements()
             
-        elif command.type == CommandType.ALTER:
-            if not command.args:
-                return "Alter what?"
-            return self.handle_environment_change(command.type, command.args)
-        
-        # Combat Commands
-        elif command.type in [CommandType.ATTACK, CommandType.DEFEND, 
-                            CommandType.DODGE, CommandType.SPECIAL]:
-            return self.handle_combat_command(command.type, command.args)
-        
-        # Roleplay Commands
-        elif command.type in [CommandType.EMOTE, CommandType.SAY, CommandType.THINK]:
-            if not command.args:
-                return f"{command.type.value} what?"
-            return self.handle_roleplay_command(command.type, command.args)
-        
-        # Handle test defeat command
-        elif command.type == CommandType.DEFEAT:
-            if not command.args:
-                return "Defeat which enemy?"
-            return self.handle_defeat_command(command.args)
-        
-        # Handle NPC interaction
-        elif command.type == CommandType.TALK:
-            if not command.args:
-                return "Talk to whom?"
-            return self.handle_talk_command(command.args)
-        
-        return "Unknown command."
+            elif command.type == CommandType.LEADERBOARD:
+                category = command.args[0] if command.args else None
+                return self.player.get_leaderboard(category)
+            
+            elif command.type == CommandType.REST:
+                success, message = self.player.rest()
+                return message
+            
+            elif command.type == CommandType.TAKE:
+                return self.handle_take_command(command.args)
+            
+            elif command.type == CommandType.DROP:
+                return self.handle_drop_command(command.args)
+            
+            elif command.type == CommandType.GATHER:
+                return self.handle_gather_command(command.args)
+            
+            elif command.type in [CommandType.MARK, CommandType.DRAW, CommandType.WRITE, CommandType.ALTER]:
+                return self.handle_environment_change(command.type, command.args)
+            
+            elif command.type in [CommandType.ATTACK, CommandType.DEFEND, CommandType.DODGE, CommandType.SPECIAL]:
+                return self.handle_combat_command(command.type, command.args)
+            
+            elif command.type in [CommandType.EMOTE, CommandType.SAY, CommandType.THINK]:
+                return self.handle_roleplay_command(command.type, command.args)
+            
+            elif command.type == CommandType.DEFEAT:
+                if not command.args:
+                    return "Defeat what?"
+                target = " ".join(command.args)
+                return self.player.combat_victory(target)
+            
+            elif command.type == CommandType.MEDITATE:
+                # Check if a duration was provided
+                if command.args and command.args[0].isdigit():
+                    duration = int(command.args[0])
+                    success, message = self.player.meditate(duration)
+                else:
+                    success, message = self.player.meditate()
+                return message
+            
+            elif command.type == CommandType.TITLES:
+                if not command.args:
+                    return self.player.title_system.get_title_status()
+                if command.args[0] == "select" and len(command.args) > 1:
+                    success, message = self.player.title_system.equip_title(command.args[1])
+                    return message
+                return self.player.title_system.get_title_status()
+            
+            return "Unknown command."
+        except Exception as e:
+            return f"An error occurred: {str(e)}"
     
-    def get_current_tile_description(self) -> str:
-        """Get description of current tile and surroundings."""
-        current_tile = self.player.state.current_tile
-        if not current_tile:
-            return "You are in an unknown area."
-            
-        description = [current_tile.description]
-        
-        # Add available directions
-        possible_moves = self.player.get_possible_moves()
-        directions = []
-        for direction, status in possible_moves.items():
-            if status == "Clear path.":
-                directions.append(direction.value)
-        
-        if directions:
-            description.append(f"\nYou can move: {', '.join(directions)}")
-        
-        # Add enemies if present
-        if current_tile.enemies:
-            enemy_names = [enemy.name for enemy in current_tile.enemies]
-            description.append(f"\nEnemies present: {', '.join(enemy_names)}")
-        
-        # Add items if present
-        if current_tile.items:
-            description.append(f"\nItems visible: {', '.join(current_tile.items)}")
-        
-        return "\n".join(description)
-    
-    def look_in_direction(self, direction: Direction) -> str:
-        """Look in a specific direction and describe what's there."""
-        new_x, new_y = self.player._get_new_position(direction)
-        
-        # Check if position is off map
-        if not (0 <= new_x < 10 and 0 <= new_y < 10):
-            return "A shimmering magical barrier stretches into the distance."
-        
-        # Check if tile has been visited
-        tile_info = self.player.get_tile_info((new_x, new_y))
-        if tile_info:
-            return tile_info
-        else:
-            return "You can see something in that direction, but can't make out details from here."
-    
-    def get_player_status(self) -> str:
-        """Get player's current status."""
-        stats = self.player.state.stats
-        return (
-            f"Health: {stats.health}/{stats.max_health}\n"
-            f"Stamina: {stats.stamina}/{stats.max_stamina}\n"
-            f"Inventory: {stats.current_inventory_weight}/{stats.inventory_capacity}"
-        )
-    
-    def get_inventory_status(self) -> str:
-        """Get inventory contents."""
-        if not self.player.state.inventory:
-            return "Your inventory is empty."
-        return "Inventory:\n" + "\n".join(f"- {item}" for item in self.player.state.inventory)
-    
-    def get_map_view(self) -> str:
-        """Get ASCII representation of discovered map."""
+    def execute_map(self) -> str:
+        """Execute the map command."""
         # This would be implemented to show visited areas
         visited = self.player.get_movement_history()
         map_view = []
@@ -393,7 +297,7 @@ class CommandParser:
             map_view.append("".join(row))
         return "\n".join(map_view)
     
-    def get_help_text(self) -> str:
+    def _get_help_text(self) -> str:
         """Get help text with available commands."""
         help_text = """
 Available Commands:
@@ -541,23 +445,49 @@ Shortcuts:
         """Handle combat actions."""
         current_tile = self.player.state.current_tile
         
-        if not current_tile or not current_tile.enemies:
-            return "There are no enemies here."
+        # Always advance time for combat actions
+        if action == CommandType.ATTACK:
+            # Combat takes 30 minutes
+            time_events = self.player.time_system.advance_time(30)
+            time_message = " ".join(time_events.values())
+            
+            if not current_tile or not current_tile.enemies:
+                return f"There are no enemies here. {time_message}"
+            
+            if not args:
+                return f"Attack what? {time_message}"
+            target = " ".join(args)
+            enemy_names = [enemy.name.lower() for enemy in current_tile.enemies]
+            if target.lower() not in enemy_names:
+                return f"There is no {target} here. {time_message}"
+            return f"You attack the {target}! {time_message}"
         
-        target = " ".join(args) if args else None
-        if target and not any(enemy["name"].lower() == target.lower() 
-                            for enemy in current_tile.enemies):
-            return f"There is no {target} here."
+        elif action == CommandType.DEFEND:
+            # Defending takes 10 minutes
+            time_events = self.player.time_system.advance_time(10)
+            time_message = " ".join(time_events.values())
+            
+            if not current_tile or not current_tile.enemies:
+                return f"There are no enemies to defend against. {time_message}"
+            return f"You take a defensive stance. {time_message}"
         
-        # Basic combat system - can be expanded later
-        combat_messages = {
-            CommandType.ATTACK: "You attack the enemy!",
-            CommandType.DEFEND: "You take a defensive stance.",
-            CommandType.DODGE: "You prepare to dodge the next attack.",
-            CommandType.SPECIAL: "You prepare to use a special ability."
-        }
+        elif action == CommandType.DODGE:
+            # Dodging takes 5 minutes
+            time_events = self.player.time_system.advance_time(5)
+            time_message = " ".join(time_events.values())
+            
+            if not current_tile or not current_tile.enemies:
+                return f"There are no attacks to dodge. {time_message}"
+            return f"You prepare to dodge. {time_message}"
         
-        return combat_messages.get(action, "Invalid combat action.")
+        elif action == CommandType.SPECIAL:
+            # Special abilities take 20 minutes
+            time_events = self.player.time_system.advance_time(20)
+            time_message = " ".join(time_events.values())
+            
+            if not current_tile or not current_tile.enemies:
+                return f"There are no enemies to use special abilities on. {time_message}"
+            return f"You prepare to use a special ability. {time_message}"
     
     def handle_roleplay_command(self, action: CommandType, args: List[str]) -> str:
         """Handle roleplay actions."""
@@ -569,75 +499,4 @@ Shortcuts:
             CommandType.THINK: f"* Centaur Prime ponders: {message}"
         }
         
-        return roleplay_formats.get(action, message)
-    
-    def handle_defeat_command(self, args: List[str]) -> str:
-        """Handle instantly defeating an enemy for testing."""
-        target_name = " ".join(args)
-        current_tile = self.player.state.current_tile
-        
-        if not current_tile:
-            return "You are in an unknown area."
-        
-        if not current_tile.enemies:
-            return "There are no enemies here."
-        
-        # Find the target enemy
-        target_enemy = None
-        remaining_enemies = []
-        
-        for enemy in current_tile.enemies:
-            if enemy.name.lower() == target_name.lower():
-                target_enemy = enemy
-            else:
-                remaining_enemies.append(enemy)
-        
-        if not target_enemy:
-            return f"There is no {target_name} here."
-        
-        # Remove the enemy and collect its drops
-        current_tile.enemies = remaining_enemies
-        
-        # Add drops to the tile's items
-        if target_enemy.drops:
-            current_tile.items.extend(target_enemy.drops)
-            drops_message = f"\nThe enemy dropped: {', '.join(target_enemy.drops)}"
-        else:
-            drops_message = ""
-        
-        # Update blocked paths if this was the last enemy
-        if not remaining_enemies:
-            if self.player.state.position in self.player.state.blocked_paths:
-                self.player.state.blocked_paths.pop(self.player.state.position)
-        
-        return f"TEST: Instantly defeated {target_enemy.name}.{drops_message}"
-    
-    def handle_talk_command(self, args: List[str]) -> str:
-        """Handle talking to NPCs."""
-        npc_name = " ".join(args).lower()
-        current_tile = self.player.state.current_tile
-        
-        if not current_tile:
-            return "You are in an unknown area."
-            
-        if not current_tile.npcs:
-            return f"There is no one here to talk to."
-            
-        # Find the NPC in the world design
-        npc = next((n for n in WORLD_NPCS if n.id.lower() == npc_name.replace(" ", "_") 
-                   or n.name.lower() == npc_name), None)
-                   
-        if not npc or npc.id not in current_tile.npcs:
-            return f"There is no {npc_name} here to talk to."
-            
-        # Get appropriate dialogue based on game progress
-        # For now, just use "start" dialogue
-        dialogue = npc.dialogue.get("start", "...")
-        
-        # Add quest items to the current tile if they exist
-        if npc.quest_items:
-            for item in npc.quest_items:
-                if item not in current_tile.items:
-                    current_tile.items.append(item)
-        
-        return f"{npc.name} says: '{dialogue}'" 
+        return roleplay_formats.get(action, message) 

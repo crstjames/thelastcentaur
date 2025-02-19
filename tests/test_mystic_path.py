@@ -16,7 +16,7 @@ def test_mystic_path():
     
     # Initialize game systems
     map_system = MapSystem()
-    player = Player(map_system)
+    player = Player(map_system, player_id="test_mystic", player_name="Test Mystic")
     command_parser = CommandParser(player)
     
     # Helper function to execute commands and print results

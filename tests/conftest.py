@@ -15,7 +15,11 @@ def map_system():
 @pytest.fixture
 def player(map_system):
     """Create a fresh player instance for each test."""
-    return Player(map_system)
+    return Player(
+        map_system=map_system,
+        player_id="test_player_1",
+        player_name="Test Player"
+    )
 
 @pytest.fixture
 def command_parser(player):

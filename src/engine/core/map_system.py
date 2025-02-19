@@ -163,7 +163,7 @@ GAME_MAP = {
         base_description="A small camp where the Fallen Warrior resides, surrounded by old battle standards.",
         requirements=[],
         enemies=[],
-        items=[],
+        items=["warrior_map"],
         weather_effects=["spirit_winds"],
         npcs=["fallen_warrior"]
     ),
@@ -464,14 +464,25 @@ class MapSystem:
         
         # Initialize starting area with proper Enemy objects
         starting_node = GAME_MAP[StoryArea.AWAKENING_WOODS]
-        starting_node.enemies = [
-            Enemy(
-                name="Wolf Pack",
-                description="A pack of wolves touched by shadow magic",
-                health=60,
-                damage=15
-            )
-        ]
+        starting_node.enemies = self._create_enemies(["wolf_pack", "shadow_stalker"])
+    
+    def _create_enemies(self, enemy_ids: List[str]) -> List[Enemy]:
+        """Convert enemy IDs to Enemy objects based on current time."""
+        enemies = []
+        for enemy_id in enemy_ids:
+            enemy_data = next((e for e in WORLD_ENEMIES if e["id"] == enemy_id), None)
+            if enemy_data:
+                is_night_only = enemy_data.get("night_only", False)
+                if not is_night_only or (is_night_only and self.current_time == "night"):
+                    enemies.append(Enemy(
+                        name=enemy_data["name"],
+                        description=enemy_data["description"],
+                        health=enemy_data["health"],
+                        damage=enemy_data["damage"],
+                        drops=enemy_data.get("drops", []),
+                        requirements=enemy_data.get("requirements", [])
+                    ))
+        return enemies
     
     def get_area_node(self, area: StoryArea) -> AreaNode:
         """Get the area node for a given area."""
@@ -561,18 +572,7 @@ class MapSystem:
         dest_node = self.get_area_node(to_area)
         
         # Convert enemy dictionaries to Enemy objects
-        enemies = []
-        for enemy_id in dest_node.enemies:
-            enemy_data = next((e for e in WORLD_ENEMIES if e["id"] == enemy_id), None)
-            if enemy_data:
-                enemies.append(Enemy(
-                    name=enemy_data["name"],
-                    description=enemy_data["description"],
-                    health=enemy_data["health"],
-                    damage=enemy_data["damage"],
-                    drops=enemy_data.get("drops", []),
-                    requirements=enemy_data.get("requirements", [])
-                ))
+        enemies = self._create_enemies(dest_node.enemies)
         
         # Initialize NPCs list from area node
         npcs = dest_node.npcs if dest_node.npcs else []
@@ -619,4 +619,28 @@ class MapSystem:
                 if conn.shortcut:
                     description += " (Shortcut)"
                 
-        return description 
+        return description
+    
+    def update_time(self, time_of_day: str) -> None:
+        """Update the current time and handle time-based changes."""
+        self.current_time = time_of_day.lower()
+        
+        # Update enemies based on time
+        for area in self.discovered_areas:
+            node = self.get_area_node(area)
+            if isinstance(node.enemies, list):
+                # Convert enemy IDs to Enemy objects if needed
+                if node.enemies and isinstance(node.enemies[0], str):
+                    node.enemies = self._create_enemies(node.enemies)
+                # Update enemies based on time of day
+                tile = TileState(
+                    position=node.position,
+                    terrain_type=node.terrain_type,
+                    area=area,
+                    description=node.base_description,
+                    items=node.items.copy(),
+                    enemies=node.enemies,
+                    is_visited=True
+                )
+                tile.update_enemies(time_of_day)
+                node.enemies = tile.enemies 
