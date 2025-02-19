@@ -2,12 +2,17 @@
 Version: 0.1.0
 Last Updated: [Current Date]
 
+## GAME OVERVIEW
+The Last Centaur is a text-based RPG accessible through web browsers and chat interfaces. 
+The game combines classic RPG elements with modern accessibility, allowing players to 
+experience the story through text commands and responses.
+
 ## ORGANIZATION
 This file is organized into the following sections:
-1. Core Game Mechanics
-2. User Interface
-3. Game World
-4. Characters
+1. Core Game Engine
+2. World & Map System
+3. Game Mechanics
+4. Interface & Accessibility
 5. Technical Requirements
 6. Implementation Status
 
@@ -30,40 +35,87 @@ P1: High
 P2: Medium
 P3: Low
 
-## 1. CORE GAME MECHANICS
-[GM-001] 🔲 P0 Initial game setup and engine selection
-- Implementation Notes: TBD
+## 1. CORE GAME ENGINE
+[ENG-001] 🔲 P0 Core Engine Models
+- Implementation Notes: Pydantic models for game state, events, and entities
 - Dependencies: None
-- Completion Criteria: TBD
+- Completion Criteria: Complete model definitions with validation
 
-## 2. USER INTERFACE
-[UI-001] 🔲 P0 Basic game window and rendering setup
-- Implementation Notes: TBD
-- Dependencies: [GM-001]
-- Completion Criteria: TBD
+[ENG-002] 🔲 P0 State Management System
+- Implementation Notes: Game state tracking and persistence
+- Dependencies: [ENG-001]
+- Completion Criteria: State can be saved/loaded with history
 
-## 3. GAME WORLD
-[GW-001] 🔲 P1 Initial world layout and boundaries
-- Implementation Notes: TBD
-- Dependencies: [GM-001]
-- Completion Criteria: TBD
+[ENG-003] 🔲 P0 Event System
+- Implementation Notes: Event handling and history tracking
+- Dependencies: [ENG-001]
+- Completion Criteria: Events affect world state and persist
 
-## 4. CHARACTERS
-[CH-001] 🔲 P1 Player character basic implementation
-- Implementation Notes: TBD
-- Dependencies: [GM-001]
-- Completion Criteria: TBD
+## 2. WORLD & MAP SYSTEM
+[MAP-001] 🔲 P0 10x10 Map Implementation
+- Implementation Notes: Grid-based map with terrain types
+- Dependencies: [ENG-001]
+- Completion Criteria: Navigable map with terrain effects
+
+[MAP-002] 🔲 P0 Tile System
+- Implementation Notes: Individual tile state and history
+- Dependencies: [MAP-001]
+- Completion Criteria: Tiles track state and modifications
+
+[MAP-003] 🔲 P0 Environmental Effects
+- Implementation Notes: Player actions affect environment
+- Dependencies: [MAP-002, ENG-003]
+- Completion Criteria: Changes persist and affect descriptions
+
+## 3. GAME MECHANICS
+[MECH-001] 🔲 P0 Command Processing
+- Implementation Notes: Parse and execute player commands
+- Dependencies: [ENG-001]
+- Completion Criteria: All basic commands functional
+
+[MECH-002] 🔲 P0 Movement System
+- Implementation Notes: Player navigation and terrain effects
+- Dependencies: [MAP-001, MECH-001]
+- Completion Criteria: Smooth movement with proper feedback
+
+[MECH-003] 🔲 P0 Interaction System
+- Implementation Notes: Player interaction with environment
+- Dependencies: [MECH-001, MAP-002]
+- Completion Criteria: Environment responds to actions
+
+## 4. TESTING FRAMEWORK
+[TEST-001] 🔲 P0 Core Engine Tests
+- Implementation Notes: Pytest suite for engine functionality
+- Dependencies: [ENG-001, ENG-002, ENG-003]
+- Completion Criteria: >90% test coverage
+
+[TEST-002] 🔲 P0 Game Flow Tests
+- Implementation Notes: End-to-end game progression tests
+- Dependencies: [TEST-001]
+- Completion Criteria: Complete game walkthrough tests
+
+[TEST-003] 🔲 P0 State Persistence Tests
+- Implementation Notes: Save/load and history persistence tests
+- Dependencies: [TEST-001]
+- Completion Criteria: State integrity verification
 
 ## 5. TECHNICAL REQUIREMENTS
-[TR-001] 🔲 P0 Project structure and development environment
-- Implementation Notes: TBD
-- Dependencies: None
-- Completion Criteria: TBD
+[TECH-001] 🔲 P0 FastAPI Implementation
+- Implementation Notes: API endpoints for game interaction
+- Dependencies: All core systems
+- Completion Criteria: Functional REST API
+
+[TECH-002] 🔲 P0 Database Schema
+- Implementation Notes: SQLAlchemy models for game state
+- Dependencies: [ENG-001]
+- Completion Criteria: Complete data persistence
 
 ## 6. IMPLEMENTATION STATUS
-Current Focus: Initial Setup
-Next Steps: TBD
+Current Focus: Core Engine Development
+Next Steps: Map and Tile System Implementation
 Blocked Items: None
 
 ## CHANGE LOG
-[Current Date] - Initial specification file created 
+[Current Date] - Initial specification file created
+[Current Date] - Updated with engine requirements
+[Current Date] - Added testing framework requirements 

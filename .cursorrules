@@ -1,5 +1,9 @@
 # THE LAST CENTAUR - Development Rules and Guidelines
 
+## PROJECT OVERVIEW
+The Last Centaur is a text-based RPG accessible via web browsers and chat interfaces.
+All development must align with this core concept and maintain consistent naming and interfaces.
+
 ## MODEL CONFIGURATION
 PRIMARY_MODEL: claude-3-5-sonnet-latest
 SEARCH_MODEL: llama-3.1-sonar-large-128k-online (Perplexity)
@@ -39,6 +43,25 @@ SEARCH_MODEL: llama-3.1-sonar-large-128k-online (Perplexity)
    - Implement rate limiting
    - Handle API errors gracefully
    - Cache responses when appropriate
+
+## GAME-SPECIFIC STANDARDS
+1. TEXT PROCESSING
+   - Consistent command parsing
+   - Clear response formatting
+   - Support for multiple interfaces
+   - Maintain narrative tone
+
+2. STATE MANAGEMENT
+   - Persistent game states
+   - Safe save/load operations
+   - Cross-platform compatibility
+   - Session management
+
+3. INTERFACE GUIDELINES
+   - Clean web interface
+   - Responsive design
+   - Chat platform compatibility
+   - Consistent messaging
 
 ## DOCUMENTATION STANDARDS
 1. SPECS.TXT
