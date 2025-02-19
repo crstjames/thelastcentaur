@@ -47,6 +47,7 @@ class AreaNode:
     hazards: List[EnvironmentalHazard] = None
     weather_effects: List[str] = None
     is_minor_area: bool = False
+    npcs: List[str] = None
 
 # Environmental Hazards
 HAZARD_TYPES = {
@@ -141,7 +142,8 @@ GAME_MAP = {
         requirements=[],
         enemies=[],
         items=["crystal_focus", "ancient_scroll"],
-        weather_effects=["spirit_winds"]
+        weather_effects=["spirit_winds"],
+        npcs=["hermit_druid"]
     ),
     
     # Fallen Warrior's Camp
@@ -162,7 +164,8 @@ GAME_MAP = {
         requirements=[],
         enemies=[],
         items=[],
-        weather_effects=["spirit_winds"]
+        weather_effects=["spirit_winds"],
+        npcs=["fallen_warrior"]
     ),
     
     # New Minor Area: Twilight Glade
@@ -182,7 +185,7 @@ GAME_MAP = {
         terrain_type=TerrainType.FOREST,
         base_description="A small clearing where twilight seems to linger eternally.",
         requirements=[],
-        enemies=["shadow_hound", "twilight_wisp"],
+        enemies=["shadow_hound"],
         items=["shadow_essence_fragment"],
         hazards=[HAZARD_TYPES["shadow_veil"]],
         weather_effects=["shadow_mist"],
@@ -258,17 +261,18 @@ GAME_MAP = {
             ),
             AreaConnection(
                 from_area=StoryArea.TRIALS_PATH,
-                to_area=StoryArea.FORGOTTEN_GROVE,
+                to_area="twilight_glade",
                 direction=Direction.NORTH,
                 requirements=["shadow_key"],
-                description="A shadowy path disappears into a dense, mysterious grove."
+                description="A shadowy path leads to a mysterious glade."
             )
         ],
         terrain_type=TerrainType.CLEARING,
         base_description="A crossroads where the three paths diverge, each leading to a different destiny.",
         requirements=[],
         enemies=["wandering_spirit", "lost_warrior"],
-        items=["path_marker", "ancient_inscription"]
+        items=["path_marker", "ancient_inscription"],
+        npcs=["shadow_scout"]
     ),
     
     # Mystic Path Areas
@@ -389,15 +393,17 @@ GAME_MAP = {
                 from_area=StoryArea.FORGOTTEN_GROVE,
                 to_area=StoryArea.SHADOW_DOMAIN,
                 direction=Direction.NORTH,
-                requirements=["stealth_cloak", "phantom_dagger"],
-                description="The grove's shadows deepen, leading to the domain of your rival."
+                requirements=["stealth_cloak", "phantom_dagger", "shadow_essence", "shadow_essence_fragment"],
+                description="The grove's shadows deepen, leading to the domain of your rival. With both shadow essences combined, you can slip through the veil of reality itself.",
+                shortcut=True
             )
         ],
         terrain_type=TerrainType.FOREST,
         base_description="A mysterious grove where shadows move with purpose and secrets hide in plain sight.",
         requirements=["shadow_key"],
-        enemies=["shadow_stalker", "mist_phantom"],
-        items=["shadow_essence", "stealth_technique"]
+        enemies=["shadow_stalker", "phantom_assassin"],
+        items=["stealth_cloak", "phantom_dagger", "shadow_essence"],
+        weather_effects=["shadow_mist"]
     ),
     
     # Final Area
@@ -407,7 +413,7 @@ GAME_MAP = {
         connections=[],
         terrain_type=TerrainType.RUINS,
         base_description="The corrupted throne of your rival, where reality itself bends to their will.",
-        requirements=["guardian_essence"],
+        requirements=[],
         enemies=["shadow_guardian", "second_centaur", "shadow_knight", "void_walker"],
         items=["crown_of_dominion"],
         hazards=[
@@ -568,12 +574,8 @@ class MapSystem:
                     requirements=enemy_data.get("requirements", [])
                 ))
         
-        # Add NPCs for special areas
-        npcs = []
-        if to_area == "warriors_camp":
-            npcs.append("fallen_warrior")
-        elif to_area == "druids_grove":
-            npcs.append("hermit_druid")
+        # Initialize NPCs list from area node
+        npcs = dest_node.npcs if dest_node.npcs else []
         
         new_tile = TileState(
             position=dest_node.position,
