@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Union, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict, model_serializer
 
 class Direction(str, Enum):
     """Cardinal directions for movement."""
@@ -63,9 +63,28 @@ class GameEvent(BaseModel):
     details: Dict[str, str] = Field(default_factory=dict)
     persistence: int = Field(100, ge=0, le=100)  # How long event effects last
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        json_schema_extra={
+            "example": {
+                "event_type": "interaction",
+                "description": "Player picked up a sword",
+                "location": (1, 1),
+                "details": {"item": "sword"},
+                "persistence": 100
+            }
+        }
+    )
+
+    @model_serializer
+    def serialize_model(self) -> Dict[str, Any]:
+        return {
+            "event_type": self.event_type,
+            "description": self.description,
+            "timestamp": self.timestamp.isoformat(),
+            "location": self.location,
+            "details": self.details,
+            "persistence": self.persistence
         }
 
 @dataclass
@@ -174,8 +193,26 @@ class GameState(BaseModel):
     events: List[GameEvent] = Field(default_factory=list)
     game_time: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            set: lambda v: list(v)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        json_schema_extra={
+            "example": {
+                "player_position": (0, 0),
+                "inventory": [],
+                "visited_tiles": [(0, 0)],
+                "current_area": "awakening_woods"
+            }
+        }
+    )
+
+    @model_serializer
+    def serialize_model(self) -> Dict[str, Any]:
+        return {
+            "player_position": self.player_position,
+            "inventory": self.inventory,
+            "visited_tiles": list(self.visited_tiles),
+            "current_area": self.current_area,
+            "tiles": {str(k): v for k, v in self.tiles.items()},
+            "events": self.events,
+            "game_time": self.game_time.isoformat()
         } 
