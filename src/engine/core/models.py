@@ -73,7 +73,7 @@ class EnvironmentalChange:
     """Represents a change to the environment."""
     type: str
     description: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
     is_permanent: bool = False
     created_by: Optional[str] = None
 
