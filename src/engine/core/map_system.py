@@ -106,6 +106,13 @@ GAME_MAP = {
                 direction=Direction.EAST,
                 requirements=[],
                 description="A small path leads to a warrior's camp."
+            ),
+            AreaConnection(
+                from_area=StoryArea.AWAKENING_WOODS,
+                to_area="druids_grove",
+                direction=Direction.WEST,
+                requirements=[],
+                description="A mystical path leads to a secluded grove."
             )
         ],
         terrain_type=TerrainType.FOREST,
@@ -113,6 +120,27 @@ GAME_MAP = {
         requirements=[],
         enemies=["wolf_pack", "corrupted_sprite"],
         items=["basic_supplies", "old_map"],
+        weather_effects=["spirit_winds"]
+    ),
+    
+    # Hermit Druid's Grove
+    "druids_grove": AreaNode(
+        area="druids_grove",
+        position=(4, 0),
+        connections=[
+            AreaConnection(
+                from_area="druids_grove",
+                to_area=StoryArea.AWAKENING_WOODS,
+                direction=Direction.EAST,
+                requirements=[],
+                description="The path leads back to the ancient woods."
+            )
+        ],
+        terrain_type=TerrainType.FOREST,
+        base_description="A peaceful grove where the Hermit Druid contemplates the mysteries of the past.",
+        requirements=[],
+        enemies=[],
+        items=["crystal_focus", "ancient_scroll"],
         weather_effects=["spirit_winds"]
     ),
     
@@ -272,6 +300,36 @@ GAME_MAP = {
         items=["crystal_shard", "runic_inscription"],
         hazards=[HAZARD_TYPES["magic_barrier"]],
         weather_effects=["magical_storm", "crystal_rain"]
+    ),
+    
+    # Crystal Caves Area
+    StoryArea.CRYSTAL_CAVES: AreaNode(
+        area=StoryArea.CRYSTAL_CAVES,
+        position=(3, 6),
+        connections=[
+            AreaConnection(
+                from_area=StoryArea.CRYSTAL_CAVES,
+                to_area=StoryArea.SHADOW_DOMAIN,
+                direction=Direction.NORTH,
+                requirements=["crystal_key", "guardian_essence"],
+                description="The crystal-lined tunnel leads to the corrupted domain.",
+                hazards=[HAZARD_TYPES["crystal_storm"], HAZARD_TYPES["magic_barrier"]]
+            ),
+            AreaConnection(
+                from_area=StoryArea.CRYSTAL_CAVES,
+                to_area=StoryArea.MYSTIC_MOUNTAINS,
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="The path leads back to the mystic mountains."
+            )
+        ],
+        terrain_type=TerrainType.MOUNTAIN,
+        base_description="A vast network of crystal-lined caves, humming with ancient magical frequencies.",
+        requirements=["crystal_key"],
+        enemies=["crystal_guardian", "resonance_spirit"],
+        items=["mystic_crystal", "resonance_key", "guardian_essence"],
+        hazards=[HAZARD_TYPES["crystal_storm"]],
+        weather_effects=["crystal_rain", "magical_storm"]
     ),
     
     # Warrior Path Areas
@@ -514,6 +572,8 @@ class MapSystem:
         npcs = []
         if to_area == "warriors_camp":
             npcs.append("fallen_warrior")
+        elif to_area == "druids_grove":
+            npcs.append("hermit_druid")
         
         new_tile = TileState(
             position=dest_node.position,
