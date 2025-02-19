@@ -156,8 +156,27 @@ PATH_ITEMS = {
     ]
 }
 
-# Major Enemies
+# World Enemies
 WORLD_ENEMIES = [
+    {
+        "id": "wolf_pack",
+        "name": "Wolf Pack",
+        "description": "A pack of wolves touched by shadow magic",
+        "health": 60,
+        "damage": 15,
+        "drops": ["wolf_fang", "shadow_essence_fragment"],
+        "requirements": []
+    },
+    {
+        "id": "shadow_stalker",
+        "name": "Shadow Stalker",
+        "description": "A creature of pure darkness that hunts at night",
+        "health": 80,
+        "damage": 25,
+        "drops": ["shadow_essence", "stealth_cloak"],
+        "requirements": [],
+        "night_only": True
+    },
     {
         "id": "shadow_guardian",
         "name": "Shadow Guardian",

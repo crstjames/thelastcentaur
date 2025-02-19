@@ -19,7 +19,7 @@ def test_stealth_path():
     
     # Initialize game systems
     map_system = MapSystem()
-    player = Player(map_system)
+    player = Player(map_system, player_id="test_stealth", player_name="Test Stealth")
     command_parser = CommandParser(player)
     
     # Helper function to execute commands and print results
