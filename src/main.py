@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 from src.core.config import settings
 from src.api.routes import api_router
@@ -8,10 +9,22 @@ from src.db.session import engine, get_db
 from src.db.base import Base
 from src.game.websocket import handle_game_websocket
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create database tables on startup
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    yield
+    
+    # Close database connections on shutdown
+    await engine.dispose()
+
 app = FastAPI(
     title="The Last Centaur API",
     description="API for The Last Centaur game",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Configure CORS
@@ -25,17 +38,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
-
-@app.on_event("startup")
-async def startup_event():
-    # Create database tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    # Close database connections
-    await engine.dispose()
 
 @app.get("/")
 async def root():

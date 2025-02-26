@@ -15,7 +15,7 @@ from src.main import app
 test_router = APIRouter()
 
 @test_router.get("/test-auth", status_code=status.HTTP_200_OK)
-def test_auth_route(current_user: Annotated[User, Depends(get_current_user)]):
+def auth_route_handler(current_user: Annotated[User, Depends(get_current_user)]):
     """Test route that requires authentication."""
     return {"user_id": current_user.id, "username": current_user.username}
 

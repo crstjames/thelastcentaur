@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from datetime import datetime
 
 class Token(BaseModel):
@@ -45,6 +45,4 @@ class UserResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        """Pydantic config."""
-        from_attributes = True 
+    model_config = ConfigDict(from_attributes=True) 

@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
 class GameStatus(str, Enum):
@@ -35,9 +35,7 @@ class GameInstanceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic config."""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GameStateCreate(BaseModel):
     """Schema for creating a game state."""
@@ -56,9 +54,7 @@ class GameStateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic config."""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GameCommandRequest(BaseModel):
     """Schema for game command request."""
@@ -83,15 +79,11 @@ class TileResponse(BaseModel):
     enemies: Dict[str, Any] = Field(default_factory=dict)
     exits: List[str] = Field(default_factory=list)
 
-    class Config:
-        """Pydantic config."""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MapResponse(BaseModel):
     """Schema for map response."""
     tiles: List[TileResponse]
     current_position: Dict[str, int]
 
-    class Config:
-        """Pydantic config."""
-        from_attributes = True 
+    model_config = ConfigDict(from_attributes=True) 

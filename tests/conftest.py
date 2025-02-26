@@ -140,11 +140,9 @@ class MockSession:
         return self.MockResult(None)
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for each test case."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+def event_loop_policy():
+    """Create a custom event loop policy for tests."""
+    return asyncio.get_event_loop_policy()
 
 @pytest_asyncio.fixture(scope="session")
 async def test_db_setup_teardown() -> AsyncGenerator[None, None]:
