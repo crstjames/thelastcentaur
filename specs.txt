@@ -1,6 +1,6 @@
 # THE LAST CENTAUR - Game Specifications
 Version: 0.1.0
-Last Updated: [Current Date]
+Last Updated: February 26, 2025
 
 ## GAME OVERVIEW
 The Last Centaur is a text-based RPG accessible through web browsers and chat interfaces. 
@@ -36,28 +36,28 @@ P2: Medium
 P3: Low
 
 ## 1. CORE GAME ENGINE
-[ENG-001] 🔲 P0 Core Engine Models
+[ENG-001] 🔄 P0 Core Engine Models
 - Implementation Notes: Pydantic models for game state, events, and entities
 - Dependencies: None
 - Completion Criteria: Complete model definitions with validation
 
-[ENG-002] 🔲 P0 State Management System
+[ENG-002] 🔄 P0 State Management System
 - Implementation Notes: Game state tracking and persistence
 - Dependencies: [ENG-001]
 - Completion Criteria: State can be saved/loaded with history
 
-[ENG-003] 🔲 P0 Event System
+[ENG-003] 🔄 P0 Event System
 - Implementation Notes: Event handling and history tracking
 - Dependencies: [ENG-001]
 - Completion Criteria: Events affect world state and persist
 
 ## 2. WORLD & MAP SYSTEM
-[MAP-001] 🔲 P0 10x10 Map Implementation
+[MAP-001] 🔄 P0 10x10 Map Implementation
 - Implementation Notes: Grid-based map with terrain types
 - Dependencies: [ENG-001]
 - Completion Criteria: Navigable map with terrain effects
 
-[MAP-002] 🔲 P0 Tile System
+[MAP-002] 🔄 P0 Tile System
 - Implementation Notes: Individual tile state and history
 - Dependencies: [MAP-001]
 - Completion Criteria: Tiles track state and modifications
@@ -68,12 +68,12 @@ P3: Low
 - Completion Criteria: Changes persist and affect descriptions
 
 ## 3. GAME MECHANICS
-[MECH-001] 🔲 P0 Command Processing
+[MECH-001] 🔄 P0 Command Processing
 - Implementation Notes: Parse and execute player commands
 - Dependencies: [ENG-001]
 - Completion Criteria: All basic commands functional
 
-[MECH-002] 🔲 P0 Movement System
+[MECH-002] 🔄 P0 Movement System
 - Implementation Notes: Player navigation and terrain effects
 - Dependencies: [MAP-001, MECH-001]
 - Completion Criteria: Smooth movement with proper feedback
@@ -100,22 +100,25 @@ P3: Low
 - Completion Criteria: State integrity verification
 
 ## 5. TECHNICAL REQUIREMENTS
-[TECH-001] 🔲 P0 FastAPI Implementation
+[TECH-001] 🔄 P0 FastAPI Implementation
 - Implementation Notes: API endpoints for game interaction
 - Dependencies: All core systems
 - Completion Criteria: Functional REST API
 
-[TECH-002] 🔲 P0 Database Schema
+[TECH-002] 🔄 P0 Database Schema
 - Implementation Notes: SQLAlchemy models for game state
 - Dependencies: [ENG-001]
 - Completion Criteria: Complete data persistence
 
 ## 6. IMPLEMENTATION STATUS
-Current Focus: Core Engine Development
-Next Steps: Map and Tile System Implementation
+Current Focus: Core Engine Development and Movement System
+Next Steps: Enhance Command Processing and Combat System
 Blocked Items: None
 
 ## CHANGE LOG
+February 26, 2025 - Fixed authentication persistence issue with persistent secret key
+February 26, 2025 - Updated status indicators for core systems
+February 26, 2025 - Added API testing documentation
 [Current Date] - Initial specification file created
 [Current Date] - Updated with engine requirements
 [Current Date] - Added testing framework requirements 

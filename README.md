@@ -69,6 +69,99 @@ python -m src.main
 http://localhost:8000
 ```
 
+## Testing the Game API
+
+For development and testing purposes, you can interact with the game directly through the API. Follow these steps to test the core functionality:
+
+### 1. Register a New User
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "email": "test@example.com", "password": "password123"}'
+```
+
+**Note:** If you encounter a "Username already registered" error, try a different username.
+
+### 2. Login to Get an Access Token
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/auth/login" \
+  -F "username=testuser" \
+  -F "password=password123"
+```
+
+This will return an access token in the format:
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+**Important:** Save this token for use in subsequent requests. The token will be valid for 24 hours.
+
+### 3. Create a Game Instance
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/game" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{"name": "My Adventure", "max_players": 1, "description": "A test game instance"}'
+```
+
+This will return a game instance ID that you'll need for further commands.
+
+### 4. View the Game Map
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/game/YOUR_GAME_ID/map" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### 5. Look Around
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{"command": "look"}'
+```
+
+### 6. Try Movement Commands
+
+```bash
+# Move north
+curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{"command": "north"}'
+
+# Other directions: south, east, west
+```
+
+### 7. Other Commands to Try
+
+```bash
+# Check inventory
+curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{"command": "inventory"}'
+
+# Attack an enemy
+curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{"command": "attack wolf"}'
+```
+
+### Known Issues
+
+- **Authentication Persistence**: This issue has been fixed by implementing a persistent secret key that is stored in `auth_secret.json`. If you encounter authentication issues after a server restart, make sure this file exists and has not been corrupted.
+- **Port Conflicts**: If you see "Address already in use" errors, check for existing processes using port 8000 with `lsof -i :8000` and terminate them if needed.
+
 ## Game Commands
 
 ### Basic Movement

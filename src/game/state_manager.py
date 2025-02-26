@@ -1,5 +1,6 @@
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select, update
 from datetime import datetime
 
@@ -12,119 +13,19 @@ from src.game.command_service import CommandService
 
 class GameStateManager:
     """
-    Manages the game state, including saving and loading.
+    Manages game state persistence and transitions.
+    
+    This class serves as the bridge between the game engine and the database,
+    handling serialization/deserialization of game state and coordinating
+    state transitions based on player actions.
     """
     
-    def __init__(self, db: Session, game_id: str, user_id: str):
+    # Dictionary to store loaded game instances
+    _loaded_instances = {}
+    
+    def __init__(self):
         """Initialize the game state manager."""
-        self.db = db
-        self.game_id = game_id
-        self.user_id = user_id
-        self.player = None
-        self.map_system = None
-        self.initialized = False
-        
-    def initialize_game(self, player_name: str) -> Player:
-        """Initialize a new game with a player."""
-        # Create map system
-        self.map_system = MapSystem()
-        
-        # Create player
-        self.player = Player(name=player_name, state_manager=self)
-        
-        # Initialize player state
-        self.player.state.current_map = self.map_system.get_map("world")
-        self.player.state.position = (0, 0)  # Starting position
-        self.player.state.current_tile = self.player.state.current_map.get_tile((0, 0))
-        
-        # Mark as initialized
-        self.initialized = True
-        
-        # Save initial state
-        self.save_game_state()
-        
-        return self.player
-        
-    def save_game_state(self) -> None:
-        """Save the current game state to the database."""
-        if not self.initialized:
-            return
-            
-        # Get existing game state or create new one
-        game_state = self.db.query(GameState).filter(
-            GameState.game_id == self.game_id
-        ).first()
-        
-        if not game_state:
-            game_state = GameState(
-                game_id=self.game_id,
-                user_id=self.user_id,
-                player_state={}
-            )
-            self.db.add(game_state)
-            
-        # Update player state
-        game_state.player_state = {
-            "name": self.player.name,
-            "position": self.player.state.position,
-            "visited_positions": self.player.state.visited_positions,
-            "inventory": self.player.inventory.to_dict(),
-            "health": self.player.state.health,
-            "stamina": self.player.state.stamina,
-            "quests": self.player.quest_log.to_dict(),
-            "achievements": self.player.achievement_system.to_dict(),
-            "titles": self.player.title_system.to_dict()
-        }
-        
-        # Commit changes
-        self.db.commit()
-        
-    def load_game_state(self) -> Optional[Player]:
-        """Load the game state from the database."""
-        # Get game state
-        game_state = self.db.query(GameState).filter(
-            GameState.game_id == self.game_id
-        ).first()
-        
-        if not game_state or not game_state.player_state:
-            return None
-            
-        # Create map system
-        self.map_system = MapSystem()
-        
-        # Create player
-        player_state = game_state.player_state
-        player_name = player_state.get("name", "Player")
-        self.player = Player(name=player_name, state_manager=self)
-        
-        # Set player state
-        self.player.state.current_map = self.map_system.get_map("world")
-        self.player.state.position = tuple(player_state.get("position", (0, 0)))
-        self.player.state.visited_positions = player_state.get("visited_positions", [])
-        self.player.state.current_tile = self.player.state.current_map.get_tile(self.player.state.position)
-        self.player.state.health = player_state.get("health", 100)
-        self.player.state.stamina = player_state.get("stamina", 100)
-        
-        # Load inventory
-        if "inventory" in player_state:
-            self.player.inventory.from_dict(player_state["inventory"])
-            
-        # Load quests
-        if "quests" in player_state:
-            self.player.quest_log.from_dict(player_state["quests"])
-            
-        # Load achievements
-        if "achievements" in player_state:
-            self.player.achievement_system.from_dict(player_state["achievements"])
-            
-        # Load titles
-        if "titles" in player_state:
-            self.player.title_system.from_dict(player_state["titles"])
-            
-        # Mark as initialized
-        self.initialized = True
-        
-        return self.player
+        pass
     
     async def initialize_game_instance(self, game_id: str, db_session: AsyncSession) -> None:
         """Initialize a new game instance with a basic world."""
@@ -146,8 +47,8 @@ class GameStateManager:
             map_system = GameMapSystem()
             player = Player(
                 map_system,
-                player_id=game_instance.user_id,
-                player_name=f"Player_{game_instance.user_id[:8]}"
+                game_instance.user_id,
+                f"Player_{game_instance.user_id[:8]}"
             )
             command_parser = CommandParser(player)
             command_service = CommandService(command_parser, db_session)
@@ -249,9 +150,12 @@ class GameStateManager:
                 "exits": tile.exits
             })
         
+        # Get player position from state
+        x, y = player.state.position
+        
         return {
             "tiles": tile_data,
-            "current_position": {"x": player.x, "y": player.y}
+            "current_position": {"x": x, "y": y}
         }
     
     async def _initialize_game_world(self, game_id: str, db_session: AsyncSession) -> None:
