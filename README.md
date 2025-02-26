@@ -48,12 +48,29 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Set up environment variables:
+4. Set up PostgreSQL:
+
+```bash
+# Install PostgreSQL if you haven't already
+# On macOS: brew install postgresql
+# On Ubuntu: sudo apt install postgresql
+
+# Start PostgreSQL service
+# On macOS: brew services start postgresql
+# On Ubuntu: sudo service postgresql start
+
+# Create a PostgreSQL user (if needed)
+# createuser -P -s postgres
+```
+
+5. Set up environment variables:
 
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
+
+The application will automatically create the database and tables on startup if they don't exist.
 
 ## Quick Start
 
@@ -160,7 +177,8 @@ curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
 ### Known Issues
 
 - **Authentication Persistence**: This issue has been fixed by implementing a persistent secret key that is stored in `auth_secret.json`. If you encounter authentication issues after a server restart, make sure this file exists and has not been corrupted.
-- **Port Conflicts**: If you see "Address already in use" errors, check for existing processes using port 8000 with `lsof -i :8000` and terminate them if needed.
+- **Port Conflicts**: The application now automatically detects if port 8000 is in use and will find an available port in the range 8000-8100. If you see a message like "Port 8000 is in use. Using port 8001 instead", simply use the new port in your browser or API calls. You can also manually check for processes using port 8000 with `lsof -i :8000` and terminate them if needed.
+- **Database Connection**: If you see an error like `database "thelastcentaur" does not exist`, the application will now attempt to create the database automatically. Make sure PostgreSQL is running and that the user specified in your `.env` file has permission to create databases. If you still encounter issues, you can manually create the database with `createdb thelastcentaur`.
 
 ## Game Commands
 
