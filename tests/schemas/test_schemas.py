@@ -116,7 +116,7 @@ class TestGameSchemas:
         """Test GameInstanceResponse schema."""
         game_data = {
             "id": "1",
-            "owner_id": "1",
+            "user_id": "1",
             "name": "Test Game",
             "status": GameStatus.ACTIVE,
             "max_players": 4,
@@ -129,7 +129,7 @@ class TestGameSchemas:
         game = GameInstanceResponse(**game_data)
         
         assert game.id == "1"
-        assert game.owner_id == "1"
+        assert game.user_id == "1"
         assert game.name == "Test Game"
         assert game.status == GameStatus.ACTIVE
         assert game.max_players == 4
