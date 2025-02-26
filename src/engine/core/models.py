@@ -127,10 +127,22 @@ class TileState:
     enemies: List[Enemy]
     npcs: List[str] = field(default_factory=list)
     is_visited: bool = False
+    environmental_changes: List[Dict[str, Any]] = field(default_factory=list)
+    blocked_paths: List[Direction] = field(default_factory=list)
     
     def get_description(self) -> str:
         """Get a full description of the tile's current state."""
         desc = [self.description]
+        
+        # Add environmental changes if present
+        if self.environmental_changes:
+            permanent_changes = [change for change in self.environmental_changes if change.get("is_permanent", False)]
+            if permanent_changes:
+                desc.append("")  # Empty line
+                desc.append("You notice changes to the environment:")
+                for change in permanent_changes:
+                    desc.append(f"- {change['description']}")
+        
         desc.append("")  # Empty line
         
         # Add movement options

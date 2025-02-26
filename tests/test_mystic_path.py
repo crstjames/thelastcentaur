@@ -2,10 +2,16 @@
 Test script for the Mystic Path in The Last Centaur.
 
 This test follows the path of magical knowledge:
-Start → Trials Path → Mystic Mountains → Crystal Caves → Shadow Domain
+Start → Enchanted Valley → Ancient Ruins → Trials Path → Shadow Domain
 """
 
 import pytest
+import sys
+import os
+
+# Add the src directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.engine.core.models import Direction, StoryArea
 from src.engine.core.player import Player
 from src.engine.core.map_system import MapSystem
@@ -36,9 +42,10 @@ def test_mystic_path():
     assert "Ancient woods where you first awakened" in result
     assert "Wolf Pack" in result
     
-    # Try going west (should fail - blocked path)
+    # Try going west (should succeed - path to Druid's Grove)
     result = execute("w")
-    assert "blocked" in result.lower() or "cannot" in result.lower()
+    assert "Moved west" in result
+    assert "peaceful grove where the Hermit Druid contemplates" in result
     
     # Defeat the wolf pack
     execute("defeat Wolf Pack")

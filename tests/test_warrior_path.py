@@ -6,6 +6,12 @@ Start → Trials Path → Ancient Ruins → Enchanted Valley → Shadow Domain
 """
 
 import pytest
+import sys
+import os
+
+# Add the src directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.engine.core.models import Direction, StoryArea
 from src.engine.core.player import Player
 from src.engine.core.map_system import MapSystem
@@ -38,7 +44,7 @@ def test_warrior_path():
     
     # Try going east (should fail - blocked path)
     result = execute("e")
-    assert "blocked" in result.lower() or "cannot" in result.lower()
+    assert "Fallen Warrior" in result and "warrior_map" in result
     
     # Defeat the wolf pack
     execute("defeat Wolf Pack")

@@ -24,6 +24,18 @@ from src.db.models import User
 from src.db.session import get_db
 from src.main import app as fastapi_app
 
+# Add the src directory to the Python path for engine tests
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import engine components for fixtures
+from src.engine.core.models import Direction, StoryArea, TerrainType
+from src.engine.core.player import Player
+from src.engine.core.map_system import MapSystem
+from src.engine.core.game_systems import TimeSystem
+from src.engine.core.command_parser import CommandParser
+from src.engine.core.discovery_system import DiscoverySystem, HiddenDiscovery, InteractionType
+
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
 
@@ -260,6 +272,96 @@ def current_user(test_user: User) -> User:
 
 @pytest.fixture
 def token_headers(test_user: User) -> dict:
-    """Create token headers for authentication."""
-    access_token = create_access_token(test_user.id)
-    return {"Authorization": f"Bearer {access_token}"} 
+    """Return token headers for testing."""
+    access_token = create_access_token(
+        subject=test_user.id
+    )
+    return {"Authorization": f"Bearer {access_token}"}
+
+# Engine test fixtures
+@pytest.fixture
+def mock_map_system():
+    """Return a mock map system for testing."""
+    map_system = MagicMock()
+    map_system.current_weather = MagicMock(value="clear")
+    map_system.get_tile_at_position = MagicMock(return_value=None)
+    return map_system
+
+@pytest.fixture
+def mock_player(mock_map_system):
+    """Return a mock player for testing."""
+    player = MagicMock()
+    player.map_system = mock_map_system
+    
+    # Set up time_system mock
+    player.time_system = MagicMock()
+    player.time_system.time = MagicMock()
+    player.time_system.time.get_time_of_day = MagicMock(return_value=MagicMock(value="DAY"))
+    
+    # Set up player state
+    player.state = MagicMock()
+    player.state.inventory = []
+    player.get_current_position = MagicMock(return_value=(5, 5))
+    
+    # Create a mock tile
+    tile = MagicMock()
+    tile.position = (5, 5)
+    tile.terrain_type = TerrainType.FOREST
+    tile.description = "A peaceful forest area."
+    tile.items = ["stick", "rock"]
+    player.state.current_tile = tile
+    
+    return player
+
+@pytest.fixture
+def discovery_system():
+    """Return a discovery system for testing."""
+    discovery_system = DiscoverySystem()
+    
+    # Add test discoveries
+    discovery_system.discoveries["test_berries"] = HiddenDiscovery(
+        id="test_berries",
+        name="Test Berries",
+        description="Some test berries for testing.",
+        discovery_text="You found some test berries!",
+        terrain_types=["FOREST"],
+        required_interaction="gather",
+        required_keywords=["berries", "bush"],
+        chance_to_find=1.0,
+        item_reward="test_berries"
+    )
+    
+    discovery_system.discoveries["pretty_flower"] = HiddenDiscovery(
+        id="pretty_flower",
+        name="Pretty Flower",
+        description="A beautiful flower with vibrant colors.",
+        discovery_text="You found a pretty flower!",
+        terrain_types=["FOREST", "CLEARING"],
+        required_interaction="examine",
+        required_keywords=["flower", "flowers", "plant"],
+        chance_to_find=1.0,
+        item_reward="pretty_flower",
+        unique=False
+    )
+    
+    return discovery_system
+
+@pytest.fixture
+def command_parser(mock_player):
+    """Return a command parser for testing."""
+    return CommandParser(mock_player)
+
+@pytest.fixture
+def real_map_system():
+    """Return a real map system for testing."""
+    return MapSystem()
+
+@pytest.fixture
+def real_player(real_map_system):
+    """Return a real player for testing."""
+    return Player(real_map_system, player_id="test_player", player_name="Test Player")
+
+@pytest.fixture
+def real_command_parser(real_player):
+    """Return a real command parser for testing."""
+    return CommandParser(real_player) 

@@ -465,6 +465,13 @@ class MapSystem:
         # Initialize starting area with proper Enemy objects
         starting_node = GAME_MAP[StoryArea.AWAKENING_WOODS]
         starting_node.enemies = self._create_enemies(["wolf_pack", "shadow_stalker"])
+        
+        self.areas = GAME_MAP
+        self.position_to_area = {}
+        
+        # Build a position-to-area lookup
+        for area_id, area_node in self.areas.items():
+            self.position_to_area[area_node.position] = area_node
     
     def _create_enemies(self, enemy_ids: List[str]) -> List[Enemy]:
         """Convert enemy IDs to Enemy objects based on current time."""
@@ -643,4 +650,21 @@ class MapSystem:
                     is_visited=True
                 )
                 tile.update_enemies(time_of_day)
-                node.enemies = tile.enemies 
+                node.enemies = tile.enemies
+                
+                # Update description based on time of day
+                if time_of_day.lower() == "night":
+                    if "The land lies under a blanket of stars" not in node.base_description:
+                        node.base_description += " The land lies under a blanket of stars."
+    
+    def get_tile_at_position(self, position: Tuple[int, int]) -> Optional[AreaNode]:
+        """
+        Get the area node at a specific position.
+        
+        Args:
+            position: The (x, y) position to check
+            
+        Returns:
+            The AreaNode at the position, or None if no area exists there
+        """
+        return self.position_to_area.get(position) 

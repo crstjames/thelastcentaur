@@ -210,6 +210,57 @@ curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
 - `write [text]` - Write a message
 - `alter [desc]` - Change the environment
 
+## Game Paths
+
+The Last Centaur features three distinct paths that players can choose from, each offering unique gameplay mechanics and quest lines:
+
+### Warrior Path
+
+The Warrior path focuses on combat prowess and direct confrontation. Warriors gain strength from honorable victories and can wield powerful ancient weapons. This path is straightforward but challenging, requiring courage and determination.
+
+Key features:
+
+- Combat-focused abilities
+- Honorable combat mechanics
+- Powerful weapons and armor
+- Direct confrontation with enemies
+- "The Warrior's Honor" quest line
+
+### Stealth Path
+
+The Stealth path focuses on subterfuge, evasion, and indirect approaches. Those who follow this path learn to move unseen, strike from shadows, and bypass obstacles rather than confronting them directly. This path requires patience and careful planning.
+
+Key features:
+
+- Stealth mechanics and detection system
+- Silent takedowns and ambush tactics
+- Evasion and misdirection abilities
+- Lockpicking and trap disarming
+- "The Shadow's Embrace" quest line
+
+### Mystic Path
+
+The Mystic path focuses on magical abilities, wisdom, and understanding the deeper nature of reality. Mystics can cast powerful spells, see hidden truths, and commune with ancient forces. This path requires study and contemplation but offers great insight and power.
+
+Key features:
+
+- Spell casting system
+- Meditation and mana regeneration
+- Insight into hidden aspects of the world
+- Magical artifacts and scrolls
+- "The Hermit's Wisdom" quest line
+
+### Path Selection
+
+Players can choose their path early in the game, or the system can suggest a path based on their play style. Each action the player takes contributes to their affinity with different paths, allowing for a natural progression toward their preferred style of play.
+
+The path system tracks:
+
+- Path experience and level progression
+- Unlocked abilities and skills
+- Quest progress specific to each path
+- Path-specific achievements and titles
+
 ## Development
 
 ### Project Structure
