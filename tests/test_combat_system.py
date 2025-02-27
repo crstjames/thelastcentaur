@@ -149,7 +149,8 @@ class TestCombatSystem:
         )
         
         assert result.damage_dealt > 0
-        assert not result.is_critical  # Not guaranteed, but unlikely with 5% chance
+        # Critical hits are random, so we can't reliably test for them
+        # Just check that damage was dealt
         
         # Test fire attack against earth (should be effective)
         result = combat_system.calculate_damage(

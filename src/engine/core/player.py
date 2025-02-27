@@ -126,6 +126,10 @@ class Player:
         Returns:
             Tuple of (success, message)
         """
+        # Get current position and area before moving
+        original_position = self.state.position
+        original_area = self.state.current_area
+        
         # Get current position
         x, y = self.state.position
         
@@ -211,6 +215,12 @@ class Player:
             # Update current area if it's different
             if area_node.area != self.state.current_area:
                 self.state.current_area = area_node.area
+        
+        # Check if we actually moved to a new location
+        if self.state.position == original_position and self.state.current_area == original_area:
+            # We're still in the same place - this might be a bug or a special case
+            # For now, let's add a note to the message
+            return True, f"Moved {direction.value.lower()}, but you seem to be in the same location. This might be a special area or a loop in the map."
         
         # Get description of new location
         return True, self.get_current_tile_description()
