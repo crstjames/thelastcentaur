@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 
-from .models import Direction, TileState, TerrainType
+from .models import Direction, TileState, TerrainType, PathType
 from .map_system import MapSystem, GAME_MAP
 from .models import StoryArea
 from .game_systems import TimeSystem, TimeOfDay, AchievementSystem, TitleSystem, LeaderboardSystem, LeaderboardEntry
@@ -57,6 +57,7 @@ class Player:
         self.title_system = TitleSystem()
         self.leaderboard_system = LeaderboardSystem()  # Initialize leaderboard system
         self.state.visited_tiles.add((5, 0))
+        self.path_type = None  # Initialize path_type as None
         
         # Initialize current tile as TileState
         starting_node = self.map_system.get_area_node(StoryArea.AWAKENING_WOODS)
@@ -125,6 +126,10 @@ class Player:
         Returns:
             Tuple of (success, message)
         """
+        # Get current position and area before moving
+        original_position = self.state.position
+        original_area = self.state.current_area
+        
         # Get current position
         x, y = self.state.position
         
@@ -210,6 +215,12 @@ class Player:
             # Update current area if it's different
             if area_node.area != self.state.current_area:
                 self.state.current_area = area_node.area
+        
+        # Check if we actually moved to a new location
+        if self.state.position == original_position and self.state.current_area == original_area:
+            # We're still in the same place - this might be a bug or a special case
+            # For now, let's add a note to the message
+            return True, f"Moved {direction.value.lower()}, but you seem to be in the same location. This might be a special area or a loop in the map."
         
         # Get description of new location
         return True, self.get_current_tile_description()
@@ -368,13 +379,21 @@ class Player:
         if hasattr(self.achievement_system, "check_combat_achievement"):
             achievement_msg = self.achievement_system.check_combat_achievement(enemy_name, True)
         
-        # Remove enemy from current tile
+        # Find the enemy by name (case-insensitive)
+        enemy_obj = None
         if self.state.current_tile and self.state.current_tile.enemies:
-            # Find the enemy by name (case-insensitive)
             for enemy in self.state.current_tile.enemies[:]:  # Create a copy to modify during iteration
                 if enemy.name.lower() == enemy_name.lower():
+                    enemy_obj = enemy
                     self.state.current_tile.enemies.remove(enemy)
                     break
+        
+        # Add enemy drops to the current tile
+        if enemy_obj and hasattr(enemy_obj, 'drops') and enemy_obj.drops:
+            # Add drops to the current tile's items
+            for item in enemy_obj.drops:
+                if item not in self.state.current_tile.items:
+                    self.state.current_tile.items.append(item)
         
         # Clear blocked paths
         if self.state.position in self.state.blocked_paths:
@@ -384,9 +403,36 @@ class Player:
         time_events = self.time_system.advance_time(30)
         time_message = " ".join(time_events.values()) if time_events else ""
         
-        victory_msg = f"You defeated the {enemy_name}! Any items they dropped are now on the ground."
+        # Restore some health and stamina after victory
+        health_restore = min(10, self.state.stats.max_health - self.state.stats.health)
+        stamina_restore = min(20, self.state.stats.max_stamina - self.state.stats.stamina)
+        
+        self.state.stats.health += health_restore
+        self.state.stats.stamina += stamina_restore
+        
+        # Build victory message
+        victory_msg = f"You defeated the {enemy_name}!"
+        
+        # Add drops message if there were any
+        if enemy_obj and hasattr(enemy_obj, 'drops') and enemy_obj.drops:
+            drops_str = ", ".join(enemy_obj.drops)
+            victory_msg += f" It dropped: {drops_str}."
+        
+        # Add health/stamina restore message
+        if health_restore > 0 or stamina_restore > 0:
+            restore_msg = []
+            if health_restore > 0:
+                restore_msg.append(f"{health_restore} health")
+            if stamina_restore > 0:
+                restore_msg.append(f"{stamina_restore} stamina")
+            
+            victory_msg += f" You recovered {' and '.join(restore_msg)}."
+        
+        # Add achievement message if any
         if achievement_msg:
             victory_msg = f"{victory_msg} {achievement_msg}"
+        
+        # Add time message if any
         if time_message:
             victory_msg = f"{victory_msg} {time_message}"
         
