@@ -10,7 +10,7 @@ Usage:
     python play_game.py [--port PORT]
 
 Options:
-    --port PORT    Port for the game API (default: 8003)
+    --port PORT    Port for the game API (default: 8000)
 """
 
 import os
@@ -40,5 +40,10 @@ except ImportError as e:
     sys.exit(1)
 
 if __name__ == "__main__":
-    # Run the CLI
-    asyncio.run(main()) 
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="The Last Centaur - Natural Language CLI")
+    parser.add_argument("--port", type=int, default=8000, help="Port for the game API (default: 8000)")
+    args = parser.parse_args()
+    
+    # Run the CLI with the specified port
+    asyncio.run(main(args.port)) 

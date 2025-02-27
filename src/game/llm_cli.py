@@ -51,7 +51,7 @@ class GameCLI:
                     timeout=10.0
                 )
                 
-                if response.status_code == 200:
+                if response.status_code in [200, 201]:  # Accept both 200 OK and 201 Created
                     data = response.json()
                     self.user_id = data.get("id")
                     self.username = username
@@ -317,14 +317,14 @@ class GameCLI:
         # Start playing
         await self.play_game()
 
-async def main():
+async def main(port=8000):
     """Main entry point for the CLI."""
-    parser = argparse.ArgumentParser(description="The Last Centaur - Natural Language CLI")
-    parser.add_argument("--port", type=int, default=8003, help="Port for the game API")
-    args = parser.parse_args()
-    
-    cli = GameCLI(api_port=args.port)
+    cli = GameCLI(api_port=port)
     await cli.setup_and_play()
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    parser = argparse.ArgumentParser(description="The Last Centaur - Natural Language CLI")
+    parser.add_argument("--port", type=int, default=8000, help="Port for the game API")
+    args = parser.parse_args()
+    
+    asyncio.run(main(args.port)) 

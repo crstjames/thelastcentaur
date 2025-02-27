@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Database
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_USER: str = "crstjames"
-    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "thelastcentaur"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
     
