@@ -1,5 +1,5 @@
 # Use Python 3.11 slim image
-FROM python:3.11-slim
+FROM python:3.11-slim as backend-base
 
 # Set working directory
 WORKDIR /app
@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Ensure pydantic-settings is installed
+RUN pip install --no-cache-dir pydantic-settings
+
+# Production stage
+FROM backend-base as backend
 
 # Copy application code
 COPY . .

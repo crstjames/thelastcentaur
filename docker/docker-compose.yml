@@ -1,42 +1,61 @@
 version: "3.8"
 
 services:
+  # Backend API service
   app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: backend
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/thelastcentaur
-      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_SERVER=${POSTGRES_SERVER:-db}
+      - POSTGRES_DB=${POSTGRES_DB:-thelastcentaur}
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
-      - ENVIRONMENT=development
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     depends_on:
       - db
       - redis
-    volumes:
-      - ../src:/app/src
-      - ../tests:/app/tests
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
 
+  # Frontend web service
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+      target: production
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  # Database service
   db:
     image: postgres:15-alpine
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=thelastcentaur
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-thelastcentaur}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
 
+  # Redis service for caching and session management
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    restart: unless-stopped
 
 volumes:
   postgres_data:
