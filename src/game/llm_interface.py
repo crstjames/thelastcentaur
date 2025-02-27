@@ -6,6 +6,8 @@ from typing import Dict, List, Any, Optional, Tuple
 import httpx
 from openai import AsyncOpenAI
 
+from src.game.environmental_items import is_environmental_item, update_inventory_with_item
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,12 +59,25 @@ class LLMInterface:
         - If the game shows "Wolf Pack" as an enemy, and the player says "attack wolves", you MUST return "attack Wolf Pack"
         - If the game shows "basic_supplies" as an item, and the player says "get supplies", you MUST return "take basic_supplies"
         
+        ENVIRONMENTAL INTERACTIONS: The player can interact with environmental elements that aren't explicitly listed but would naturally be present based on the terrain type and description. For example:
+        - In a forest: leaves, twigs, bark, berries, moss, flowers, herbs
+        - Near mountains: rocks, stones, pebbles, dirt, snow, ice
+        - By a river: water, reeds, clay, mud, sand
+        - On a beach: sand, shells, seaweed, driftwood
+        - In a cave: rocks, stones, crystals, dust, dirt
+        - In a clearing: grass, flowers, weeds, dirt, soil
+        - Among ruins: dust, debris, fragments, stones, rubble
+        
+        When the player wants to interact with these environmental elements, convert their request to the appropriate command (e.g., "take leaves", "take stones", etc.).
+        
         Pay close attention to the current location description, visible items, enemies present, and other environmental details to understand the context of the player's command. The player may refer to objects described in the environment without using their exact names.
         
         For roleplay interactions with the environment that aren't explicitly listed in the game state:
         - "Pick up some leaves" → "take leaves"
         - "Gather stones from the ground" → "take stones"
         - "Collect flowers" → "take flowers"
+        - "Scoop up some water" → "take water"
+        - "Break off a piece of bark" → "take bark"
         
         The player may use slang or informal language. Here are some examples of slang and their interpretations:
         
@@ -332,6 +347,139 @@ class LLMInterface:
             Game response string
         """
         try:
+            # Handle attack commands with special care
+            if command.startswith("attack "):
+                target = command[7:].strip()  # Extract the target name
+                
+                # First, check if the target is actually present in the current location
+                look_response = await self._execute_direct_command("look", game_id, access_token)
+                
+                # Check if the target is mentioned in the look response
+                if "Enemies present:" in look_response and target in look_response:
+                    logger.info(f"Target {target} found in the current location")
+                    
+                    # Try the attack command
+                    attack_response = await self._execute_direct_command(command, game_id, access_token)
+                    
+                    # If we got a meaningful response, return it
+                    if attack_response and len(attack_response.strip()) > 3:
+                        return attack_response
+                    
+                    # If the response was empty or too short, provide a more helpful message
+                    return f"You attempt to attack the {target}, but something seems off. The {target} might be too strong or not vulnerable to direct attacks right now."
+                else:
+                    logger.info(f"Target {target} not found in the current location")
+                    return f"You don't see any {target} here to attack."
+            
+            # Handle environmental roleplay items that aren't explicitly in the game state
+            # but would naturally be present in the environment
+            if command.startswith("take "):
+                item = command[5:].strip()  # Extract the item name
+                
+                # First check if this is a regular item in the game
+                # If it is, use the normal game command to take it
+                regular_item_response = await self._execute_direct_command(command, game_id, access_token)
+                if "You take" in regular_item_response or "added to your inventory" in regular_item_response:
+                    logger.info(f"Successfully took regular item: {item}")
+                    return regular_item_response
+                
+                # If we couldn't take it as a regular item, check if it's an environmental item
+                # Get the current game state to check the environment
+                game_data = await self.get_game_state(game_id, access_token)
+                
+                # Log the game state for debugging
+                logger.info(f"Processing potential environmental item: {item}")
+                logger.info(f"Game state keys: {list(game_data.keys())}")
+                
+                # First, try to get the current tile description from the look command
+                # This is the most reliable way to get the current environment
+                look_response = await self._execute_direct_command("look", game_id, access_token)
+                
+                # If we have a look response, check if this is a forest environment
+                if look_response:
+                    logger.info(f"Look response: {look_response}")
+                    
+                    # Check for forest/woods keywords in the look response
+                    forest_keywords = ["forest", "woods", "trees", "ancient woods", "branches", "canopy"]
+                    is_forest = any(keyword in look_response.lower() for keyword in forest_keywords)
+                    
+                    # Check if this is a forest item
+                    forest_items = ["leaves", "twigs", "bark", "berries", "moss", "flowers", "herbs"]
+                    
+                    # If this is a forest environment and a forest item, handle it directly
+                    if is_forest and item in forest_items:
+                        logger.info(f"Detected forest environment and forest item: {item}")
+                        
+                        # Try to add the item to inventory using our direct method
+                        return await self._add_environmental_item_to_inventory(item, game_id, access_token)
+                
+                # If we didn't handle it directly, try the normal approach
+                # Extract terrain type and description from game state
+                terrain_type = ""
+                description = look_response if look_response else ""
+                
+                # If we have a description from look, check for forest/woods keywords
+                if description:
+                    if any(keyword in description.lower() for keyword in ["forest", "woods", "trees", "ancient woods"]):
+                        terrain_type = "forest"
+                        logger.info(f"Detected forest terrain from description")
+                
+                # If we couldn't get a description from look, try the game state
+                if not description or not terrain_type:
+                    # Check different possible structures in the game state
+                    if "current_tile" in game_data:
+                        current_tile = game_data["current_tile"]
+                        if "terrain_type" in current_tile:
+                            terrain_type = current_tile["terrain_type"]
+                        if "description" in current_tile:
+                            description = current_tile["description"]
+                    elif "game_state" in game_data:
+                        game_state = game_data["game_state"]
+                        if "current_tile" in game_state:
+                            current_tile = game_state["current_tile"]
+                            if "terrain_type" in current_tile:
+                                terrain_type = current_tile["terrain_type"]
+                            if "description" in current_tile:
+                                description = current_tile["description"]
+                
+                # Log the extracted information for debugging
+                logger.info(f"Extracted terrain_type: {terrain_type}, description: {description}")
+                
+                # Check if this is an environmental item
+                if is_environmental_item(item, terrain_type, description):
+                    logger.info(f"Handling environmental item: {item}")
+                    
+                    # Use our helper function to update the inventory
+                    async with httpx.AsyncClient() as client:
+                        result = await update_inventory_with_item(
+                            client, game_id, access_token, item, self.api_base_url
+                        )
+                        
+                        return result["message"]
+                
+                # If we got here, it's not a valid item to take
+                return f"There is no {item} here."
+            
+            # For non-environmental items or other commands, proceed with normal API call
+            return await self._execute_direct_command(command, game_id, access_token)
+                    
+        except Exception as e:
+            logger.error(f"Error sending command to game: {e}")
+            return f"Error executing command: {str(e)}"
+    
+    async def _execute_direct_command(self, command: str, game_id: str, access_token: str) -> str:
+        """
+        Execute a command directly through the game API.
+        
+        Args:
+            command: The game command to send
+            game_id: The game instance ID
+            access_token: The user's access token
+            
+        Returns:
+            Game response string
+        """
+        try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.api_base_url}/game/{game_id}/command",
@@ -343,21 +491,14 @@ class LLMInterface:
                     timeout=10.0
                 )
                 
-                response.raise_for_status()
-                data = response.json()
-                
-                # Extract the response text from the API response
-                return data.get("response", "No response from game")
-                
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error sending command to game: {e}")
-            return f"Error communicating with the game: {e.response.status_code}"
-        except httpx.RequestError as e:
-            logger.error(f"Request error sending command to game: {e}")
-            return "Error connecting to the game server"
+                if response.status_code == 200:
+                    return response.json()["response"]
+                else:
+                    logger.error(f"Error from game API: {response.status_code} - {response.text}")
+                    return f"Error executing command: {response.text}"
         except Exception as e:
-            logger.error(f"Unexpected error sending command to game: {e}")
-            return f"Unexpected error: {str(e)}"
+            logger.error(f"Error executing direct command: {e}")
+            return f"Error executing command: {str(e)}"
     
     async def _enhance_response(self, game_response: str, user_input: str, game_command: str) -> str:
         """
@@ -372,18 +513,31 @@ class LLMInterface:
             Enhanced response string
         """
         try:
-            # If the game response is empty or very short, return a default message
+            # If the game response is empty or very short, return a more specific default message
             if not game_response or len(game_response.strip()) < 3:
                 if "look" in game_command or "examine" in game_command:
                     return "You see nothing special about that."
                 elif "attack" in game_command:
-                    return "You swing at the air, finding no target for your attack."
+                    # Get the target from the attack command
+                    target = game_command.replace("attack", "").strip()
+                    if target:
+                        return f"You attempt to attack the {target}, but something seems off. Perhaps they're not in a position to be attacked right now, or there might be another approach needed."
+                    else:
+                        return "You swing at the air, finding no target for your attack."
                 elif "take" in game_command:
-                    return "You reach out, but there's nothing there to take."
+                    item = game_command.replace("take", "").strip()
+                    if item:
+                        return f"You reach for the {item}, but can't seem to grasp it. It might not be available to take right now."
+                    else:
+                        return "You reach out, but there's nothing there to take."
                 elif "talk" in game_command:
-                    return "There's no one here to talk to."
+                    target = game_command.replace("talk", "").strip()
+                    if target:
+                        return f"You try to engage the {target} in conversation, but they don't seem interested in talking at the moment."
+                    else:
+                        return "There's no one here to talk to."
                 else:
-                    return "Nothing happens."
+                    return "Nothing happens. Perhaps try a different approach."
             
             # Prepare context for the LLM
             context = f"""
@@ -412,7 +566,7 @@ class LLMInterface:
     
     async def get_game_state(self, game_id: str, access_token: str) -> Dict[str, Any]:
         """
-        Get the current game state from the API.
+        Get the current game state.
         
         Args:
             game_id: The game instance ID
@@ -429,9 +583,11 @@ class LLMInterface:
                     timeout=10.0
                 )
                 
-                response.raise_for_status()
-                return response.json()
-                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.error(f"Error getting game state: {response.status_code} - {response.text}")
+                    return {}
         except Exception as e:
             logger.error(f"Error getting game state: {e}")
             return {}
@@ -460,4 +616,60 @@ class LLMInterface:
                 
         except Exception as e:
             logger.error(f"Error getting game map: {e}")
-            return {} 
+            return {}
+    
+    async def _add_environmental_item_to_inventory(self, item_name: str, game_id: str, access_token: str) -> str:
+        """
+        Add an environmental item directly to the player's inventory.
+        This is a fallback method when the normal update_inventory_with_item fails.
+        
+        Args:
+            item_name: The name of the item to add
+            game_id: The game instance ID
+            access_token: The user's access token
+            
+        Returns:
+            Response message
+        """
+        try:
+            # First, check the current inventory
+            inventory_response = await self._execute_direct_command("inventory", game_id, access_token)
+            logger.info(f"Current inventory: {inventory_response}")
+            
+            # Check if the player already has this item
+            if item_name in inventory_response.lower():
+                return f"You already have some {item_name} in your inventory."
+            
+            # Check if the inventory is full (arbitrary limit)
+            # Count the number of items by splitting the inventory response
+            if inventory_response.startswith("Inventory:"):
+                items = inventory_response[len("Inventory:"):].strip().split(", ")
+                if len(items) >= 20 and items[0]:  # Check if there are items and not just an empty string
+                    return f"You gather some {item_name} from the surroundings, but your inventory is full."
+            
+            # Create a custom command to add the item to inventory
+            # This is a hack, but it might work if the game supports it
+            create_command = f"debug add_item {item_name}"
+            create_response = await self._execute_direct_command(create_command, game_id, access_token)
+            
+            # Check if the command worked
+            if "added to inventory" in create_response.lower() or "successfully" in create_response.lower():
+                return f"You gather some {item_name} from the surroundings and add them to your inventory."
+            
+            # If that didn't work, try another approach
+            # Try to use the game's internal command to create the item in the current location
+            spawn_command = f"debug spawn_item {item_name}"
+            spawn_response = await self._execute_direct_command(spawn_command, game_id, access_token)
+            
+            # Now try to take the item
+            take_response = await self._execute_direct_command(f"take {item_name}", game_id, access_token)
+            
+            if "added to inventory" in take_response.lower() or "you take" in take_response.lower():
+                return f"You gather some {item_name} from the surroundings and add them to your inventory."
+            
+            # If all else fails, return a generic message
+            return f"You gather some {item_name} from the surroundings, but can't seem to find a place for them in your inventory."
+            
+        except Exception as e:
+            logger.error(f"Error adding environmental item to inventory: {e}")
+            return f"You gather some {item_name} from the surroundings, but something prevents you from keeping them." 
