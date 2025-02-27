@@ -13,6 +13,7 @@ from .models import Direction
 from .player import Player
 from .world_design import WORLD_NPCS
 from .discovery_system import DiscoverySystem, InteractionType
+from .combat_system import CombatSystem, ElementType, CombatAction
 
 class CommandType(str, Enum):
     """Types of commands available to the player."""
@@ -89,6 +90,7 @@ class CommandParser:
     def __init__(self, player: Player):
         self.player = player
         self.discovery_system = DiscoverySystem()
+        self.combat_system = CombatSystem()
     
     def parse_command(self, command_text: str) -> Command:
         """Parse a command string into a Command object."""
@@ -236,7 +238,7 @@ class CommandParser:
             
         # Handle help commands
         if command.type == CommandType.HELP:
-            return self._get_help_text()
+            return self._handle_help_command()
             
         # Handle status commands
         if command.type == CommandType.STATUS:
@@ -359,54 +361,67 @@ class CommandParser:
             map_view.append("".join(row))
         return "\n".join(map_view)
     
-    def _get_help_text(self) -> str:
-        """Get help text with available commands."""
-        help_text = """
-Available Commands:
-
-Movement:
-- move (n/s/e/w) : Move in a direction
-- meditate       : Recover stamina through meditation
-
-Information:
-- look [dir]     : Examine current area or look in a direction
-- status         : Show your current stats
-- inventory      : Show your inventory
-- map           : Show discovered areas
-
-Items:
-- take/get [item]: Pick up an item
-- drop [item]    : Drop an item
-- gather [type]  : Gather environmental resources
-
-Environment:
-- mark [desc]    : Leave a mark or sign
-- draw [desc]    : Draw something
-- write [text]   : Write a message
-- alter [desc]   : Change the environment
-
-Combat:
-- attack [target]: Attack an enemy
-- defend         : Take defensive stance
-- dodge          : Prepare to dodge
-- special        : Use special ability
-
-Roleplay:
-- emote [action] : Perform an action
-- say [text]     : Say something
-- think [text]   : Express thoughts
-
-Test Commands:
-- defeat [enemy] : Instantly defeat an enemy (testing only)
-
-Shortcuts:
-- Movement: n, s, e, w
-- Look: l
-- Inventory: i
-- Map: m
-- Help: h, ?
-"""
-        return help_text
+    def _handle_help_command(self) -> str:
+        """Handle the help command."""
+        help_text = [
+            "=== THE LAST CENTAUR - COMMANDS ===",
+            "",
+            "MOVEMENT:",
+            "  north, south, east, west - Move in a direction",
+            "  n, s, e, w - Shorthand for directions",
+            "",
+            "INFORMATION:",
+            "  look - Examine your surroundings",
+            "  status - Check your health, stamina, and other stats",
+            "  inventory - List items you're carrying",
+            "  map - Display a simple map of explored areas",
+            "  achievements - View your achievements",
+            "  titles - View available titles",
+            "  leaderboard - View the game leaderboard",
+            "",
+            "ITEMS:",
+            "  take [item] - Pick up an item",
+            "  drop [item] - Drop an item",
+            "  gather - Collect resources from the environment",
+            "",
+            "COMBAT:",
+            "  attack [enemy] [element] - Attack an enemy with specified element",
+            "  defend - Take a defensive stance to reduce damage",
+            "  dodge - Increase chance to avoid the next attack",
+            "  special - Use a path-specific special ability",
+            "",
+            "ELEMENTS:",
+            "  physical - Basic non-elemental damage",
+            "  fire - Strong against earth, weak against water",
+            "  water - Strong against fire, weak against earth",
+            "  earth - Strong against water, weak against air",
+            "  air - Strong against earth, weak against fire",
+            "  shadow - Strong against light, weak against physical",
+            "  light - Strong against shadow, weak against physical",
+            "",
+            "TERRAIN EFFECTS:",
+            "  forest - Boosts earth attacks",
+            "  mountain - Boosts air attacks",
+            "  ruins - Boosts shadow attacks",
+            "  clearing - Boosts light attacks",
+            "  valley - Boosts water attacks",
+            "  cave - Boosts fire attacks",
+            "",
+            "ROLEPLAY:",
+            "  emote [action] - Perform an action",
+            "  say [message] - Say something out loud",
+            "  think [thought] - Express a thought",
+            "  talk [npc] - Talk to an NPC",
+            "",
+            "SYSTEM:",
+            "  help - Display this help text",
+            "  hint - Get a hint about what to do next",
+            "  save - Save your game progress",
+            "",
+            "==================================="
+        ]
+        
+        return "\n".join(help_text)
     
     def handle_take_command(self, args: List[str]) -> str:
         """Handle taking items from the environment."""
@@ -530,15 +545,103 @@ Shortcuts:
             
             if not args:
                 return f"Attack what? {time_message}"
-            target = " ".join(args)
+            
+            # Parse target and element
+            target_parts = []
+            element_name = None
+            
+            for arg in args:
+                # Check if this is an element specification
+                if arg.lower() in [e.value for e in ElementType]:
+                    element_name = arg.lower()
+                else:
+                    target_parts.append(arg)
+            
+            target = " ".join(target_parts)
+            
+            # Default to physical if no element specified
+            if not element_name:
+                element_name = ElementType.PHYSICAL.value
+            
+            # Convert string to ElementType
+            element = next((e for e in ElementType if e.value == element_name), ElementType.PHYSICAL)
             
             # Check if the target exists
             enemy_found = False
             for enemy in current_tile.enemies:
                 if target.lower() in enemy.name.lower():
                     enemy_found = True
-                    # Call combat_victory to handle the defeat of the enemy
-                    return self.player.combat_victory(enemy.name)
+                    
+                    # Check if this is the first attack (start of combat)
+                    if not self.combat_system.in_combat or self.combat_system.current_enemy != enemy:
+                        # Initialize combat with this enemy
+                        encounter_message = self.combat_system.start_combat(
+                            self.player.state.stats.__dict__,
+                            enemy.__dict__,
+                            current_tile.terrain_type
+                        )
+                        # Return the encounter message for the first turn
+                        if "shadow centaur" in enemy.name.lower() or "second centaur" in enemy.name.lower():
+                            return encounter_message + "\n\nPrepare for the ultimate challenge!"
+                        return encounter_message
+                    
+                    # Get combat stats from the ongoing combat
+                    player_stats = self.combat_system.player_combat_stats
+                    enemy_stats = self.combat_system.enemy_combat_stats
+                    terrain_type = self.combat_system.terrain_type
+                    
+                    # Process player's attack
+                    damage, message = self.combat_system.process_player_turn(
+                        player_stats,
+                        enemy_stats,
+                        CombatAction.ATTACK,
+                        element,
+                        terrain_type
+                    )
+                    
+                    # Apply damage to enemy
+                    enemy.health = enemy_stats.health
+                    
+                    # Check if enemy is defeated
+                    if enemy.health <= 0:
+                        # End combat
+                        self.combat_system.in_combat = False
+                        self.combat_system.current_enemy = None
+                        return self.player.combat_victory(enemy.name)
+                    
+                    # Process enemy's counterattack
+                    enemy_damage, enemy_message = self.combat_system.process_enemy_turn(
+                        enemy_stats,
+                        player_stats,
+                        terrain_type
+                    )
+                    
+                    # Apply damage to player
+                    self.player.state.stats.health = player_stats.health
+                    
+                    # Check if player is defeated
+                    if self.player.state.stats.health <= 0:
+                        # End combat
+                        self.combat_system.in_combat = False
+                        self.combat_system.current_enemy = None
+                        self.player.state.stats.health = 1  # Prevent death, just leave at 1 HP
+                        return f"{message}\n\n{enemy_message}\n\nYou were defeated but managed to escape with your life. You should rest to recover."
+                    
+                    # Format combat status
+                    status = self.combat_system.format_combat_status(player_stats, enemy_stats, enemy.name)
+                    
+                    # Special message for Shadow Centaur at health thresholds
+                    special_message = ""
+                    if "shadow centaur" in enemy.name.lower() or "second centaur" in enemy.name.lower():
+                        health_percent = (enemy_stats.health / enemy_stats.max_health) * 100
+                        if 74 < health_percent <= 75:
+                            special_message = colored("\nThe Shadow Centaur's form flickers as its power grows more unstable!", "magenta")
+                        elif 49 < health_percent <= 50:
+                            special_message = colored("\nThe Shadow Centaur roars in fury, darkness swirling more violently around it!", "magenta")
+                        elif 24 < health_percent <= 25:
+                            special_message = colored("\nThe Shadow Centaur's eyes glow with intense hatred as it enters a desperate frenzy!", "magenta")
+                    
+                    return f"{message}\n\n{enemy_message}{special_message}\n\n{status}"
             
             if not enemy_found:
                 return f"There is no {target} here. {time_message}"
@@ -550,7 +653,56 @@ Shortcuts:
             
             if not current_tile or not current_tile.enemies:
                 return f"There are no enemies to defend against. {time_message}"
-            return f"You take a defensive stance. {time_message}"
+            
+            # Check if we're in combat
+            if not self.combat_system.in_combat:
+                # Get the first enemy (for simplicity)
+                enemy = current_tile.enemies[0]
+                # Initialize combat
+                encounter_message = self.combat_system.start_combat(
+                    self.player.state.stats.__dict__,
+                    enemy.__dict__,
+                    current_tile.terrain_type
+                )
+                return encounter_message
+            
+            # Get combat stats from the ongoing combat
+            player_stats = self.combat_system.player_combat_stats
+            enemy_stats = self.combat_system.enemy_combat_stats
+            terrain_type = self.combat_system.terrain_type
+            enemy = self.combat_system.current_enemy
+            
+            # Process player's defend action
+            _, message = self.combat_system.process_player_turn(
+                player_stats,
+                enemy_stats,
+                CombatAction.DEFEND,
+                ElementType.PHYSICAL,  # Element doesn't matter for defend
+                terrain_type
+            )
+            
+            # Process enemy's attack
+            enemy_damage, enemy_message = self.combat_system.process_enemy_turn(
+                enemy_stats,
+                player_stats,
+                terrain_type
+            )
+            
+            # Apply damage to player
+            self.player.state.stats.health = player_stats.health
+            
+            # Check if player is defeated
+            if self.player.state.stats.health <= 0:
+                # End combat
+                self.combat_system.in_combat = False
+                self.combat_system.current_enemy = None
+                self.player.state.stats.health = 1  # Prevent death
+                return f"{message}\n\n{enemy_message}\n\nYou were defeated but managed to escape with your life. You should rest to recover."
+            
+            # Format combat status
+            status = self.combat_system.format_combat_status(player_stats, enemy_stats, enemy["name"])
+            
+            return f"{message}\n\n{enemy_message}\n\n{status}"
         
         elif action == CommandType.DODGE:
             # Dodging takes 5 minutes
@@ -559,7 +711,53 @@ Shortcuts:
             
             if not current_tile or not current_tile.enemies:
                 return f"There are no attacks to dodge. {time_message}"
-            return f"You prepare to dodge. {time_message}"
+            
+            # Check if we're in combat
+            if not self.combat_system.in_combat:
+                # Get the first enemy (for simplicity)
+                enemy = current_tile.enemies[0]
+                # Initialize combat
+                encounter_message = self.combat_system.start_combat(
+                    self.player.state.stats.__dict__,
+                    enemy.__dict__,
+                    current_tile.terrain_type
+                )
+                return encounter_message
+            
+            # Get combat stats from the ongoing combat
+            player_stats = self.combat_system.player_combat_stats
+            enemy_stats = self.combat_system.enemy_combat_stats
+            terrain_type = self.combat_system.terrain_type
+            enemy = self.combat_system.current_enemy
+            
+            # Process player's dodge action
+            _, message = self.combat_system.process_player_turn(
+                player_stats,
+                enemy_stats,
+                CombatAction.DODGE,
+                ElementType.PHYSICAL,  # Element doesn't matter for dodge
+                terrain_type
+            )
+            
+            # Process enemy's attack (with increased dodge chance)
+            enemy_damage, enemy_message = self.combat_system.process_enemy_turn(
+                enemy_stats,
+                player_stats,
+                terrain_type
+            )
+            
+            # Apply damage to player
+            self.player.state.stats.health = player_stats.health
+            
+            # Check if player is defeated
+            if self.player.state.stats.health <= 0:
+                self.player.state.stats.health = 1  # Prevent death
+                return f"{message}\n\n{enemy_message}\n\nYou were defeated but managed to escape with your life. You should rest to recover."
+            
+            # Format combat status
+            status = self.combat_system.format_combat_status(player_stats, enemy_stats, enemy.name)
+            
+            return f"{message}\n\n{enemy_message}\n\n{status}"
         
         elif action == CommandType.SPECIAL:
             # Special abilities take 20 minutes
@@ -568,7 +766,101 @@ Shortcuts:
             
             if not current_tile or not current_tile.enemies:
                 return f"There are no enemies to use special abilities on. {time_message}"
-            return f"You prepare to use a special ability. {time_message}"
+            
+            # Check if we're in combat
+            if not self.combat_system.in_combat:
+                # Get the first enemy (for simplicity)
+                enemy = current_tile.enemies[0]
+                # Initialize combat
+                encounter_message = self.combat_system.start_combat(
+                    self.player.state.stats.__dict__,
+                    enemy.__dict__,
+                    current_tile.terrain_type
+                )
+                return encounter_message
+            
+            # Get combat stats from the ongoing combat
+            player_stats = self.combat_system.player_combat_stats
+            enemy_stats = self.combat_system.enemy_combat_stats
+            terrain_type = self.combat_system.terrain_type
+            enemy = self.combat_system.current_enemy
+            
+            # Determine special ability based on path
+            path_type = getattr(self.player, 'path_type', None)
+            special_message = "You prepare to use a special ability."
+            special_element = ElementType.PHYSICAL
+            
+            if path_type:
+                if path_type == PathType.WARRIOR:
+                    special_message = "You unleash a powerful warrior strike!"
+                    special_element = ElementType.PHYSICAL
+                elif path_type == PathType.MYSTIC:
+                    special_message = "You channel mystical energy!"
+                    # Choose highest elemental affinity
+                    elements = self.combat_system.get_available_elements(player_stats)
+                    if elements and elements[0][0] != ElementType.PHYSICAL:
+                        special_element = elements[0][0]
+                    else:
+                        special_element = ElementType.LIGHT
+                elif path_type == PathType.STEALTH:
+                    special_message = "You strike from the shadows!"
+                    special_element = ElementType.SHADOW
+            
+            # Process player's special action (using ELEMENTAL action type)
+            damage, message = self.combat_system.process_player_turn(
+                player_stats,
+                enemy_stats,
+                CombatAction.ELEMENTAL,
+                special_element,
+                terrain_type
+            )
+            
+            # Apply damage to enemy with a bonus
+            bonus_damage = int(damage * 0.5)  # 50% bonus for special abilities
+            total_damage = damage + bonus_damage
+            enemy_stats.health -= bonus_damage  # Additional damage beyond what process_player_turn applied
+            enemy.health = enemy_stats.health
+            
+            # Check if enemy is defeated
+            if enemy.health <= 0:
+                # End combat
+                self.combat_system.in_combat = False
+                self.combat_system.current_enemy = None
+                return self.player.combat_victory(enemy["name"])
+            
+            # Process enemy's counterattack
+            enemy_damage, enemy_message = self.combat_system.process_enemy_turn(
+                enemy_stats,
+                player_stats,
+                terrain_type
+            )
+            
+            # Apply damage to player
+            self.player.state.stats.health = player_stats.health
+            
+            # Check if player is defeated
+            if self.player.state.stats.health <= 0:
+                # End combat
+                self.combat_system.in_combat = False
+                self.combat_system.current_enemy = None
+                self.player.state.stats.health = 1  # Prevent death
+                return f"{special_message} {message}\n\n{enemy_message}\n\nYou were defeated but managed to escape with your life. You should rest to recover."
+            
+            # Format combat status
+            status = self.combat_system.format_combat_status(player_stats, enemy_stats, enemy["name"])
+            
+            # Special message for Shadow Centaur at health thresholds
+            phase_message = ""
+            if "shadow centaur" in enemy["name"].lower() or "second centaur" in enemy["name"].lower():
+                health_percent = (enemy_stats.health / enemy_stats.max_health) * 100
+                if 74 < health_percent <= 75:
+                    phase_message = colored("\nThe Shadow Centaur's form flickers as its power grows more unstable!", "magenta")
+                elif 49 < health_percent <= 50:
+                    phase_message = colored("\nThe Shadow Centaur roars in fury, darkness swirling more violently around it!", "magenta")
+                elif 24 < health_percent <= 25:
+                    phase_message = colored("\nThe Shadow Centaur's eyes glow with intense hatred as it enters a desperate frenzy!", "magenta")
+            
+            return f"{special_message} {message} (Bonus damage: {bonus_damage})\n\n{enemy_message}{phase_message}\n\n{status}"
     
     def handle_roleplay_command(self, action: CommandType, args: List[str]) -> str:
         """Handle roleplay actions."""
