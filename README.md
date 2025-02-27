@@ -25,6 +25,7 @@ The Last Centaur is an immersive text-based RPG where you play as Centaur Prime,
   - Web browser interface
   - Chat platform integration
   - Command-line interface
+  - **NEW: Natural Language Interface** powered by LLMs
 
 ## Installation
 
@@ -85,6 +86,27 @@ python -m src.main
 ```
 http://localhost:8000
 ```
+
+### Using the Natural Language Interface
+
+For a more immersive experience, you can use the LLM-powered natural language interface:
+
+1. Make sure you have set up your API keys in the `.env` file:
+
+```
+OPENAI_API_KEY=your_openai_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+```
+
+2. In a separate terminal, run the LLM interface:
+
+```bash
+python play_game.py
+```
+
+3. Follow the prompts to register/login and start playing using natural language!
+
+For more details on the LLM interface, see [README_LLM_INTERFACE.md](README_LLM_INTERFACE.md).
 
 ## Testing the Game API
 

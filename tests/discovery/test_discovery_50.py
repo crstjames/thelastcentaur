@@ -114,18 +114,18 @@ def test_process_interaction_with_no_player_or_text_or_terrain_type_or_interacti
     def test_gameplay_item_discovery(self):
         """Test discovering a gameplay item."""
         # Process an interaction that should find the test berries
-    response, effects = self.discovery_system.process_interaction(
+        response, effects = self.discovery_system.process_interaction(
             self.player,
             "gather",
             "I want to gather some berries from that bush"
         )
         
-    # Check that the discovery was found
-            self.assertIn("You found some test berries", response)
-            self.assertIn("test_berries", self.discovery_system.found_discoveries)
+        # Check that the discovery was found
+        self.assertIn("You found some test berries", response)
+        self.assertIn("test_berries", self.discovery_system.found_discoveries)
         
         # Check that the item was added to inventory
-            self.assertIn("test_berries", self.player.state.inventory)
+        self.assertIn("test_berries", self.player.state.inventory)
         self.assertEqual(effects.get("item_added"), "test_berries")
     
     

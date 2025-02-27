@@ -41,7 +41,7 @@ nest_asyncio.apply()
 
 # Test database settings
 POSTGRES_SERVER = os.getenv("POSTGRES_SERVER", "localhost")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "crstjames")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "thelastcentaur_test")
 
