@@ -58,6 +58,13 @@ class LLMInterface:
         - If the game shows "old_map" as an item, and the player says "take the map", you MUST return "take old_map"
         - If the game shows "Wolf Pack" as an enemy, and the player says "attack wolves", you MUST return "attack Wolf Pack"
         - If the game shows "basic_supplies" as an item, and the player says "get supplies", you MUST return "take basic_supplies"
+        - If the game shows "shadow_scout" as an NPC, and the player says "talk to the scout", you MUST return "talk shadow_scout"
+        
+        NPC INTERACTIONS: When the player wants to talk to an NPC, you MUST use the exact NPC ID as it appears in the game state. NPCs are listed in the "NPCs present" section of the context. For example:
+        - If "shadow_scout" is listed as an NPC, and the player says "talk to the scout", you MUST return "talk shadow_scout"
+        - If "village_elder" is listed as an NPC, and the player says "speak with the elder", you MUST return "talk village_elder"
+        - If "mystic_sage" is listed as an NPC, and the player says "ask the sage about the prophecy", you MUST return "talk mystic_sage"
+        - If "warrior_trainer" is listed as an NPC, and the player says "chat with the trainer", you MUST return "talk warrior_trainer"
         
         ENVIRONMENTAL INTERACTIONS: The player can interact with environmental elements that aren't explicitly listed but would naturally be present based on the terrain type and description. For example:
         - In a forest: leaves, twigs, bark, berries, moss, flowers, herbs
@@ -119,6 +126,9 @@ class LLMInterface:
         - "Drop a line to that guard" → "talk guard" (or the exact NPC name from the game state)
         - "Shoot the breeze with the old man" → "talk old man" (or the exact NPC name from the game state)
         - "Rap with the wizard" → "talk wizard" (or the exact NPC name from the game state)
+        - "Talk to the scout" → "talk shadow_scout" (if "shadow_scout" is the exact NPC ID in the game state)
+        - "Ask the scout about the shadow key" → "talk shadow_scout" (if "shadow_scout" is the exact NPC ID in the game state)
+        - "Speak with the scout" → "talk shadow_scout" (if "shadow_scout" is the exact NPC ID in the game state)
         
         Dropping Items:
         - "Drop this useless sword" → "drop sword" (or the exact item name from the game state)
@@ -142,6 +152,7 @@ class LLMInterface:
         - If the user says "Pick up some leaves from the ground", respond with "take leaves"
         - If the user says "Gather a few stones", respond with "take stones"
         - If the user says "Take the map" and the game state shows "old_map", respond with "take old_map"
+        - If the user says "Talk to the scout" and the game state shows "shadow_scout", respond with "talk shadow_scout"
         
         Be precise and concise. Do not add explanations or additional text.
         """
@@ -227,6 +238,7 @@ class LLMInterface:
             current_items = []
             current_enemies = []
             current_exits = []
+            current_npcs = []  # Added explicit tracking of NPCs
             tile_description = ""
             terrain_type = ""
             weather = ""
@@ -250,6 +262,10 @@ class LLMInterface:
                     if "exits" in current_tile:
                         current_exits = current_tile["exits"]
                     
+                    # Extract NPCs in the current location
+                    if "npcs" in current_tile:
+                        current_npcs = current_tile["npcs"]
+                    
                     # Extract tile description
                     if "description" in current_tile:
                         tile_description = current_tile["description"]
@@ -269,8 +285,43 @@ class LLMInterface:
                 if "inventory" in game_state:
                     player_inventory = game_state["inventory"]
             
-            # For simple, unambiguous commands, use pattern matching for efficiency
+            # Check for NPC interaction intent
             lower_input = user_input.lower()
+            
+            # Special handling for NPC interactions
+            # Check if the user is trying to talk to an NPC
+            talk_keywords = ["talk", "speak", "chat", "converse", "ask", "talk to", "speak to", "talk with", "speak with"]
+            is_talk_intent = any(keyword in lower_input for keyword in talk_keywords)
+            
+            if is_talk_intent and current_npcs:
+                # Try to extract the NPC name from the user input
+                potential_npc = None
+                
+                # First check for exact NPC matches
+                for npc in current_npcs:
+                    if npc.lower() in lower_input:
+                        potential_npc = npc
+                        break
+                
+                # If no exact match, try to find partial matches or references
+                if not potential_npc:
+                    # Check for common terms like "scout", "guard", etc.
+                    for npc in current_npcs:
+                        # Extract key terms from NPC id
+                        npc_terms = npc.lower().split('_')
+                        for term in npc_terms:
+                            if term in lower_input and len(term) > 3:  # Only match significant terms
+                                potential_npc = npc
+                                break
+                        if potential_npc:
+                            break
+                
+                # If we found a potential NPC, return the talk command
+                if potential_npc:
+                    logger.info(f"Detected talk intent with NPC: {potential_npc}")
+                    return f"talk {potential_npc}"
+            
+            # For simple, unambiguous commands, use pattern matching for efficiency
             
             # Check for direct direction commands
             directions = {"north": ["north", "n"], "south": ["south", "s"], 
@@ -303,6 +354,9 @@ class LLMInterface:
             
             if current_enemies:
                 context += f"Enemies present: {', '.join(current_enemies)}\n"
+            
+            if current_npcs:
+                context += f"NPCs present: {', '.join(current_npcs)}\n"
             
             if current_exits:
                 context += f"Available exits: {', '.join(current_exits)}\n"
@@ -533,11 +587,23 @@ class LLMInterface:
                 elif "talk" in game_command:
                     target = game_command.replace("talk", "").strip()
                     if target:
-                        return f"You try to engage the {target} in conversation, but they don't seem interested in talking at the moment."
+                        # Provide more specific feedback for NPC interactions
+                        if "no" in game_response.lower() and target in game_response.lower():
+                            # This is likely a case where the NPC ID doesn't match what's expected
+                            return f"You try to engage with {target}, but there seems to be a disconnect. Perhaps try a different approach or check if you're using the correct name. The NPC might be known by a different identifier in the game world."
+                        else:
+                            return f"You try to engage the {target} in conversation, but they don't seem interested in talking at the moment. They might be waiting for you to complete a specific task or acquire a certain item before they'll speak with you."
                     else:
                         return "There's no one here to talk to."
                 else:
                     return "Nothing happens. Perhaps try a different approach."
+            
+            # Special handling for NPC interaction failures
+            if "talk" in game_command and "no" in game_response.lower() and "to talk to" in game_response.lower():
+                target = game_command.replace("talk", "").strip()
+                
+                # This is a case where the game says there's no NPC to talk to, but the player tried to talk to someone
+                return f"You look around for {target}, but they don't seem to be here. Perhaps they're in another location, or you need to use a different name to address them. The game recognizes NPCs by specific identifiers, which might differ from how they're described in the narrative."
             
             # Prepare context for the LLM
             context = f"""
