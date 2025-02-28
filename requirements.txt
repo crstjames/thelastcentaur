@@ -10,6 +10,7 @@ websockets>=12.0  # WebSocket support
 redis>=5.0.1  # Session management
 aiohttp>=3.9.3  # Async HTTP client
 greenlet>=3.0.3  # Required for async SQLAlchemy
+email-validator>=2.1.0  # Required for Pydantic email validation
 
 # Testing
 pytest>=7.4.3

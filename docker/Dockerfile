@@ -20,6 +20,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 # Ensure pydantic-settings is installed
 RUN pip install --no-cache-dir pydantic-settings
+# Install email-validator for Pydantic
+RUN pip install --no-cache-dir email-validator
 
 # Production stage
 FROM backend-base as backend

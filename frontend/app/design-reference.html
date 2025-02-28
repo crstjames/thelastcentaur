@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Last Centaur - Design Reference</title>
+    <style>
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: "Arial", sans-serif;
+      }
+
+      .reference {
+        padding: 20px;
+        background-color: #1a1a1a;
+        color: #fff;
+      }
+
+      .reference h1 {
+        color: #f0f0f0;
+        border-bottom: 1px solid #444;
+        padding-bottom: 10px;
+      }
+
+      .reference p {
+        color: #ccc;
+        margin-bottom: 20px;
+      }
+
+      .reference h2 {
+        color: #f0f0f0;
+        margin-top: 30px;
+      }
+
+      .reference ul {
+        color: #ccc;
+        margin-bottom: 20px;
+      }
+
+      .reference pre {
+        background-color: #2a2a2a;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        color: #f0f0f0;
+      }
+
+      .reference .image-container {
+        margin: 20px 0;
+        text-align: center;
+      }
+
+      .reference img {
+        max-width: 100%;
+        border: 2px solid #444;
+        border-radius: 5px;
+      }
+
+      .reference .color-palette {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 20px 0;
+      }
+
+      .reference .color-swatch {
+        width: 100px;
+        height: 100px;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 12px;
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reference">
+      <h1>The Last Centaur - Design Reference</h1>
+      <p>
+        This document serves as a design reference for the pixel art RPG style we're implementing for The Last Centaur.
+      </p>
+
+      <h2>Inspiration: Stein World</h2>
+      <div class="image-container">
+        <img
+          src="https://steamcdn-a.akamaihd.net/steam/apps/748090/ss_c1d1c394bb87450c1f2d4c1a1a3b0b3e6a02e724.1920x1080.jpg"
+          alt="Stein World Reference"
+        />
+        <p>Stein World login screen with pixel art forest background and centered login form</p>
+      </div>
+
+      <h2>Color Palette</h2>
+      <p>We're using a warm, earthy color palette for the UI elements:</p>
+      <div class="color-palette">
+        <div class="color-swatch" style="background-color: #b45309">Amber-700<br />#b45309</div>
+        <div class="color-swatch" style="background-color: #78350f">Amber-900<br />#78350f</div>
+        <div class="color-swatch" style="background-color: #fbbf24">Amber-400<br />#fbbf24</div>
+        <div class="color-swatch" style="background-color: #fef3c7">Amber-100<br />#fef3c7</div>
+        <div class="color-swatch" style="background-color: #7f1d1d">Red-900<br />#7f1d1d</div>
+      </div>
+
+      <h2>Key UI Elements</h2>
+      <ul>
+        <li>Pixel art forest background with mountains</li>
+        <li>Large game title at the top</li>
+        <li>Wooden/parchment style UI panels</li>
+        <li>Tab-based navigation between login and register</li>
+        <li>Form fields with labels</li>
+        <li>Server selection dropdown</li>
+        <li>Action buttons with hover effects</li>
+      </ul>
+
+      <h2>Implementation Notes</h2>
+      <p>For the background image, we need a high-quality pixel art forest scene. The image should be:</p>
+      <ul>
+        <li>High resolution (at least 1920x1080)</li>
+        <li>Pixel art style with visible pixels</li>
+        <li>Forest scene with trees, possibly mountains in the background</li>
+        <li>Bright, vibrant colors that contrast with the UI</li>
+      </ul>
+
+      <p>The UI elements should have:</p>
+      <ul>
+        <li>Wooden/parchment appearance</li>
+        <li>Clear borders and shadows</li>
+        <li>Consistent padding and spacing</li>
+        <li>Text that's easy to read against the backgrounds</li>
+      </ul>
+
+      <h2>CSS Implementation</h2>
+      <pre>
+/* Background image */
+.bg-image {
+  background-image: url('/images/forest-background.jpg');
+  background-size: cover;
+  background-position: center;
+  image-rendering: pixelated;
+}
+
+/* UI Panel */
+.ui-panel {
+  background-color: rgba(180, 83, 9, 0.9);
+  border: 2px solid #d97706;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Form inputs */
+.input-field {
+  background-color: #fef3c7;
+  border: 1px solid #d97706;
+  color: #78350f;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+/* Buttons */
+.action-button {
+  background-color: #b45309;
+  color: white;
+  border: 1px solid #fbbf24;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.action-button:hover {
+  background-color: #d97706;
+  transform: translateY(-1px);
+}
+    </pre
+      >
+    </div>
+  </body>
+</html>
