@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "./context/AuthContext";
 import { useState, useRef, useEffect } from "react";
-import Image from "next/image";
 
 export default function HomePage() {
   const router = useRouter();
@@ -214,35 +213,56 @@ export default function HomePage() {
 
         .logo-container {
           position: absolute;
-          top: 50%;
+          top: 20%;
           left: 50%;
-          transform: translate(-50%, -60%);
+          transform: translateX(-50%);
           animation: fadeIn 2s;
-          filter: drop-shadow(8px 8px 0px #000);
-          max-width: 90%;
+          max-width: 95%;
           display: flex;
+          flex-direction: column;
           justify-content: center;
           align-items: center;
           z-index: 4;
+          text-align: center;
         }
 
-        .start-prompt {
+        .logo-text-top {
           font-family: "Press Start 2P", cursive;
-          font-size: 24px;
-          color: white;
-          text-shadow: 2px 2px 0px #000;
-          padding: 10px;
-          cursor: pointer;
-          position: relative;
+          font-size: 64px;
+          color: #ffd700;
+          text-shadow: 3px 3px 0px #b8860b, 6px 6px 0px #8b6914, 9px 9px 0px #000;
+          margin-bottom: 15px;
+          letter-spacing: 6px;
+          transform: perspective(500px) rotateX(10deg);
+        }
+
+        .logo-text-bottom {
+          font-family: "Press Start 2P", cursive;
+          font-size: 96px;
+          color: #ffd700;
+          text-shadow: 3px 3px 0px #b8860b, 6px 6px 0px #8b6914, 9px 9px 0px #000;
+          letter-spacing: 6px;
+          transform: perspective(500px) rotateX(10deg);
         }
 
         .start-prompt-container {
           position: absolute;
-          bottom: 180px;
+          bottom: 38%;
           left: 50%;
           transform: translateX(-50%);
           cursor: pointer;
           z-index: 5;
+          margin-top: 80px;
+        }
+
+        .start-prompt {
+          font-family: "Press Start 2P", cursive;
+          font-size: 28px;
+          color: white;
+          text-shadow: 2px 2px 0px #000;
+          padding: 15px;
+          cursor: pointer;
+          position: relative;
         }
 
         .social-links {
@@ -299,7 +319,8 @@ export default function HomePage() {
 
       <div className="crt-content">
         <div className="logo-container">
-          <Image src="/images/tlc_logo.png" alt="The Last Centaur" width={1200} height={600} priority />
+          <div className="logo-text-top">THE</div>
+          <div className="logo-text-bottom">LAST CENTAUR</div>
         </div>
 
         <div className="start-prompt-container" onClick={handleStartClick}>

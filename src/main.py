@@ -43,13 +43,38 @@ async def lifespan(app: FastAPI):
         print("Continuing startup process...")
     
     try:
-        # Create database tables
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        print("Database tables created successfully.")
+        # Run Alembic migrations instead of just creating tables
+        import subprocess
+        import os
+        
+        # Get the current directory (should be /app in Docker)
+        current_dir = os.getcwd()
+        print(f"Current directory: {current_dir}")
+        
+        # Run the Alembic migration command
+        try:
+            result = subprocess.run(
+                ["alembic", "upgrade", "head"],
+                cwd=current_dir,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            print("Alembic migrations applied successfully:")
+            print(result.stdout)
+        except subprocess.CalledProcessError as e:
+            print(f"Error applying Alembic migrations: {e}")
+            print(f"Stdout: {e.stdout}")
+            print(f"Stderr: {e.stderr}")
+            
+            # Fallback to create_all if migrations fail
+            print("Falling back to creating tables directly...")
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("Database tables created directly with SQLAlchemy.")
     except Exception as e:
-        print(f"Error creating database tables: {e}")
-        print("Application may not function correctly without database tables.")
+        print(f"Error setting up database: {e}")
+        print("Application may not function correctly without proper database setup.")
     
     yield
     

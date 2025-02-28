@@ -81,8 +81,22 @@ class GameStateManager:
         # Get player position
         x, y = player.state.position
         
-        # Serialize game state
-        game_state = self._serialize_game_state(game_id)
+        # Get current game instance to preserve existing game_state values
+        stmt = select(GameInstance).where(GameInstance.id == game_id)
+        result = await db_session.execute(stmt)
+        game_instance = result.scalar_one_or_none()
+        
+        if not game_instance:
+            return False
+        
+        # Preserve existing game_state data like status
+        existing_game_state = dict(game_instance.game_state) if game_instance.game_state else {}
+        
+        # Serialize new game state
+        new_game_state = self._serialize_game_state(game_id)
+        
+        # Merge existing and new game state, preserving status
+        merged_game_state = {**new_game_state, **existing_game_state}
         
         # Update game instance
         stmt = (
@@ -90,7 +104,7 @@ class GameStateManager:
             .where(GameInstance.id == game_id)
             .values(
                 current_position={"x": x, "y": y},
-                game_state=game_state,
+                game_state=merged_game_state,
                 updated_at=datetime.utcnow()
             )
         )

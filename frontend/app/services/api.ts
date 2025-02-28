@@ -3,9 +3,30 @@
  */
 
 // Base API URL from environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const API_V1_PREFIX = "/api/v1";
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8001";
+
+// Max number of retries for API calls
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1000; // milliseconds
+
+/**
+ * Helper function to add retry logic to fetch requests
+ */
+async function fetchWithRetry(url: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
+  try {
+    console.log(`Fetching ${url} with ${retries} retries remaining`);
+    const response = await fetch(url, options);
+    return response;
+  } catch (error) {
+    if (retries <= 0) throw error;
+
+    console.log(`Fetch failed, retrying in ${RETRY_DELAY}ms...`);
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+    return fetchWithRetry(url, options, retries - 1);
+  }
+}
 
 // Authentication API
 export const authAPI = {
@@ -22,7 +43,7 @@ export const authAPI = {
     formData.append("password", password);
     formData.append("grant_type", "password");
 
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/auth/login`, {
+    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -40,17 +61,18 @@ export const authAPI = {
             throw new Error(errorData.detail.map((err: { msg: string }) => err.msg).join(", "));
           }
         }
-        throw new Error("Login failed");
+        throw new Error(`Login failed with status: ${response.status}`);
       } catch (err) {
         if (err instanceof Error) {
           throw err;
         }
-        throw new Error("Login failed. Please try again.");
+        throw new Error(`Login failed with status: ${response.status}. Please try again.`);
       }
     }
 
     // Get the token response
     const tokenData = await response.json();
+    console.log("Login successful, token received");
 
     // For OAuth2 form-based login, we need to construct the user object
     // since the backend returns only the token
@@ -58,9 +80,9 @@ export const authAPI = {
       access_token: tokenData.access_token,
       token_type: tokenData.token_type || "bearer",
       user: {
-        id: "user-id", // This will be replaced when we implement proper user info endpoint
+        id: tokenData.user_id || "user-id", // Use user_id from token if available
         username: username,
-        email: "user@example.com", // This will be replaced when we implement proper user info endpoint
+        email: tokenData.email || "user@example.com", // Use email from token if available
       },
     };
   },
@@ -180,16 +202,24 @@ export const gameAPI = {
    * List all games for the current user
    */
   listGames: async (token: string): Promise<Game[]> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/games`, {
+    console.log("Listing games...");
+    if (!token) {
+      console.error("No token provided to listGames");
+      throw new Error("Authentication required. Please log in again.");
+    }
+
+    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
       method: "GET",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Failed to fetch games");
+      const errorMsg = `Failed to load games: ${response.status} ${response.statusText}`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     return response.json();
@@ -199,16 +229,16 @@ export const gameAPI = {
    * Get a specific game
    */
   getGame: async (token: string, gameId: string): Promise<Game> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/games/${gameId}`, {
+    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
       method: "GET",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Failed to fetch game");
+      throw new Error("Failed to load game");
     }
 
     return response.json();
@@ -218,7 +248,13 @@ export const gameAPI = {
    * Create a new game
    */
   createGame: async (token: string, name: string, description: string): Promise<Game> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/games`, {
+    console.log("Creating game...");
+    if (!token) {
+      console.error("No token provided to createGame");
+      throw new Error("Authentication required. Please log in again.");
+    }
+
+    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -228,18 +264,66 @@ export const gameAPI = {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Failed to create game");
+      const errorMsg = `Failed to create game: ${response.status} ${response.statusText}`;
+      console.error(errorMsg);
+
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          throw new Error(typeof errorData.detail === "string" ? errorData.detail : JSON.stringify(errorData.detail));
+        }
+      } catch {
+        // If we can't parse the error, just throw the generic error
+      }
+
+      throw new Error(errorMsg);
     }
 
     return response.json();
   },
 
   /**
+   * Delete a game
+   */
+  deleteGame: async (token: string, gameId: string): Promise<void> => {
+    console.log("Deleting game...");
+    if (!token) {
+      console.error("No token provided to deleteGame");
+      throw new Error("Authentication required. Please log in again.");
+    }
+
+    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorMsg = `Failed to delete game: ${response.status} ${response.statusText}`;
+      console.error(errorMsg);
+
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          throw new Error(typeof errorData.detail === "string" ? errorData.detail : JSON.stringify(errorData.detail));
+        }
+      } catch {
+        // If we can't parse the error, just throw the generic error
+      }
+
+      throw new Error(errorMsg);
+    }
+
+    // DELETE endpoints often return 204 No Content
+    return;
+  },
+
+  /**
    * Send a command to the game
    */
   sendCommand: async (token: string, gameId: string, command: string): Promise<CommandResponse> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/games/${gameId}/command`, {
+    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/command`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -249,8 +333,7 @@ export const gameAPI = {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Failed to send command");
+      throw new Error("Failed to execute command");
     }
 
     return response.json();
@@ -260,16 +343,16 @@ export const gameAPI = {
    * Get game history
    */
   getGameHistory: async (token: string, gameId: string): Promise<GameHistoryEntry[]> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/games/${gameId}/history`, {
+    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/history`, {
       method: "GET",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Failed to fetch game history");
+      throw new Error("Failed to load game history");
     }
 
     return response.json();

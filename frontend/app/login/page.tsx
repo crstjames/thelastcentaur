@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
-import Image from "next/image";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -30,11 +29,12 @@ export default function LoginPage() {
     setFormVisible(true);
   }, []);
 
-  // Redirect if already authenticated
-  if (isAuthenticated) {
-    router.push("/games");
-    return null;
-  }
+  // Redirect if already authenticated - FIXED: use useEffect instead of direct navigation
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/games");
+    }
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +44,7 @@ export default function LoginPage() {
 
     try {
       await login(username, password);
-      router.push("/games");
+      // Don't navigate here - let the useEffect handle it
     } catch (error) {
       console.error("Login error:", error);
 
@@ -69,6 +69,11 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Don't render anything if authenticated - let useEffect handle redirect
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="crt-container">
@@ -232,11 +237,30 @@ export default function LoginPage() {
           left: 50%;
           transform: translateX(-50%);
           animation: fadeIn 0.5s ease-out;
-          filter: drop-shadow(4px 4px 0px #000);
           z-index: 4;
           opacity: ${formVisible ? 0.8 : 1};
           transition: opacity 0.3s ease-in-out;
           will-change: transform, opacity;
+          text-align: center;
+        }
+
+        .logo-text-top {
+          font-family: "Press Start 2P", cursive;
+          font-size: 32px;
+          color: #ffd700;
+          text-shadow: 3px 3px 0px #b8860b, 6px 6px 0px #8b6914, 9px 9px 0px #000;
+          margin-bottom: 8px;
+          letter-spacing: 4px;
+          transform: perspective(500px) rotateX(10deg);
+        }
+
+        .logo-text-bottom {
+          font-family: "Press Start 2P", cursive;
+          font-size: 48px;
+          color: #ffd700;
+          text-shadow: 3px 3px 0px #b8860b, 6px 6px 0px #8b6914, 9px 9px 0px #000;
+          letter-spacing: 4px;
+          transform: perspective(500px) rotateX(10deg);
         }
 
         .form-container {
@@ -362,9 +386,10 @@ export default function LoginPage() {
         }
 
         .back-section {
-          margin-top: 60px;
+          margin-top: 80px;
           margin-bottom: 40px;
           text-align: center;
+          width: 100%;
         }
 
         .back-button-container {
@@ -373,23 +398,29 @@ export default function LoginPage() {
           z-index: 10;
           cursor: pointer;
           padding: 15px 30px;
+          background: rgba(0, 0, 0, 0.4);
+          border-radius: 5px;
+          border: 2px solid #ffd700;
           transition: all 0.3s ease;
         }
 
         .back-text {
           font-family: "Press Start 2P", cursive;
           font-size: 20px;
-          color: #f9d71c;
+          color: #ffd700;
           text-shadow: 2px 2px 0px #000;
           transition: all 0.3s ease;
-          opacity: ${formVisible ? 1 : 0.3};
           letter-spacing: 2px;
         }
 
-        .back-button-container:hover .back-text {
+        .back-button-container:hover {
+          background: rgba(0, 0, 0, 0.6);
           transform: scale(1.05);
-          text-shadow: 3px 3px 0px #000;
+        }
+
+        .back-button-container:hover .back-text {
           color: white;
+          text-shadow: 3px 3px 0px #000;
         }
 
         @keyframes fadeIn {
@@ -407,7 +438,8 @@ export default function LoginPage() {
 
       <div className="crt-content">
         <div className="logo-container">
-          <Image src="/images/tlc_logo.png" alt="The Last Centaur" width={500} height={250} priority />
+          <div className="logo-text-top">THE</div>
+          <div className="logo-text-bottom">LAST CENTAUR</div>
         </div>
 
         <div className="form-container">

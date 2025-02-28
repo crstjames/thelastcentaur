@@ -7,7 +7,7 @@ from datetime import datetime
 
 from src.auth.deps import get_current_user
 from src.db.session import get_db
-from src.db.models import User, GameInstance, Tile
+from src.db.models import User, GameInstance, Tile, TileHistory
 from src.game.schemas import (
     GameInstanceCreate, 
     GameInstanceUpdate, 
@@ -15,7 +15,8 @@ from src.game.schemas import (
     GameCommandRequest,
     GameCommandResponse,
     MapResponse,
-    TileResponse
+    TileResponse,
+    GameStatus
 )
 from src.game.state_manager import GameStateManager
 
@@ -29,14 +30,20 @@ async def create_game_instance(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new game instance."""
+    # Initialize game_state with status and description since description column doesn't exist
+    game_state = {
+        "status": GameStatus.ACTIVE.value,
+        "description": game_data.description
+    }
+    
+    # Only use fields we know exist in the database
     game_instance = GameInstance(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
         name=game_data.name,
-        status="ACTIVE",
-        max_players=game_data.max_players,
-        current_players=1,
-        description=game_data.description,
+        is_active=True,
+        current_position={"x": 0, "y": 0},
+        game_state=game_state,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
@@ -109,6 +116,17 @@ async def update_game_instance(
     
     update_data = game_data.dict(exclude_unset=True)
     
+    # Handle status updates by storing in both is_active and game_state
+    if "status" in update_data:
+        status_value = update_data.pop("status")
+        # Update is_active for backward compatibility
+        update_data["is_active"] = (status_value == GameStatus.ACTIVE)
+        
+        # Update game_state with status
+        game_state = dict(game_instance.game_state) if game_instance.game_state else {}
+        game_state["status"] = status_value.value if isinstance(status_value, GameStatus) else status_value
+        update_data["game_state"] = game_state
+    
     for key, value in update_data.items():
         setattr(game_instance, key, value)
     
@@ -140,6 +158,24 @@ async def delete_game_instance(
             detail="Game instance not found"
         )
     
+    # First get all tiles for this game
+    tile_result = await db.execute(
+        select(Tile.id).where(Tile.game_instance_id == game_id)
+    )
+    tile_ids = [tile_id for tile_id, in tile_result]
+    
+    # Delete related tile history records
+    if tile_ids:
+        await db.execute(
+            delete(TileHistory).where(TileHistory.tile_id.in_(tile_ids))
+        )
+    
+    # Delete related tiles
+    await db.execute(
+        delete(Tile).where(Tile.game_instance_id == game_id)
+    )
+    
+    # Finally delete the game instance
     await db.delete(game_instance)
     await db.commit()
     
