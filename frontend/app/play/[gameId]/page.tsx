@@ -22,6 +22,20 @@ interface Message {
   timestamp: string;
 }
 
+// Player stats interface
+interface PlayerStats {
+  health: number;
+  maxHealth: number;
+  stamina: number;
+  maxStamina: number;
+  level: number;
+  experience: number;
+  nextLevelExp: number;
+  gold: number;
+  location: string;
+  inventory: string[];
+}
+
 export default function PlayPage() {
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,6 +43,20 @@ export default function PlayPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  // Sample player stats - this would come from your API in real implementation
+  const [playerStats, setPlayerStats] = useState<PlayerStats>({
+    health: 75,
+    maxHealth: 100,
+    stamina: 60,
+    maxStamina: 100,
+    level: 1,
+    experience: 250,
+    nextLevelExp: 1000,
+    gold: 15,
+    location: "Forest Edge",
+    inventory: ["Rusty Dagger", "Health Potion", "Torch", "Leather Armor"],
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const params = useParams();
@@ -146,6 +174,16 @@ export default function PlayPage() {
       };
 
       setMessages((prev) => [...prev, systemResponse]);
+
+      // Update player stats based on commands (simulated)
+      // In a real implementation, this would come from your game engine
+      if (inputMessage.toLowerCase().includes("follow") || inputMessage.toLowerCase().includes("go")) {
+        setPlayerStats((prev) => ({
+          ...prev,
+          stamina: Math.max(0, prev.stamina - 5),
+          location: "Forest Clearing",
+        }));
+      }
     } catch (err) {
       console.error("Error sending message:", err);
 
@@ -172,118 +210,761 @@ export default function PlayPage() {
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden flex flex-col">
-      {/* Background with fallback gradient */}
-      <div
-        className="absolute inset-0 bg-cover bg-center z-0"
-        style={{
-          backgroundImage: "url('/images/forest-background.jpg'), linear-gradient(to bottom, #1a2e35, #0f172a)",
-          imageRendering: "pixelated",
-          opacity: 0.4, // Dimmed for better text readability
-        }}
-      />
+    <div className="crt-container">
+      <style jsx>{`
+        @font-face {
+          font-family: "Press Start 2P";
+          font-style: normal;
+          font-weight: 400;
+          src: url("https://fonts.gstatic.com/s/pressstart2p/v15/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2") format("woff2");
+          unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+            U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+        }
 
-      {/* Overlay for better text visibility */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/50 z-10" />
+        .crt-container {
+          height: 100vh;
+          width: 100vw;
+          overflow: hidden;
+          position: relative;
+          font-family: "Press Start 2P", monospace;
+        }
 
-      <div className="relative z-20 flex flex-col h-screen">
-        <header className="bg-amber-900/90 shadow-lg backdrop-blur-sm border-b-2 border-amber-700/70">
-          <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8 flex justify-between items-center">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-amber-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                {game?.name || "Loading adventure..."}
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-amber-200 text-sm">
-                <span className="font-bold">{user?.username || "Adventurer"}</span>
-              </div>
-              <button
-                onClick={handleBackToGames}
-                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded-md text-sm border border-amber-500 shadow-md transition-colors"
-              >
+        .crt-container::before {
+          content: " ";
+          display: block;
+          position: absolute;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          right: 0;
+          background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+          background-size: 100% 4px;
+          z-index: 2;
+          pointer-events: none;
+        }
+
+        .crt-container::after {
+          content: " ";
+          display: block;
+          position: absolute;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          right: 0;
+          background: rgba(18, 16, 16, 0.1);
+          opacity: 0;
+          z-index: 2;
+          pointer-events: none;
+          animation: flicker 0.15s infinite;
+        }
+
+        @keyframes flicker {
+          0% {
+            opacity: 0.27861;
+          }
+          5% {
+            opacity: 0.34769;
+          }
+          10% {
+            opacity: 0.23604;
+          }
+          15% {
+            opacity: 0.90626;
+          }
+          20% {
+            opacity: 0.18128;
+          }
+          25% {
+            opacity: 0.83891;
+          }
+          30% {
+            opacity: 0.65583;
+          }
+          35% {
+            opacity: 0.67807;
+          }
+          40% {
+            opacity: 0.26559;
+          }
+          45% {
+            opacity: 0.84693;
+          }
+          50% {
+            opacity: 0.96019;
+          }
+          55% {
+            opacity: 0.08594;
+          }
+          60% {
+            opacity: 0.20313;
+          }
+          65% {
+            opacity: 0.71988;
+          }
+          70% {
+            opacity: 0.53455;
+          }
+          75% {
+            opacity: 0.37288;
+          }
+          80% {
+            opacity: 0.71428;
+          }
+          85% {
+            opacity: 0.70419;
+          }
+          90% {
+            opacity: 0.7003;
+          }
+          95% {
+            opacity: 0.36108;
+          }
+          100% {
+            opacity: 0.24387;
+          }
+        }
+
+        .crt-frame {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.5);
+          border-radius: 20px;
+          overflow: hidden;
+          z-index: 3;
+          pointer-events: none;
+        }
+
+        .crt-content {
+          position: relative;
+          height: 100%;
+          width: 100%;
+          background-color: #0c0c0c;
+          background-image: url("/images/bg.png");
+          background-size: cover;
+          background-position: center;
+          background-blend-mode: overlay;
+          background-opacity: 0.1;
+          display: flex;
+          flex-direction: column;
+          color: white;
+          z-index: 1;
+        }
+
+        .game-header {
+          background-color: #222;
+          border-bottom: 2px solid #ffd700;
+          padding: 0.5rem 1rem;
+          margin-bottom: 0.5rem;
+          font-family: "Press Start 2P", monospace;
+        }
+
+        .header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .game-title {
+          font-size: 1.25rem;
+          font-weight: bold;
+          color: #ffd700;
+          text-shadow: 2px 2px 0px #b8860b;
+        }
+
+        .back-button {
+          padding: 0.5rem 1rem;
+          background-color: #663300;
+          color: #ffd700;
+          border: 1px solid #996633;
+          border-radius: 0.25rem;
+          cursor: pointer;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.6rem;
+        }
+
+        .back-button:hover {
+          background-color: #7c2d12;
+        }
+
+        .game-main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          padding: 0.5rem;
+          gap: 0.5rem;
+          position: relative;
+        }
+
+        .loading-container {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: #1a1a1a;
+          border-radius: 0.375rem;
+        }
+
+        .loading-content {
+          text-align: center;
+        }
+
+        .spinner {
+          display: inline-block;
+          height: 2rem;
+          width: 2rem;
+          animation: spin 1s linear infinite;
+          border-radius: 50%;
+          border-width: 4px;
+          border-style: solid;
+          border-color: #ffd700 transparent #ffd700 transparent;
+        }
+
+        .loading-text {
+          margin-top: 1rem;
+          color: #ffd700;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.7rem;
+        }
+
+        .error-container {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: #1a1a1a;
+          border-radius: 0.375rem;
+        }
+
+        .error-content {
+          background-color: rgba(153, 27, 27, 0.7);
+          border: 2px solid #991b1b;
+          color: #fee2e2;
+          padding: 1.5rem;
+          border-radius: 0.375rem;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.7rem;
+        }
+
+        .error-text {
+          font-size: 0.7rem;
+          font-weight: 500;
+        }
+
+        .error-button {
+          margin-top: 1rem;
+          padding: 0.5rem 1rem;
+          background-color: #7f1d1d;
+          color: #fee2e2;
+          border: 1px solid #b91c1c;
+          border-radius: 0.25rem;
+          cursor: pointer;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.6rem;
+        }
+
+        .game-content {
+          display: flex;
+          flex-direction: row;
+          gap: 0.5rem;
+          height: 100%;
+        }
+
+        .game-panel {
+          width: 66%;
+          display: flex;
+          flex-direction: column;
+          background-color: rgba(26, 26, 26, 0.9);
+          border: 2px solid #996633;
+          border-radius: 0.375rem;
+          overflow: hidden;
+          box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .narrative-area {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1rem;
+          background-color: rgba(12, 12, 12, 0.9);
+        }
+
+        .messages-container {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .message {
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.7rem;
+          line-height: 1.5;
+        }
+
+        .user-message {
+          color: #4ade80;
+          border-left: 2px solid #4ade80;
+          padding-left: 0.5rem;
+        }
+
+        .system-message {
+          color: #fbbf24;
+          border-left: 2px solid #fbbf24;
+          padding-left: 0.5rem;
+        }
+
+        .character-message {
+          color: #f5f5f5;
+        }
+
+        .message-timestamp {
+          font-size: 0.6rem;
+          color: #d97706;
+          margin-bottom: 0.25rem;
+        }
+
+        .message-content {
+          margin-left: 0.5rem;
+        }
+
+        .character-content {
+          font-size: 0.8rem;
+          font-weight: 500;
+        }
+
+        .input-area {
+          background-color: #333;
+          border-top: 1px solid #996633;
+          padding: 0.75rem;
+        }
+
+        .input-form {
+          display: flex;
+        }
+
+        .command-input {
+          flex: 1;
+          padding: 0.5rem 0.75rem;
+          background-color: #1a1a1a;
+          border: 1px solid #996633;
+          color: #f5f5f5;
+          border-top-left-radius: 0.25rem;
+          border-bottom-left-radius: 0.25rem;
+          outline: none;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.7rem;
+        }
+
+        .submit-button {
+          padding: 0.5rem 1rem;
+          background-color: #996633;
+          color: #f5f5f5;
+          border: 1px solid #996633;
+          border-top-right-radius: 0.25rem;
+          border-bottom-right-radius: 0.25rem;
+          cursor: pointer;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.7rem;
+        }
+
+        .submit-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .command-help {
+          text-align: center;
+          background-color: #0c0c0c;
+          color: #d97706;
+          font-size: 0.6rem;
+          padding: 0.5rem;
+          border-top: 1px solid #4a3520;
+          font-family: "Press Start 2P", monospace;
+        }
+
+        .stats-panel {
+          width: 33%;
+          background-color: rgba(26, 26, 26, 0.9);
+          border: 2px solid #996633;
+          border-radius: 0.375rem;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .stats-header {
+          background-color: #333;
+          border-bottom: 1px solid #996633;
+          padding: 0.75rem 1rem;
+        }
+
+        .stats-title {
+          color: #ffd700;
+          font-weight: bold;
+          text-align: center;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.8rem;
+          text-shadow: 2px 2px 0px #000;
+        }
+
+        .stats-content {
+          flex: 1;
+          padding: 1rem;
+          overflow-y: auto;
+          background-color: rgba(12, 12, 12, 0.9);
+        }
+
+        .stats-sections {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+
+        .character-section {
+          border-bottom: 1px solid #4a3520;
+          padding-bottom: 1rem;
+        }
+
+        .character-info {
+          text-align: center;
+          margin-bottom: 0.5rem;
+        }
+
+        .character-name {
+          color: #ffd700;
+          font-weight: bold;
+          font-size: 0.9rem;
+          font-family: "Press Start 2P", monospace;
+          text-shadow: 2px 2px 0px #000;
+        }
+
+        .character-level {
+          color: #f5f5f5;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.7rem;
+        }
+
+        .exp-container {
+          margin-top: 1rem;
+        }
+
+        .stat-label-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.6rem;
+          color: #d97706;
+          margin-bottom: 0.25rem;
+          font-family: "Press Start 2P", monospace;
+        }
+
+        .progress-bar {
+          width: 100%;
+          background-color: #333;
+          border-radius: 9999px;
+          height: 0.5rem;
+          border: 1px solid #4a3520;
+        }
+
+        .progress-fill {
+          height: 100%;
+          border-radius: 9999px;
+        }
+
+        .exp-fill {
+          background-color: #3b82f6;
+        }
+
+        .character-stats {
+          color: #f5f5f5;
+          margin-top: 1rem;
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 0.5rem;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.6rem;
+        }
+
+        .stat-row {
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .vitals-section {
+          border-bottom: 1px solid #4a3520;
+          padding-bottom: 1rem;
+        }
+
+        .section-title {
+          color: #ffd700;
+          font-weight: bold;
+          margin-bottom: 0.75rem;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.8rem;
+          text-shadow: 2px 2px 0px #000;
+        }
+
+        .health-container {
+          margin-bottom: 0.75rem;
+        }
+
+        .health-fill {
+          background-color: #dc2626;
+        }
+
+        .stamina-fill {
+          background-color: #16a34a;
+        }
+
+        .inventory-section {
+        }
+
+        .inventory-items {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .inventory-item {
+          color: #f5f5f5;
+          font-size: 0.7rem;
+          background-color: #333;
+          border: 1px solid #4a3520;
+          padding: 0.5rem 0.75rem;
+          border-radius: 0.25rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-family: "Press Start 2P", monospace;
+        }
+
+        .game-footer {
+          margin-top: 0.5rem;
+          text-align: center;
+          color: #d97706;
+          font-size: 0.6rem;
+          padding: 0.5rem;
+          background-color: #222;
+          border-top: 1px solid #4a3520;
+          border-bottom-left-radius: 0.375rem;
+          border-bottom-right-radius: 0.375rem;
+          font-family: "Press Start 2P", monospace;
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
+
+      <div className="crt-frame"></div>
+      <div className="crt-content">
+        {/* Game Title Header */}
+        <header className="game-header">
+          <div className="header-content">
+            <h1 className="game-title">{game?.name || "Adventure One"}</h1>
+            <div>
+              <button onClick={handleBackToGames} className="back-button">
                 Back to Adventures
               </button>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-hidden flex flex-col max-w-7xl w-full mx-auto px-4 py-4 sm:px-6 lg:px-8">
+        <main className="game-main">
           {loading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-amber-500 border-r-transparent"></div>
-                <p className="mt-4 text-amber-200">Loading your adventure...</p>
+            <div className="loading-container">
+              <div className="loading-content">
+                <div className="spinner"></div>
+                <p className="loading-text">Loading your adventure...</p>
               </div>
             </div>
           ) : error ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="bg-red-900/70 border border-red-500 text-red-200 px-6 py-4 rounded">
-                <p className="text-lg font-medium">{error}</p>
-                <button
-                  onClick={handleBackToGames}
-                  className="mt-4 px-4 py-2 bg-red-800 hover:bg-red-700 rounded border border-red-600"
-                >
+            <div className="error-container">
+              <div className="error-content">
+                <p className="error-text">{error}</p>
+                <button onClick={handleBackToGames} className="error-button">
                   Return to Adventures
                 </button>
               </div>
             </div>
           ) : (
-            <>
-              {/* Game messages */}
-              <div className="flex-1 overflow-y-auto mb-4 pr-2 scrollbar-thin scrollbar-thumb-amber-700 scrollbar-track-amber-900/30">
-                <div className="space-y-4 pb-2">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`px-4 py-3 rounded-lg max-w-3xl ${
-                        message.sender === "user"
-                          ? "ml-auto bg-amber-700/80 text-amber-100 border border-amber-600"
-                          : message.sender === "system"
-                          ? "mr-auto bg-gray-800/80 text-gray-200 border border-gray-700"
-                          : "mr-auto bg-amber-800/80 text-amber-200 border border-amber-700"
-                      }`}
-                    >
-                      <div className="text-sm">{message.content}</div>
-                      <div className="text-xs mt-1 opacity-70 text-right">
-                        {message.sender === "user" ? "You" : message.sender === "system" ? "System" : "Narrator"} •{" "}
-                        {new Date(message.timestamp).toLocaleTimeString()}
+            <div className="game-content">
+              {/* Main game content - 2/3 width */}
+              <div className="game-panel">
+                {/* Game narrative content */}
+                <div className="narrative-area">
+                  <div className="messages-container">
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`message ${
+                          message.sender === "user"
+                            ? "user-message"
+                            : message.sender === "system"
+                            ? "system-message"
+                            : "character-message"
+                        }`}
+                      >
+                        {message.sender === "user" ? (
+                          <>
+                            <div className="message-timestamp">
+                              {new Date(message.timestamp).toLocaleTimeString()} - You:
+                            </div>
+                            <div className="message-content">{message.content}</div>
+                          </>
+                        ) : message.sender === "system" ? (
+                          <>
+                            <div className="message-timestamp">SYSTEM:</div>
+                            <div className="message-content">{message.content}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="message-timestamp">{new Date(message.timestamp).toLocaleTimeString()}</div>
+                            <div className="character-content">{message.content}</div>
+                          </>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} />
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
                 </div>
+
+                {/* Input area */}
+                <div className="input-area">
+                  <form onSubmit={handleSendMessage} className="input-form">
+                    <input
+                      type="text"
+                      placeholder="Type your command..."
+                      className="command-input"
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      disabled={sendingMessage}
+                    />
+                    <button type="submit" disabled={sendingMessage || !inputMessage.trim()} className="submit-button">
+                      {sendingMessage ? "..." : "ENTER"}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Command help bar */}
+                <div className="command-help">Type &apos;help&apos; for available commands</div>
               </div>
 
-              {/* Input form */}
-              <div className="bg-amber-900/80 rounded-lg border-2 border-amber-700 p-3 backdrop-blur-sm">
-                <form onSubmit={handleSendMessage} className="flex">
-                  <input
-                    type="text"
-                    placeholder="What would you like to do?"
-                    className="flex-1 px-4 py-2 bg-amber-100 border border-amber-600 rounded-l-md text-amber-900 placeholder-amber-700/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    disabled={sendingMessage}
-                  />
-                  <button
-                    type="submit"
-                    disabled={sendingMessage || !inputMessage.trim()}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-r-md border border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {sendingMessage ? "..." : "Send"}
-                  </button>
-                </form>
-                <div className="mt-2 text-xs text-amber-300/70 px-2">Type &apos;help&apos; for available commands</div>
+              {/* Character stats panel - 1/3 width */}
+              <div className="stats-panel">
+                {/* Stats header */}
+                <div className="stats-header">
+                  <h2 className="stats-title">CHARACTER STATS</h2>
+                </div>
+
+                {/* Stats content */}
+                <div className="stats-content">
+                  <div className="stats-sections">
+                    {/* Character info section */}
+                    <div className="character-section">
+                      <div className="character-info">
+                        <h3 className="character-name">{user?.username || "crstjames"}</h3>
+                        <div className="character-level">Level {playerStats.level}</div>
+                      </div>
+
+                      {/* Experience */}
+                      <div className="exp-container">
+                        <div className="stat-label-row">
+                          <span>Experience</span>
+                          <span>
+                            {playerStats.experience} / {playerStats.nextLevelExp}
+                          </span>
+                        </div>
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill exp-fill"
+                            style={{
+                              width: `${Math.min(100, (playerStats.experience / playerStats.nextLevelExp) * 100)}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      <div className="character-stats">
+                        <div className="stat-row">
+                          <span>Gold:</span>
+                          <span>{playerStats.gold}</span>
+                        </div>
+                        <div className="stat-row">
+                          <span>Location:</span>
+                          <span>{playerStats.location}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Vitals section */}
+                    <div className="vitals-section">
+                      <h3 className="section-title">VITALS</h3>
+
+                      {/* Health */}
+                      <div className="health-container">
+                        <div className="stat-label-row">
+                          <span>Health</span>
+                          <span>
+                            {playerStats.health} / {playerStats.maxHealth}
+                          </span>
+                        </div>
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill health-fill"
+                            style={{
+                              width: `${Math.min(100, (playerStats.health / playerStats.maxHealth) * 100)}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Stamina */}
+                      <div>
+                        <div className="stat-label-row">
+                          <span>Stamina</span>
+                          <span>
+                            {playerStats.stamina} / {playerStats.maxStamina}
+                          </span>
+                        </div>
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill stamina-fill"
+                            style={{
+                              width: `${Math.min(100, (playerStats.stamina / playerStats.maxStamina) * 100)}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Inventory section */}
+                    <div className="inventory-section">
+                      <h3 className="section-title">INVENTORY</h3>
+                      <div className="inventory-items">
+                        {playerStats.inventory.map((item, index) => (
+                          <div key={index} className="inventory-item">
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </>
+            </div>
           )}
         </main>
 
-        {/* Game version or copyright */}
-        <div className="relative z-20 text-center text-white text-xs py-2 bg-black/30 backdrop-blur-sm border-t border-gray-800">
-          v0.1.0 Alpha • © 2023 The Last Centaur
-        </div>
+        {/* Footer */}
+        <footer className="game-footer">v0.1.0 Alpha • © 2023 The Last Centaur</footer>
       </div>
     </div>
   );

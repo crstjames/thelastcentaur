@@ -14,9 +14,11 @@ export default function HomePage() {
   const [textVisible, setTextVisible] = useState(true);
 
   // Auto-redirect if already authenticated
-  if (!isLoading && isAuthenticated) {
-    router.push("/games");
-  }
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push("/games");
+    }
+  }, [isLoading, isAuthenticated, router]);
 
   // Text blinking effect for "Click to Start"
   useEffect(() => {
