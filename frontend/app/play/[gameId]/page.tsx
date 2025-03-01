@@ -310,17 +310,29 @@ export default function PlayPage() {
 
       // Update player stats if game_state is provided in the response
       if (commandResponse.game_state) {
-        setPlayerStats((prev) => ({
-          ...prev,
-          health: commandResponse.game_state?.health ?? prev.health,
-          location: commandResponse.game_state?.location ?? prev.location,
-          inventory: commandResponse.game_state?.inventory ?? prev.inventory,
-          // Update other stats as needed
-          stamina: (commandResponse.game_state?.stamina as number) ?? prev.stamina,
-          gold: (commandResponse.game_state?.gold as number) ?? prev.gold,
-          experience: (commandResponse.game_state?.experience as number) ?? prev.experience,
-          level: (commandResponse.game_state?.level as number) ?? prev.level,
-        }));
+        setPlayerStats((prev) => {
+          // Check if game_state has player property
+          const playerData = commandResponse.game_state?.player || {};
+
+          // Extract position if available
+          let locationStr = prev.location;
+          if (playerData && typeof playerData === "object" && "position" in playerData && playerData.position) {
+            const pos = playerData.position as { x: number; y: number };
+            locationStr = `${pos.x},${pos.y}`;
+          }
+
+          return {
+            ...prev,
+            health: playerData.health ?? prev.health,
+            location: locationStr,
+            inventory: Array.isArray(playerData.inventory) ? playerData.inventory : prev.inventory,
+            // Update other stats as needed
+            stamina: (playerData.stamina as number) ?? prev.stamina,
+            gold: (playerData.gold as number) ?? prev.gold,
+            experience: (playerData.experience as number) ?? prev.experience,
+            level: (playerData.level as number) ?? prev.level,
+          };
+        });
       }
 
       // Fetch the latest game state to ensure we have the most up-to-date inventory and stats

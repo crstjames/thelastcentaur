@@ -370,7 +370,23 @@ class LLMInterface:
                 context += f"Time of day: {time_of_day}\n"
             
             if player_inventory:
-                context += f"Items in inventory: {', '.join(player_inventory)}\n"
+                # Convert Item objects to strings if needed
+                inventory_items = []
+                for item in player_inventory:
+                    if isinstance(item, str):
+                        inventory_items.append(item)
+                    elif hasattr(item, 'name'):
+                        inventory_items.append(item.name)
+                    elif isinstance(item, dict) and 'name' in item:
+                        inventory_items.append(item['name'])
+                    else:
+                        # Log the unexpected item type
+                        logger.warning(f"Unexpected item type in inventory: {type(item)}, {item}")
+                        continue
+                
+                context += f"Items in inventory: {', '.join(inventory_items)}\n"
+            else:
+                context += "Inventory is empty.\n"
             
             # Use OpenAI for command interpretation with comprehensive context
             response = await self.openai_client.chat.completions.create(

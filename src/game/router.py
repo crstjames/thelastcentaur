@@ -235,6 +235,10 @@ async def execute_command(
             timestamp=datetime.utcnow()
         )
         
+        # Add game state to the response
+        game_state = await game_state_manager.get_game_state(game_id)
+        response.game_state = game_state
+        
         return response
     except Exception as e:
         # Log the error but provide a fallback response
@@ -253,6 +257,10 @@ async def execute_command(
             game_id=game_id,
             timestamp=datetime.utcnow()
         )
+        
+        # Add game state to the response
+        game_state = await game_state_manager.get_game_state(game_id)
+        response.game_state = game_state
         
         return response
 

@@ -228,9 +228,7 @@ class CommandParser:
                 
         # Handle inventory commands
         if command.type == CommandType.INVENTORY:
-            if not hasattr(self.player.state, 'inventory') or not self.player.state.inventory:
-                return "Your inventory is empty."
-            return "Inventory: " + ", ".join(self.player.state.inventory)
+            return self.handle_inventory_command(command.args)
             
         # Handle map commands
         if command.type == CommandType.MAP:
@@ -424,14 +422,13 @@ class CommandParser:
         return "\n".join(help_text)
     
     def handle_take_command(self, args: List[str]) -> str:
-        """Handle taking items from the environment."""
+        """Handle the 'take' command."""
+        if not args:
+            return "Take what?"
+            
         item_name = " ".join(args)
         current_tile = self.player.state.current_tile
         
-        if not current_tile:
-            return "You are in an unknown area."
-            
-        # Check if item exists in tile
         if item_name not in current_tile.items:
             return f"There is no {item_name} here."
             
@@ -449,8 +446,15 @@ class CommandParser:
             # Skip this check for tests
             pass
             
-        # Add item to inventory
-        self.player.state.inventory.append(item_name)
+        # Add item to inventory - ensure we're adding a string
+        item_to_add = item_name
+        if not isinstance(item_name, str):
+            if hasattr(item_name, 'name'):
+                item_to_add = item_name.name
+            elif isinstance(item_name, dict) and 'name' in item_name:
+                item_to_add = item_name['name']
+                
+        self.player.state.inventory.append(item_to_add)
         
         # Remove item from tile
         current_tile.items.remove(item_name)
@@ -1000,4 +1004,31 @@ class CommandParser:
         dialogue = npc.dialogue.get(progress_state, "...")
         
         # Return the NPC's dialogue
-        return f"{npc.name}: \"{dialogue}\"" 
+        return f"{npc.name}: \"{dialogue}\""
+    
+    def handle_inventory_command(self, args: List[str]) -> str:
+        """Handle the 'inventory' command."""
+        # For tests, ensure inventory exists
+        if not hasattr(self.player.state, 'inventory') or self.player.state.inventory is None:
+            self.player.state.inventory = []
+            
+        # Convert any Item objects to strings
+        string_inventory = []
+        for item in self.player.state.inventory:
+            if isinstance(item, str):
+                string_inventory.append(item)
+            elif hasattr(item, 'name'):
+                string_inventory.append(item.name)
+            elif isinstance(item, dict) and 'name' in item:
+                string_inventory.append(item['name'])
+            else:
+                # Skip items that can't be converted
+                continue
+                
+        # Update the inventory with string items
+        self.player.state.inventory = string_inventory
+            
+        if not self.player.state.inventory:
+            return "Your inventory is empty."
+            
+        return f"You are carrying: {', '.join(self.player.state.inventory)}." 
