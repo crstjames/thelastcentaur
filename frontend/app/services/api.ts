@@ -5,7 +5,6 @@
 // Base API URL from environment variables
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_V1_PREFIX = "/api/v1";
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 
 // Authentication API
 export const authAPI = {
@@ -147,6 +146,52 @@ export interface Game {
   status: string;
   created_at: string;
   user_id: string;
+  game_state?: GameState;
+}
+
+/**
+ * GameState interface
+ */
+export interface GameState {
+  player?: {
+    health?: number;
+    max_health?: number;
+    stamina?: number;
+    max_stamina?: number;
+    level?: number;
+    experience?: number;
+    gold?: number;
+    inventory?: string[];
+  };
+  current_tile?: {
+    terrain_type?: string;
+    description?: string;
+    items?: Array<{
+      id: string;
+      name: string;
+      description: string;
+      type: string;
+      properties?: Record<string, unknown>;
+    }>;
+    enemies?: Array<{
+      id: string;
+      name: string;
+      description: string;
+      health: number;
+      damage: number;
+      drops?: string[];
+    }>;
+    npcs?: string[];
+    exits?: string[];
+  };
+  // Legacy properties for backward compatibility
+  health?: number;
+  stamina?: number;
+  level?: number;
+  experience?: number;
+  gold?: number;
+  location?: string;
+  inventory?: string[];
 }
 
 /**
@@ -154,11 +199,15 @@ export interface Game {
  */
 export interface CommandResponse {
   response: string;
-  game_state?: {
-    location: string;
-    inventory: string[];
-    health: number;
-    [key: string]: unknown;
+  game_state?: GameState & {
+    // Legacy properties for backward compatibility
+    health?: number;
+    location?: string;
+    inventory?: string[];
+    stamina?: number;
+    gold?: number;
+    experience?: number;
+    level?: number;
   };
 }
 
@@ -256,7 +305,12 @@ export const gameAPI = {
   /**
    * Send a command to the game
    */
-  sendCommand: async (token: string, gameId: string, command: string): Promise<CommandResponse> => {
+  sendCommand: async (
+    token: string,
+    gameId: string,
+    command: string,
+    useLLM: boolean = true
+  ): Promise<CommandResponse> => {
     try {
       const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/command`, {
         method: "POST",
@@ -264,7 +318,7 @@ export const gameAPI = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ command }),
+        body: JSON.stringify({ command, use_llm: useLLM }),
       });
 
       if (!response.ok) {
@@ -294,139 +348,13 @@ export const gameAPI = {
 
       if (!response.ok) {
         console.error(`Failed to load game history: ${response.status} ${response.statusText}`);
-        return []; // Return empty array instead of throwing
+        throw new Error(`Failed to load game history: ${response.status}`);
       }
 
       return response.json();
     } catch (error) {
       console.error("Network error when loading game history:", error);
-      return []; // Return empty array on network errors
+      throw error; // Re-throw to be handled by the component
     }
   },
 };
-
-/**
- * WebSocket message interface
- */
-export interface WebSocketMessage {
-  type: string;
-  data: {
-    message?: string;
-    command?: string;
-    response?: string;
-    [key: string]: unknown;
-  };
-}
-
-/**
- * Connect to game WebSocket
- */
-export function connectGameWebSocket(
-  gameId: string,
-  token: string,
-  callbacks: {
-    onOpen?: () => void;
-    onMessage?: (data: WebSocketMessage) => void;
-    onClose?: () => void;
-    onError?: (error: Event) => void;
-    onConnectionFailed?: () => void;
-  },
-  options = { timeout: 5000, retries: 1 }
-): { socket: WebSocket | null; disconnect: () => void } {
-  let socket: WebSocket | null = null;
-  let reconnectAttempts = 0;
-  let connectionTimer: NodeJS.Timeout | null = null;
-  let isManuallyDisconnected = false;
-
-  const connect = () => {
-    try {
-      // Clear any existing connection timer
-      if (connectionTimer) {
-        clearTimeout(connectionTimer);
-      }
-
-      // Create new WebSocket connection
-      socket = new WebSocket(`${WS_URL}/ws/game/${gameId}?token=${token}`);
-
-      // Set connection timeout
-      connectionTimer = setTimeout(() => {
-        if (socket && socket.readyState !== WebSocket.OPEN) {
-          console.error("WebSocket connection timeout");
-          socket.close();
-
-          if (reconnectAttempts < options.retries && !isManuallyDisconnected) {
-            console.log(`Retrying WebSocket connection (${reconnectAttempts + 1}/${options.retries})`);
-            reconnectAttempts++;
-            connect();
-          } else if (callbacks.onConnectionFailed) {
-            callbacks.onConnectionFailed();
-          }
-        }
-      }, options.timeout);
-
-      socket.onopen = () => {
-        if (connectionTimer) {
-          clearTimeout(connectionTimer);
-          connectionTimer = null;
-        }
-        reconnectAttempts = 0;
-        if (callbacks.onOpen) callbacks.onOpen();
-      };
-
-      socket.onmessage = (event) => {
-        if (callbacks.onMessage) {
-          try {
-            const data = JSON.parse(event.data) as WebSocketMessage;
-            callbacks.onMessage(data);
-          } catch (error) {
-            console.error("Failed to parse WebSocket message:", error);
-          }
-        }
-      };
-
-      socket.onclose = (event) => {
-        if (connectionTimer) {
-          clearTimeout(connectionTimer);
-          connectionTimer = null;
-        }
-
-        // Only attempt to reconnect if not manually disconnected and not reached max retries
-        if (!isManuallyDisconnected && reconnectAttempts < options.retries && event.code !== 1000) {
-          console.log(`WebSocket closed unexpectedly. Retrying (${reconnectAttempts + 1}/${options.retries})`);
-          reconnectAttempts++;
-          setTimeout(connect, 1000); // Wait 1 second before reconnecting
-        } else if (callbacks.onClose) {
-          callbacks.onClose();
-        }
-      };
-
-      socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        if (callbacks.onError) callbacks.onError(error);
-      };
-    } catch (error) {
-      console.error("Error creating WebSocket:", error);
-      if (callbacks.onConnectionFailed) {
-        callbacks.onConnectionFailed();
-      }
-    }
-  };
-
-  // Initial connection
-  connect();
-
-  // Return the socket and a disconnect function
-  return {
-    socket: socket,
-    disconnect: () => {
-      isManuallyDisconnected = true;
-      if (connectionTimer) {
-        clearTimeout(connectionTimer);
-        connectionTimer = null;
-      }
-      if (socket) {
-        socket.close();
-      }
-    },
-  };
-}

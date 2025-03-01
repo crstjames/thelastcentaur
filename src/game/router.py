@@ -174,9 +174,12 @@ async def execute_command(
     
     # Get OpenAI API key from environment
     openai_api_key = os.environ.get("OPENAI_API_KEY")
-    if not openai_api_key:
-        # Log warning and return basic response if no API key
-        print("WARNING: No OpenAI API key found. LLM enhancement disabled.")
+    
+    # Check if we should bypass LLM processing
+    if not command_data.use_llm or not openai_api_key:
+        if not openai_api_key and command_data.use_llm:
+            # Log warning if LLM was requested but API key is missing
+            print("WARNING: No OpenAI API key found. LLM enhancement disabled.")
         
         # Load the game state if not already loaded
         await game_state_manager.load_game_instance(game_id, db)

@@ -3,16 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { gameAPI } from "../../services/api";
-
-// Game type definition
-interface Game {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  created_at: string;
-}
+import { gameAPI, Game } from "../../services/api";
 
 // Message type definition
 interface Message {
@@ -104,6 +95,7 @@ export default function PlayPage() {
           description: "Your adventure in the world of The Last Centaur",
           status: "active",
           created_at: new Date().toISOString(),
+          user_id: user?.id || "unknown",
         });
       }
 
@@ -131,7 +123,8 @@ export default function PlayPage() {
       // Try to get initial state
       try {
         // Send initial command to get game state
-        const initialStateCommand = await gameAPI.sendCommand(token, gameId, "look");
+        // Use LLM for the initial look command to get a rich description
+        const initialStateCommand = await gameAPI.sendCommand(token, gameId, "look", true);
 
         // Update player stats from initial state
         if (initialStateCommand.game_state) {
@@ -175,6 +168,69 @@ export default function PlayPage() {
     }
   };
 
+  // Check if a command is an inventory check
+  const isInventoryCommand = (cmd: string): boolean => {
+    const lowerCmd = cmd.toLowerCase().trim();
+    return (
+      lowerCmd === "inventory" ||
+      lowerCmd === "check inventory" ||
+      lowerCmd === "show inventory" ||
+      lowerCmd === "i" ||
+      lowerCmd === "inv"
+    );
+  };
+
+  // Fetch game state without using LLM (for UI updates only)
+  const fetchGameState = async () => {
+    if (!token || !gameId) return;
+
+    try {
+      // Get the latest game state
+      const gameData = await gameAPI.getGame(token, gameId);
+
+      if (gameData && gameData.game_state) {
+        // Extract player stats from game data
+        const gameState = gameData.game_state || {};
+        console.log("Game state updated:", gameState);
+
+        // Check both formats - the new nested player object and the old flat structure
+        if (gameState.player) {
+          // New format with nested player object
+          const playerData = gameState.player;
+
+          // Update player stats with the latest data
+          setPlayerStats((prev) => ({
+            ...prev,
+            health: playerData.health ?? prev.health,
+            maxHealth: playerData.max_health ?? prev.maxHealth,
+            stamina: playerData.stamina ?? prev.stamina,
+            maxStamina: playerData.max_stamina ?? prev.maxStamina,
+            level: playerData.level ?? prev.level,
+            experience: playerData.experience ?? prev.experience,
+            gold: playerData.gold ?? prev.gold,
+            location: gameState.current_tile?.terrain_type || prev.location,
+            inventory: Array.isArray(playerData.inventory) ? playerData.inventory : prev.inventory,
+          }));
+        } else {
+          // Old format with flat structure
+          setPlayerStats((prev) => ({
+            ...prev,
+            health: gameState.health ?? prev.health,
+            stamina: gameState.stamina ?? prev.stamina,
+            level: gameState.level ?? prev.level,
+            experience: gameState.experience ?? prev.experience,
+            gold: gameState.gold ?? prev.gold,
+            location: gameState.location ?? prev.location,
+            inventory: Array.isArray(gameState.inventory) ? gameState.inventory : prev.inventory,
+          }));
+        }
+      }
+    } catch (stateErr) {
+      console.error("Error fetching updated game state:", stateErr);
+      // Continue without updating if there's an error
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || sendingMessage) return;
@@ -194,9 +250,13 @@ export default function PlayPage() {
 
     try {
       // Try to send command to the game engine API
+      // Always use LLM for player-initiated commands, especially inventory checks
+      // This ensures rich narrative responses for player-requested inventory checks
+      const shouldUseLLM = true; // Default to using LLM for all player commands
+
       let commandResponse;
       try {
-        commandResponse = await gameAPI.sendCommand(token!, gameId, inputMessage);
+        commandResponse = await gameAPI.sendCommand(token!, gameId, inputMessage, shouldUseLLM);
       } catch (apiErr) {
         console.error("API error sending command:", apiErr);
 
@@ -215,6 +275,12 @@ export default function PlayPage() {
         } else if (inputMessage.toLowerCase().includes("help")) {
           responseContent =
             "Available commands: look, go [direction], examine [object], take [item], inventory, talk to [character]";
+        } else if (isInventoryCommand(inputMessage)) {
+          responseContent =
+            "You check your belongings. " +
+            (playerStats.inventory.length > 0
+              ? `You are carrying: ${playerStats.inventory.join(", ")}.`
+              : "Your inventory is empty.");
         }
 
         // Create a fallback response object
@@ -256,6 +322,9 @@ export default function PlayPage() {
           level: (commandResponse.game_state?.level as number) ?? prev.level,
         }));
       }
+
+      // Fetch the latest game state to ensure we have the most up-to-date inventory and stats
+      await fetchGameState();
     } catch (err) {
       console.error("Error sending message:", err);
 
@@ -283,7 +352,6 @@ export default function PlayPage() {
 
   return (
     <div className="crt-container">
-      <div>TEST TEST TEST</div>
       <style jsx>{`
         @font-face {
           font-family: "Press Start 2P";
@@ -607,6 +675,15 @@ export default function PlayPage() {
           font-weight: 500;
         }
 
+        .character-paragraph {
+          margin-bottom: 0.8rem;
+          line-height: 1.4;
+        }
+
+        .character-paragraph:last-child {
+          margin-bottom: 0;
+        }
+
         .input-area {
           background-color: #333;
           border-top: 1px solid #996633;
@@ -899,7 +976,15 @@ export default function PlayPage() {
                         ) : (
                           <>
                             <div className="message-timestamp">{new Date(message.timestamp).toLocaleTimeString()}</div>
-                            <div className="character-content">{message.content}</div>
+                            <div className="character-content">
+                              {message.content.split("\n\n").map((paragraph, index) =>
+                                paragraph.trim() ? (
+                                  <p key={index} className="character-paragraph">
+                                    {paragraph}
+                                  </p>
+                                ) : null
+                              )}
+                            </div>
                           </>
                         )}
                       </div>

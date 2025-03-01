@@ -59,6 +59,7 @@ class GameStateResponse(BaseModel):
 class GameCommandRequest(BaseModel):
     """Schema for game command request."""
     command: str
+    use_llm: bool = True
 
 class GameCommandResponse(BaseModel):
     """Schema for game command response."""
