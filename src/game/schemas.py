@@ -59,6 +59,7 @@ class GameStateResponse(BaseModel):
 class GameCommandRequest(BaseModel):
     """Schema for game command request."""
     command: str
+    use_llm: bool = True
 
 class GameCommandResponse(BaseModel):
     """Schema for game command response."""
@@ -66,6 +67,7 @@ class GameCommandResponse(BaseModel):
     response: str
     game_id: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    game_state: Optional[Dict[str, Any]] = None
 
 class TileResponse(BaseModel):
     """Schema for tile response."""

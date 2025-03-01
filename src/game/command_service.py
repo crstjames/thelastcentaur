@@ -96,53 +96,58 @@ class CommandService:
         player = self.command_parser.player
         current_pos = (player.x, player.y)
         
-        stmt = select(Tile).where(
-            Tile.game_instance_id == game_id,
-            Tile.position_x == current_pos[0],
-            Tile.position_y == current_pos[1]
-        )
-        tile_result = await self.db_session.execute(stmt)
-        current_tile = tile_result.scalar_one_or_none()
-        
-        if not current_tile:
+        try:
+            stmt = select(Tile).where(
+                Tile.game_instance_id == game_id,
+                Tile.position_x == current_pos[0],
+                Tile.position_y == current_pos[1]
+            )
+            tile_result = await self.db_session.execute(stmt)
+            current_tile = tile_result.scalar_one_or_none()
+            
+            if not current_tile:
+                return result
+            
+            # Enhance result based on command type
+            command_type = getattr(command, "command_type", None)
+            
+            if command_type == CommandType.LOOK:
+                # Enhance look command with tile details
+                enhanced = result
+                
+                # Add information about items if present
+                if current_tile.items and len(current_tile.items) > 0:
+                    items_desc = self._format_items(current_tile.items)
+                    if items_desc:
+                        enhanced += f"\n\nYou see: {items_desc}"
+                
+                # Add information about enemies if present
+                if current_tile.enemies and len(current_tile.enemies) > 0:
+                    enemies_desc = self._format_enemies(current_tile.enemies)
+                    if enemies_desc:
+                        enhanced += f"\n\nBeware: {enemies_desc}"
+                
+                # Add information about exits
+                exits_desc = self._format_exits(current_tile.exits)
+                if exits_desc:
+                    enhanced += f"\n\nExits: {exits_desc}"
+                
+                return enhanced
+            
+            elif command_type == CommandType.MOVE:
+                # Update tile visited status
+                if current_tile and not current_tile.is_visited:
+                    current_tile.is_visited = True
+                    await self.db_session.commit()
+                
+                return result
+            
+            # Default: return original result
             return result
-        
-        # Enhance result based on command type
-        command_type = getattr(command, "command_type", None)
-        
-        if command_type == CommandType.LOOK:
-            # Enhance look command with tile details
-            enhanced = result
-            
-            # Add information about items if present
-            if current_tile.items and len(current_tile.items) > 0:
-                items_desc = self._format_items(current_tile.items)
-                if items_desc:
-                    enhanced += f"\n\nYou see: {items_desc}"
-            
-            # Add information about enemies if present
-            if current_tile.enemies and len(current_tile.enemies) > 0:
-                enemies_desc = self._format_enemies(current_tile.enemies)
-                if enemies_desc:
-                    enhanced += f"\n\nBeware: {enemies_desc}"
-            
-            # Add information about exits
-            exits_desc = self._format_exits(current_tile.exits)
-            if exits_desc:
-                enhanced += f"\n\nExits: {exits_desc}"
-            
-            return enhanced
-        
-        elif command_type == CommandType.MOVE:
-            # Update tile visited status
-            if current_tile and not current_tile.is_visited:
-                current_tile.is_visited = True
-                await self.db_session.commit()
-            
-            return result
-        
-        # Default: return original result
-        return result
+        except Exception as e:
+            # Log the error but don't break the game flow
+            print(f"Error enhancing result: {str(e)}")
+            return result  # Return the original result if enhancement fails
     
     def _format_items(self, items_data: Dict[str, Any]) -> str:
         """Format items data for display."""

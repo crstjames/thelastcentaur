@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.db.models import GameInstance, Tile, TileHistory
 from src.core.models import GameState, TileState, Direction, TerrainType, StoryArea
@@ -68,36 +68,83 @@ class GameStateManager:
         
         return game_instance
     
-    async def save_game_state(self, game_id: str) -> bool:
+    async def save_game_state(self, game_id: str) -> None:
         """Save the current game state to the database."""
         if game_id not in self._loaded_instances:
-            return False
+            logger.warning(f"Cannot save game state for unloaded instance: {game_id}")
+            return
+            
+        game_instance = self._loaded_instances[game_id]
         
-        instance_data = self._loaded_instances[game_id]
-        player = instance_data["player"]
-        map_system = instance_data["map_system"]
-        db_session = instance_data["db_session"]
+        # Normalize the game state before saving
+        self._normalize_game_state(game_instance)
         
         # Get player position
+        player = game_instance["player"]
         x, y = player.state.position
         
         # Serialize game state
         game_state = self._serialize_game_state(game_id)
         
-        # Update game instance
+        # Update the game instance in the database
         stmt = (
             update(GameInstance)
             .where(GameInstance.id == game_id)
             .values(
                 current_position={"x": x, "y": y},
                 game_state=game_state,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.now(timezone.utc)
             )
         )
-        await db_session.execute(stmt)
-        await db_session.commit()
         
-        return True
+        db_session = game_instance["db_session"]
+        try:
+            await db_session.execute(stmt)
+            await db_session.commit()
+        except Exception as e:
+            await db_session.rollback()
+            logger.error(f"Error saving game state: {e}")
+            raise
+    
+    def _normalize_game_state(self, game_instance):
+        """Normalize the game state to ensure it can be properly serialized."""
+        # Check if game_instance is a dictionary (from _loaded_instances)
+        if isinstance(game_instance, dict):
+            # If player has inventory, normalize it
+            player = game_instance.get("player")
+            if player and hasattr(player, "state") and hasattr(player.state, "inventory"):
+                normalized_inventory = []
+                for item in player.state.inventory:
+                    if isinstance(item, str):
+                        normalized_inventory.append(item)
+                    elif hasattr(item, 'name'):
+                        normalized_inventory.append(item.name)
+                    elif isinstance(item, dict) and 'name' in item:
+                        normalized_inventory.append(item['name'])
+                    else:
+                        # Log unexpected item type
+                        logger.warning(f"Skipping unexpected item type in inventory: {type(item)}")
+                        continue
+                        
+                player.state.inventory = normalized_inventory
+        else:
+            # Handle case where game_instance is a GameInstance object
+            if hasattr(game_instance, 'game_state') and game_instance.game_state:
+                if 'inventory' in game_instance.game_state:
+                    normalized_inventory = []
+                    for item in game_instance.game_state['inventory']:
+                        if isinstance(item, str):
+                            normalized_inventory.append(item)
+                        elif hasattr(item, 'name'):
+                            normalized_inventory.append(item.name)
+                        elif isinstance(item, dict) and 'name' in item:
+                            normalized_inventory.append(item['name'])
+                        else:
+                            # Log unexpected item type
+                            logger.warning(f"Skipping unexpected item type in inventory: {type(item)}")
+                            continue
+                            
+                    game_instance.game_state['inventory'] = normalized_inventory
     
     async def execute_command(self, game_id: str, command_text: str) -> str:
         """Execute a command and update game state."""
@@ -157,6 +204,53 @@ class GameStateManager:
             "tiles": tile_data,
             "current_position": {"x": x, "y": y}
         }
+    
+    async def get_game_state(self, game_id: str) -> Dict[str, Any]:
+        """
+        Get the current game state for a game instance.
+        
+        Args:
+            game_id: The game instance ID
+            
+        Returns:
+            Dictionary containing the current game state
+        """
+        if game_id not in self._loaded_instances:
+            return {}
+        
+        instance_data = self._loaded_instances[game_id]
+        player = instance_data["player"]
+        map_system = instance_data["map_system"]
+        
+        # Get player position
+        x, y = player.state.position
+        
+        # Get current tile
+        current_tile = map_system.get_tile(x, y)
+        
+        # Build game state
+        game_state = {
+            "player": {
+                "position": {"x": x, "y": y},
+                "inventory": player.state.inventory,
+                "health": player.state.stats.health if hasattr(player.state, "stats") else 100,
+                "stamina": player.state.stats.stamina if hasattr(player.state, "stats") else 100,
+                "level": 1,  # Default level since it's not in the Player class
+                "experience": 0,  # Default experience since it's not in the Player class
+                "gold": 0  # Default gold since it's not in the Player class
+            },
+            "current_tile": {
+                "position": {"x": x, "y": y},
+                "description": current_tile.description if current_tile else "Unknown area",
+                "terrain_type": current_tile.terrain_type.value if current_tile and hasattr(current_tile, 'terrain_type') else "unknown",
+                "items": current_tile.items if current_tile else [],
+                "enemies": current_tile.enemies if current_tile else [],
+                "npcs": current_tile.npcs if current_tile and hasattr(current_tile, 'npcs') else [],
+                "exits": current_tile.exits if current_tile else []
+            }
+        }
+        
+        return game_state
     
     async def _initialize_game_world(self, game_id: str, db_session: AsyncSession) -> None:
         """Initialize the game world for a new game instance."""

@@ -1,0 +1,28 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install PostgreSQL client and other dependencies
+RUN apt-get update && \
+    apt-get install -y postgresql-client gcc python3-dev libpq-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 8000
+
+# Set environment variables for CORS
+ENV CORS_ORIGINS="http://localhost:3002,http://127.0.0.1:3002"
+
+# Print a message about API keys
+RUN echo "Checking for API keys at runtime..."
+
+# Command to run the application with API key check
+CMD ["bash", "-c", "if [ -z \"$OPENAI_API_KEY\" ]; then echo 'WARNING: OPENAI_API_KEY is not set. LLM enhancement will be disabled.'; fi; python -m src.main"] 

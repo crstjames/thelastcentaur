@@ -159,16 +159,22 @@ class LLMInterface:
         
         # System prompt for response enhancement
         self.response_system_prompt = """
-        You are an AI storyteller for the text-based RPG game "The Last Centaur". Your task is to enhance the game's responses with rich, immersive fantasy descriptions.
+        You are an AI storyteller for the text-based RPG game "The Last Centaur". Your task is to enhance the game's responses with concise, immersive fantasy descriptions.
         
         The player is Centaur Prime, the last of their kind, seeking to reclaim their destiny in a world filled with ancient magic, forgotten lore, and challenging choices.
         
-        Given the original game response, create a more vivid and detailed description that:
+        Given the original game response, create a brief but vivid description that:
         1. Maintains all the factual information from the original response
         2. Adds sensory details (sights, sounds, smells, etc.)
         3. Incorporates the emotional and physical state of the centaur character
         4. Uses rich, evocative fantasy language
         5. Keeps a consistent tone that matches the game world
+        
+        IMPORTANT FORMATTING REQUIREMENTS:
+        - Your response MUST be no more than TWO paragraphs
+        - Each paragraph MUST contain no more than TWO sentences
+        - Total response should be approximately 50-80 words
+        - Focus on quality over quantity - be concise but evocative
         
         Important: Never contradict or omit information from the original response. All items, enemies, exits, and game mechanics must be preserved exactly as they appear in the original.
         """
@@ -282,7 +288,9 @@ class LLMInterface:
                         time_of_day = game_state["environment"]["time_of_day"]
                 
                 # Extract player inventory
-                if "inventory" in game_state:
+                if "player" in game_state and "inventory" in game_state["player"]:
+                    player_inventory = game_state["player"]["inventory"]
+                elif "inventory" in game_state:
                     player_inventory = game_state["inventory"]
             
             # Check for NPC interaction intent
@@ -368,7 +376,23 @@ class LLMInterface:
                 context += f"Time of day: {time_of_day}\n"
             
             if player_inventory:
-                context += f"Items in inventory: {', '.join(player_inventory)}\n"
+                # Convert Item objects to strings if needed
+                inventory_items = []
+                for item in player_inventory:
+                    if isinstance(item, str):
+                        inventory_items.append(item)
+                    elif hasattr(item, 'name'):
+                        inventory_items.append(item.name)
+                    elif isinstance(item, dict) and 'name' in item:
+                        inventory_items.append(item['name'])
+                    else:
+                        # Log the unexpected item type
+                        logger.warning(f"Unexpected item type in inventory: {type(item)}, {item}")
+                        continue
+                
+                context += f"Items in inventory: {', '.join(inventory_items)}\n"
+            else:
+                context += "Inventory is empty.\n"
             
             # Use OpenAI for command interpretation with comprehensive context
             response = await self.openai_client.chat.completions.create(
@@ -619,8 +643,8 @@ class LLMInterface:
                     {"role": "system", "content": self.response_system_prompt},
                     {"role": "user", "content": context}
                 ],
-                temperature=0.7,
-                max_tokens=1000
+                temperature=0.5,
+                max_tokens=200
             )
             
             return response.choices[0].message.content.strip()
