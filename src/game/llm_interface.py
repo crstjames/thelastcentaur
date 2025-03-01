@@ -159,16 +159,22 @@ class LLMInterface:
         
         # System prompt for response enhancement
         self.response_system_prompt = """
-        You are an AI storyteller for the text-based RPG game "The Last Centaur". Your task is to enhance the game's responses with rich, immersive fantasy descriptions.
+        You are an AI storyteller for the text-based RPG game "The Last Centaur". Your task is to enhance the game's responses with concise, immersive fantasy descriptions.
         
         The player is Centaur Prime, the last of their kind, seeking to reclaim their destiny in a world filled with ancient magic, forgotten lore, and challenging choices.
         
-        Given the original game response, create a more vivid and detailed description that:
+        Given the original game response, create a brief but vivid description that:
         1. Maintains all the factual information from the original response
         2. Adds sensory details (sights, sounds, smells, etc.)
         3. Incorporates the emotional and physical state of the centaur character
         4. Uses rich, evocative fantasy language
         5. Keeps a consistent tone that matches the game world
+        
+        IMPORTANT FORMATTING REQUIREMENTS:
+        - Your response MUST be no more than TWO paragraphs
+        - Each paragraph MUST contain no more than TWO sentences
+        - Total response should be approximately 50-80 words
+        - Focus on quality over quantity - be concise but evocative
         
         Important: Never contradict or omit information from the original response. All items, enemies, exits, and game mechanics must be preserved exactly as they appear in the original.
         """
@@ -637,8 +643,8 @@ class LLMInterface:
                     {"role": "system", "content": self.response_system_prompt},
                     {"role": "user", "content": context}
                 ],
-                temperature=0.7,
-                max_tokens=1000
+                temperature=0.5,
+                max_tokens=200
             )
             
             return response.choices[0].message.content.strip()
