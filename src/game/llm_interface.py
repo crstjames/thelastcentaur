@@ -282,7 +282,9 @@ class LLMInterface:
                         time_of_day = game_state["environment"]["time_of_day"]
                 
                 # Extract player inventory
-                if "inventory" in game_state:
+                if "player" in game_state and "inventory" in game_state["player"]:
+                    player_inventory = game_state["player"]["inventory"]
+                elif "inventory" in game_state:
                     player_inventory = game_state["inventory"]
             
             # Check for NPC interaction intent

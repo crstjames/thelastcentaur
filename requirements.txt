@@ -2,6 +2,7 @@
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic>=2.0.0
+pydantic-settings>=2.0.0
 sqlalchemy>=2.0.23
 python-dotenv>=1.0.0
 asyncpg>=0.29.0  # PostgreSQL async driver
@@ -32,4 +33,4 @@ python-multipart>=0.0.6  # For form data parsing
 # LLM Interface
 openai>=1.10.0  # OpenAI API client
 anthropic>=0.8.0  # Anthropic API client
-termcolor>=2.3.0  # Colored terminal output pydantic-settings
+termcolor>=2.3.0  # Colored terminal output

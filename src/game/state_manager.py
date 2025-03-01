@@ -81,22 +81,8 @@ class GameStateManager:
         # Get player position
         x, y = player.state.position
         
-        # Get current game instance to preserve existing game_state values
-        stmt = select(GameInstance).where(GameInstance.id == game_id)
-        result = await db_session.execute(stmt)
-        game_instance = result.scalar_one_or_none()
-        
-        if not game_instance:
-            return False
-        
-        # Preserve existing game_state data like status
-        existing_game_state = dict(game_instance.game_state) if game_instance.game_state else {}
-        
-        # Serialize new game state
-        new_game_state = self._serialize_game_state(game_id)
-        
-        # Merge existing and new game state, preserving status
-        merged_game_state = {**new_game_state, **existing_game_state}
+        # Serialize game state
+        game_state = self._serialize_game_state(game_id)
         
         # Update game instance
         stmt = (
@@ -104,7 +90,7 @@ class GameStateManager:
             .where(GameInstance.id == game_id)
             .values(
                 current_position={"x": x, "y": y},
-                game_state=merged_game_state,
+                game_state=game_state,
                 updated_at=datetime.utcnow()
             )
         )
@@ -171,6 +157,53 @@ class GameStateManager:
             "tiles": tile_data,
             "current_position": {"x": x, "y": y}
         }
+    
+    async def get_game_state(self, game_id: str) -> Dict[str, Any]:
+        """
+        Get the current game state for a game instance.
+        
+        Args:
+            game_id: The game instance ID
+            
+        Returns:
+            Dictionary containing the current game state
+        """
+        if game_id not in self._loaded_instances:
+            return {}
+        
+        instance_data = self._loaded_instances[game_id]
+        player = instance_data["player"]
+        map_system = instance_data["map_system"]
+        
+        # Get player position
+        x, y = player.state.position
+        
+        # Get current tile
+        current_tile = map_system.get_tile(x, y)
+        
+        # Build game state
+        game_state = {
+            "player": {
+                "position": {"x": x, "y": y},
+                "inventory": player.state.inventory,
+                "health": player.state.stats.health if hasattr(player.state, "stats") else 100,
+                "stamina": player.state.stats.stamina if hasattr(player.state, "stats") else 100,
+                "level": 1,  # Default level since it's not in the Player class
+                "experience": 0,  # Default experience since it's not in the Player class
+                "gold": 0  # Default gold since it's not in the Player class
+            },
+            "current_tile": {
+                "position": {"x": x, "y": y},
+                "description": current_tile.description if current_tile else "Unknown area",
+                "terrain_type": current_tile.terrain_type.value if current_tile and hasattr(current_tile, 'terrain_type') else "unknown",
+                "items": current_tile.items if current_tile else [],
+                "enemies": current_tile.enemies if current_tile else [],
+                "npcs": current_tile.npcs if current_tile and hasattr(current_tile, 'npcs') else [],
+                "exits": current_tile.exits if current_tile else []
+            }
+        }
+        
+        return game_state
     
     async def _initialize_game_world(self, game_id: str, db_session: AsyncSession) -> None:
         """Initialize the game world for a new game instance."""

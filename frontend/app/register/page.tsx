@@ -68,6 +68,13 @@ export default function RegisterPage() {
           setError("Username or email already in use. Please choose another.");
         } else if (error.message.includes("validation")) {
           setError("Invalid input. Please check your details and try again.");
+        } else if (
+          error.message.includes("fetch") ||
+          error.message.includes("network") ||
+          error.message.includes("Failed to fetch") ||
+          error.message.includes("Network request failed")
+        ) {
+          setError("Unable to connect to the server. Please check your internet connection and try again.");
         } else {
           setError(error.message);
         }

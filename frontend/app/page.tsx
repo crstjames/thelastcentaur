@@ -13,7 +13,7 @@ export default function HomePage() {
   const [isMuted, setIsMuted] = useState(false);
   const [textVisible, setTextVisible] = useState(true);
 
-  // Auto-redirect if already authenticated
+  // Move the redirect logic to useEffect
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.push("/games");

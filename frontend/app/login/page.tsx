@@ -29,7 +29,7 @@ export default function LoginPage() {
     setFormVisible(true);
   }, []);
 
-  // Redirect if already authenticated - FIXED: use useEffect instead of direct navigation
+  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
       router.push("/games");
@@ -44,7 +44,7 @@ export default function LoginPage() {
 
     try {
       await login(username, password);
-      // Don't navigate here - let the useEffect handle it
+      router.push("/games");
     } catch (error) {
       console.error("Login error:", error);
 
@@ -57,6 +57,13 @@ export default function LoginPage() {
           error.message.includes("Invalid authentication")
         ) {
           setError("Invalid username or password. Please try again.");
+        } else if (
+          error.message.includes("fetch") ||
+          error.message.includes("network") ||
+          error.message.includes("Failed to fetch") ||
+          error.message.includes("Network request failed")
+        ) {
+          setError("Unable to connect to the server. Please check your internet connection and try again.");
         } else {
           setError(error.message);
         }
@@ -69,11 +76,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
-  // Don't render anything if authenticated - let useEffect handle redirect
-  if (isAuthenticated) {
-    return null;
-  }
 
   return (
     <div className="crt-container">

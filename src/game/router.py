@@ -1,13 +1,14 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 import uuid
 from datetime import datetime
+import os
 
 from src.auth.deps import get_current_user
 from src.db.session import get_db
-from src.db.models import User, GameInstance, Tile, TileHistory
+from src.db.models import User, GameInstance, Tile
 from src.game.schemas import (
     GameInstanceCreate, 
     GameInstanceUpdate, 
@@ -15,10 +16,10 @@ from src.game.schemas import (
     GameCommandRequest,
     GameCommandResponse,
     MapResponse,
-    TileResponse,
-    GameStatus
+    TileResponse
 )
 from src.game.state_manager import GameStateManager
+from src.core.config import settings
 
 router = APIRouter()
 game_state_manager = GameStateManager()
@@ -30,20 +31,14 @@ async def create_game_instance(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new game instance."""
-    # Initialize game_state with status and description since description column doesn't exist
-    game_state = {
-        "status": GameStatus.ACTIVE.value,
-        "description": game_data.description
-    }
-    
-    # Only use fields we know exist in the database
     game_instance = GameInstance(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
         name=game_data.name,
-        is_active=True,
-        current_position={"x": 0, "y": 0},
-        game_state=game_state,
+        status="ACTIVE",
+        max_players=game_data.max_players,
+        current_players=1,
+        description=game_data.description,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
@@ -116,17 +111,6 @@ async def update_game_instance(
     
     update_data = game_data.dict(exclude_unset=True)
     
-    # Handle status updates by storing in both is_active and game_state
-    if "status" in update_data:
-        status_value = update_data.pop("status")
-        # Update is_active for backward compatibility
-        update_data["is_active"] = (status_value == GameStatus.ACTIVE)
-        
-        # Update game_state with status
-        game_state = dict(game_instance.game_state) if game_instance.game_state else {}
-        game_state["status"] = status_value.value if isinstance(status_value, GameStatus) else status_value
-        update_data["game_state"] = game_state
-    
     for key, value in update_data.items():
         setattr(game_instance, key, value)
     
@@ -158,24 +142,6 @@ async def delete_game_instance(
             detail="Game instance not found"
         )
     
-    # First get all tiles for this game
-    tile_result = await db.execute(
-        select(Tile.id).where(Tile.game_instance_id == game_id)
-    )
-    tile_ids = [tile_id for tile_id, in tile_result]
-    
-    # Delete related tile history records
-    if tile_ids:
-        await db.execute(
-            delete(TileHistory).where(TileHistory.tile_id.in_(tile_ids))
-        )
-    
-    # Delete related tiles
-    await db.execute(
-        delete(Tile).where(Tile.game_instance_id == game_id)
-    )
-    
-    # Finally delete the game instance
     await db.delete(game_instance)
     await db.commit()
     
@@ -203,24 +169,89 @@ async def execute_command(
             detail="Game instance not found"
         )
     
-    # Load the game state if not already loaded
-    await game_state_manager.load_game_instance(game_id, db)
+    # Import LLMInterface here to avoid circular imports
+    from src.game.llm_interface import LLMInterface
     
-    # Execute the command
-    command_result = await game_state_manager.execute_command(
-        game_id, 
-        command_data.command
-    )
+    # Get OpenAI API key from environment
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    if not openai_api_key:
+        # Log warning and return basic response if no API key
+        print("WARNING: No OpenAI API key found. LLM enhancement disabled.")
+        
+        # Load the game state if not already loaded
+        await game_state_manager.load_game_instance(game_id, db)
+        
+        # Execute the command directly
+        command_result = await game_state_manager.execute_command(
+            game_id, 
+            command_data.command
+        )
+        
+        # Create response without enhancement
+        response = GameCommandResponse(
+            command=command_data.command,
+            response=command_result,
+            game_id=game_id,
+            timestamp=datetime.utcnow()
+        )
+        
+        return response
     
-    # Create response
-    response = GameCommandResponse(
-        command=command_data.command,
-        response=command_result,
-        game_id=game_id,
-        timestamp=datetime.utcnow()
-    )
+    # Create LLM interface instance
+    llm_interface = LLMInterface(api_base_url="", api_port=8000)
     
-    return response
+    try:
+        # Load the game state if not already loaded
+        await game_state_manager.load_game_instance(game_id, db)
+        
+        # Get current game state for context
+        game_state = await game_state_manager.get_game_state(game_id)
+        
+        # First, interpret the natural language command
+        user_input = command_data.command
+        game_command = await llm_interface._interpret_command(user_input, game_state)
+        
+        # Execute the command
+        command_result = await game_state_manager.execute_command(
+            game_id, 
+            game_command
+        )
+        
+        # Enhance the response with LLM
+        enhanced_response = await llm_interface._enhance_response(
+            command_result, 
+            user_input, 
+            game_command
+        )
+        
+        # Create response
+        response = GameCommandResponse(
+            command=command_data.command,
+            response=enhanced_response,  # Use the enhanced response
+            game_id=game_id,
+            timestamp=datetime.utcnow()
+        )
+        
+        return response
+    except Exception as e:
+        # Log the error but provide a fallback response
+        print(f"Error processing command: {str(e)}")
+        
+        # Execute the command directly as fallback
+        command_result = await game_state_manager.execute_command(
+            game_id, 
+            command_data.command
+        )
+        
+        # Create response with original result
+        response = GameCommandResponse(
+            command=command_data.command,
+            response=command_result,
+            game_id=game_id,
+            timestamp=datetime.utcnow()
+        )
+        
+        return response
 
 @router.get("/{game_id}/map", response_model=MapResponse)
 async def get_game_map(

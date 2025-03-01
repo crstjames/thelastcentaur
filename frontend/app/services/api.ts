@@ -3,30 +3,9 @@
  */
 
 // Base API URL from environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_V1_PREFIX = "/api/v1";
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8001";
-
-// Max number of retries for API calls
-const MAX_RETRIES = 2;
-const RETRY_DELAY = 1000; // milliseconds
-
-/**
- * Helper function to add retry logic to fetch requests
- */
-async function fetchWithRetry(url: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
-  try {
-    console.log(`Fetching ${url} with ${retries} retries remaining`);
-    const response = await fetch(url, options);
-    return response;
-  } catch (error) {
-    if (retries <= 0) throw error;
-
-    console.log(`Fetch failed, retrying in ${RETRY_DELAY}ms...`);
-    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
-    return fetchWithRetry(url, options, retries - 1);
-  }
-}
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 
 // Authentication API
 export const authAPI = {
@@ -43,7 +22,7 @@ export const authAPI = {
     formData.append("password", password);
     formData.append("grant_type", "password");
 
-    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/auth/login`, {
+    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -61,18 +40,17 @@ export const authAPI = {
             throw new Error(errorData.detail.map((err: { msg: string }) => err.msg).join(", "));
           }
         }
-        throw new Error(`Login failed with status: ${response.status}`);
+        throw new Error("Login failed");
       } catch (err) {
         if (err instanceof Error) {
           throw err;
         }
-        throw new Error(`Login failed with status: ${response.status}. Please try again.`);
+        throw new Error("Login failed. Please try again.");
       }
     }
 
     // Get the token response
     const tokenData = await response.json();
-    console.log("Login successful, token received");
 
     // For OAuth2 form-based login, we need to construct the user object
     // since the backend returns only the token
@@ -80,9 +58,9 @@ export const authAPI = {
       access_token: tokenData.access_token,
       token_type: tokenData.token_type || "bearer",
       user: {
-        id: tokenData.user_id || "user-id", // Use user_id from token if available
+        id: "user-id", // This will be replaced when we implement proper user info endpoint
         username: username,
-        email: tokenData.email || "user@example.com", // Use email from token if available
+        email: "user@example.com", // This will be replaced when we implement proper user info endpoint
       },
     };
   },
@@ -202,160 +180,128 @@ export const gameAPI = {
    * List all games for the current user
    */
   listGames: async (token: string): Promise<Game[]> => {
-    console.log("Listing games...");
-    if (!token) {
-      console.error("No token provided to listGames");
-      throw new Error("Authentication required. Please log in again.");
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error(`Failed to load games: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to load games: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error("Network error when loading games:", error);
+      throw error; // Re-throw to be handled by the component
     }
-
-    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorMsg = `Failed to load games: ${response.status} ${response.statusText}`;
-      console.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    return response.json();
   },
 
   /**
    * Get a specific game
    */
   getGame: async (token: string, gameId: string): Promise<Game> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error("Failed to load game");
+      if (!response.ok) {
+        console.error(`Failed to load game: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to load game: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error("Network error when loading game:", error);
+      throw error; // Re-throw to be handled by the component
     }
-
-    return response.json();
   },
 
   /**
    * Create a new game
    */
   createGame: async (token: string, name: string, description: string): Promise<Game> => {
-    console.log("Creating game...");
-    if (!token) {
-      console.error("No token provided to createGame");
-      throw new Error("Authentication required. Please log in again.");
-    }
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name, description }),
+      });
 
-    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ name, description }),
-    });
-
-    if (!response.ok) {
-      const errorMsg = `Failed to create game: ${response.status} ${response.statusText}`;
-      console.error(errorMsg);
-
-      try {
-        const errorData = await response.json();
-        if (errorData.detail) {
-          throw new Error(typeof errorData.detail === "string" ? errorData.detail : JSON.stringify(errorData.detail));
-        }
-      } catch {
-        // If we can't parse the error, just throw the generic error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`Failed to create game: ${response.status} ${response.statusText}`, errorData);
+        throw new Error(errorData.detail || `Failed to create game: ${response.status}`);
       }
 
-      throw new Error(errorMsg);
+      return response.json();
+    } catch (error) {
+      console.error("Network error when creating game:", error);
+      throw error; // Re-throw to be handled by the component
     }
-
-    return response.json();
-  },
-
-  /**
-   * Delete a game
-   */
-  deleteGame: async (token: string, gameId: string): Promise<void> => {
-    console.log("Deleting game...");
-    if (!token) {
-      console.error("No token provided to deleteGame");
-      throw new Error("Authentication required. Please log in again.");
-    }
-
-    const response = await fetchWithRetry(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorMsg = `Failed to delete game: ${response.status} ${response.statusText}`;
-      console.error(errorMsg);
-
-      try {
-        const errorData = await response.json();
-        if (errorData.detail) {
-          throw new Error(typeof errorData.detail === "string" ? errorData.detail : JSON.stringify(errorData.detail));
-        }
-      } catch {
-        // If we can't parse the error, just throw the generic error
-      }
-
-      throw new Error(errorMsg);
-    }
-
-    // DELETE endpoints often return 204 No Content
-    return;
   },
 
   /**
    * Send a command to the game
    */
   sendCommand: async (token: string, gameId: string, command: string): Promise<CommandResponse> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/command`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ command }),
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/command`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ command }),
+      });
 
-    if (!response.ok) {
-      throw new Error("Failed to execute command");
+      if (!response.ok) {
+        console.error(`Failed to execute command: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to execute command: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error("Network error when executing command:", error);
+      throw error; // Re-throw to be handled by the component
     }
-
-    return response.json();
   },
 
   /**
    * Get game history
    */
   getGameHistory: async (token: string, gameId: string): Promise<GameHistoryEntry[]> => {
-    const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/history`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/history`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error("Failed to load game history");
+      if (!response.ok) {
+        console.error(`Failed to load game history: ${response.status} ${response.statusText}`);
+        return []; // Return empty array instead of throwing
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error("Network error when loading game history:", error);
+      return []; // Return empty array on network errors
     }
-
-    return response.json();
   },
 };
 
@@ -383,32 +329,104 @@ export function connectGameWebSocket(
     onMessage?: (data: WebSocketMessage) => void;
     onClose?: () => void;
     onError?: (error: Event) => void;
-  }
-): WebSocket {
-  const socket = new WebSocket(`${WS_URL}/ws/game/${gameId}?token=${token}`);
+    onConnectionFailed?: () => void;
+  },
+  options = { timeout: 5000, retries: 1 }
+): { socket: WebSocket | null; disconnect: () => void } {
+  let socket: WebSocket | null = null;
+  let reconnectAttempts = 0;
+  let connectionTimer: NodeJS.Timeout | null = null;
+  let isManuallyDisconnected = false;
 
-  socket.onopen = () => {
-    if (callbacks.onOpen) callbacks.onOpen();
-  };
+  const connect = () => {
+    try {
+      // Clear any existing connection timer
+      if (connectionTimer) {
+        clearTimeout(connectionTimer);
+      }
 
-  socket.onmessage = (event) => {
-    if (callbacks.onMessage) {
-      try {
-        const data = JSON.parse(event.data) as WebSocketMessage;
-        callbacks.onMessage(data);
-      } catch (error) {
-        console.error("Failed to parse WebSocket message:", error);
+      // Create new WebSocket connection
+      socket = new WebSocket(`${WS_URL}/ws/game/${gameId}?token=${token}`);
+
+      // Set connection timeout
+      connectionTimer = setTimeout(() => {
+        if (socket && socket.readyState !== WebSocket.OPEN) {
+          console.error("WebSocket connection timeout");
+          socket.close();
+
+          if (reconnectAttempts < options.retries && !isManuallyDisconnected) {
+            console.log(`Retrying WebSocket connection (${reconnectAttempts + 1}/${options.retries})`);
+            reconnectAttempts++;
+            connect();
+          } else if (callbacks.onConnectionFailed) {
+            callbacks.onConnectionFailed();
+          }
+        }
+      }, options.timeout);
+
+      socket.onopen = () => {
+        if (connectionTimer) {
+          clearTimeout(connectionTimer);
+          connectionTimer = null;
+        }
+        reconnectAttempts = 0;
+        if (callbacks.onOpen) callbacks.onOpen();
+      };
+
+      socket.onmessage = (event) => {
+        if (callbacks.onMessage) {
+          try {
+            const data = JSON.parse(event.data) as WebSocketMessage;
+            callbacks.onMessage(data);
+          } catch (error) {
+            console.error("Failed to parse WebSocket message:", error);
+          }
+        }
+      };
+
+      socket.onclose = (event) => {
+        if (connectionTimer) {
+          clearTimeout(connectionTimer);
+          connectionTimer = null;
+        }
+
+        // Only attempt to reconnect if not manually disconnected and not reached max retries
+        if (!isManuallyDisconnected && reconnectAttempts < options.retries && event.code !== 1000) {
+          console.log(`WebSocket closed unexpectedly. Retrying (${reconnectAttempts + 1}/${options.retries})`);
+          reconnectAttempts++;
+          setTimeout(connect, 1000); // Wait 1 second before reconnecting
+        } else if (callbacks.onClose) {
+          callbacks.onClose();
+        }
+      };
+
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        if (callbacks.onError) callbacks.onError(error);
+      };
+    } catch (error) {
+      console.error("Error creating WebSocket:", error);
+      if (callbacks.onConnectionFailed) {
+        callbacks.onConnectionFailed();
       }
     }
   };
 
-  socket.onclose = () => {
-    if (callbacks.onClose) callbacks.onClose();
-  };
+  // Initial connection
+  connect();
 
-  socket.onerror = (error) => {
-    if (callbacks.onError) callbacks.onError(error);
+  // Return the socket and a disconnect function
+  return {
+    socket: socket,
+    disconnect: () => {
+      isManuallyDisconnected = true;
+      if (connectionTimer) {
+        clearTimeout(connectionTimer);
+        connectionTimer = null;
+      }
+      if (socket) {
+        socket.close();
+      }
+    },
   };
-
-  return socket;
 }

@@ -90,37 +90,86 @@ export default function PlayPage() {
     try {
       if (!token) return;
 
-      // Load game data
-      const gameData = await gameAPI.getGame(token, gameId);
-      setGame(gameData);
+      // Load game data with fallback
+      let gameData;
+      try {
+        gameData = await gameAPI.getGame(token, gameId);
+        setGame(gameData);
+      } catch (gameErr) {
+        console.error("Error loading game data:", gameErr);
+        // Set fallback game data
+        setGame({
+          id: gameId,
+          name: "Adventure One",
+          description: "Your adventure in the world of The Last Centaur",
+          status: "active",
+          created_at: new Date().toISOString(),
+        });
+      }
 
-      // Load initial messages or game state
-      // This would be replaced with actual API calls to get game history
-      setMessages([
+      // Initialize messages array with default welcome messages
+      // Skip loading game history for now as it's not implemented on the backend yet
+      const historyMessages: Message[] = [
         {
-          id: "1",
+          id: "system-welcome",
           content: "Welcome to The Last Centaur! Your adventure begins now...",
           sender: "system",
           timestamp: new Date().toISOString(),
         },
         {
-          id: "2",
+          id: "character-intro",
           content:
-            "You find yourself in a dense forest. The air is thick with the scent of pine and moss. Sunlight filters through the canopy above, creating dappled patterns on the forest floor.",
+            "You find yourself standing at the edge of a dense forest. The air is thick with the scent of pine and something... magical. What would you like to do?",
           sender: "character",
           timestamp: new Date().toISOString(),
         },
-        {
-          id: "3",
-          content:
-            "In the distance, you can hear the faint sound of running water. To your right, there's a narrow path winding between the trees. What would you like to do?",
-          sender: "character",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      ];
+
+      // Set messages state
+      setMessages(historyMessages);
+
+      // Try to get initial state
+      try {
+        // Send initial command to get game state
+        const initialStateCommand = await gameAPI.sendCommand(token, gameId, "look");
+
+        // Update player stats from initial state
+        if (initialStateCommand.game_state) {
+          // Extract values from game_state with fallbacks
+          const gameState = initialStateCommand.game_state;
+
+          setPlayerStats({
+            health: typeof gameState.health === "number" ? gameState.health : 100,
+            maxHealth: 100,
+            stamina: 100,
+            maxStamina: 100,
+            level: typeof gameState.level === "number" ? gameState.level : 1,
+            experience: typeof gameState.experience === "number" ? gameState.experience : 0,
+            nextLevelExp: 100,
+            gold: typeof gameState.gold === "number" ? gameState.gold : 10,
+            location: typeof gameState.location === "string" ? gameState.location : "Forest Edge",
+            inventory: Array.isArray(gameState.inventory) ? gameState.inventory : [],
+          });
+        }
+      } catch (stateErr) {
+        console.error("Error getting initial state:", stateErr);
+        // Set default player stats
+        setPlayerStats({
+          health: 100,
+          maxHealth: 100,
+          stamina: 100,
+          maxStamina: 100,
+          level: 1,
+          experience: 0,
+          nextLevelExp: 100,
+          gold: 10,
+          location: "Forest Edge",
+          inventory: [],
+        });
+      }
     } catch (err) {
-      setError("Failed to load game");
-      console.error("Error loading game:", err);
+      console.error("Error in loadGame:", err);
+      setError("Failed to load game. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -144,44 +193,67 @@ export default function PlayPage() {
     setInputMessage("");
 
     try {
-      // This would be replaced with actual API call to send message to game engine
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Try to send command to the game engine API
+      let commandResponse;
+      try {
+        commandResponse = await gameAPI.sendCommand(token!, gameId, inputMessage);
+      } catch (apiErr) {
+        console.error("API error sending command:", apiErr);
 
-      // Simulate response based on user input
-      let responseContent = "I don't understand that command.";
+        // Generate fallback response based on user input
+        let responseContent = "I don't understand that command.";
 
-      if (inputMessage.toLowerCase().includes("look")) {
-        responseContent =
-          "You see tall trees surrounding you, their branches swaying gently in the breeze. The forest floor is covered in fallen leaves and small plants.";
-      } else if (inputMessage.toLowerCase().includes("path") || inputMessage.toLowerCase().includes("follow")) {
-        responseContent =
-          "You follow the narrow path through the trees. After walking for a few minutes, you come to a small clearing with a bubbling stream running through it.";
-      } else if (inputMessage.toLowerCase().includes("water") || inputMessage.toLowerCase().includes("stream")) {
-        responseContent =
-          "You head toward the sound of water. Soon, you find a clear stream cutting through the forest. The water looks cool and refreshing.";
-      } else if (inputMessage.toLowerCase().includes("help")) {
-        responseContent =
-          "Available commands: look, go [direction], examine [object], take [item], inventory, talk to [character]";
+        if (inputMessage.toLowerCase().includes("look")) {
+          responseContent =
+            "You see tall trees surrounding you, their branches swaying gently in the breeze. The forest floor is covered in fallen leaves and small plants.";
+        } else if (inputMessage.toLowerCase().includes("path") || inputMessage.toLowerCase().includes("follow")) {
+          responseContent =
+            "You follow the narrow path through the trees. After walking for a few minutes, you come to a small clearing with a bubbling stream running through it.";
+        } else if (inputMessage.toLowerCase().includes("water") || inputMessage.toLowerCase().includes("stream")) {
+          responseContent =
+            "You head toward the sound of water. Soon, you find a clear stream cutting through the forest. The water looks cool and refreshing.";
+        } else if (inputMessage.toLowerCase().includes("help")) {
+          responseContent =
+            "Available commands: look, go [direction], examine [object], take [item], inventory, talk to [character]";
+        }
+
+        // Create a fallback response object
+        commandResponse = {
+          response: responseContent,
+          game_state: {
+            health: playerStats.health,
+            location: inputMessage.toLowerCase().includes("follow") ? "Forest Clearing" : playerStats.location,
+            inventory: playerStats.inventory,
+            stamina: Math.max(0, playerStats.stamina - 5),
+            gold: playerStats.gold,
+            experience: playerStats.experience,
+            level: playerStats.level,
+          },
+        };
       }
 
       // Add system response
       const systemResponse: Message = {
         id: `system-${Date.now()}`,
-        content: responseContent,
+        content: commandResponse.response,
         sender: "character",
         timestamp: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, systemResponse]);
 
-      // Update player stats based on commands (simulated)
-      // In a real implementation, this would come from your game engine
-      if (inputMessage.toLowerCase().includes("follow") || inputMessage.toLowerCase().includes("go")) {
+      // Update player stats if game_state is provided in the response
+      if (commandResponse.game_state) {
         setPlayerStats((prev) => ({
           ...prev,
-          stamina: Math.max(0, prev.stamina - 5),
-          location: "Forest Clearing",
+          health: commandResponse.game_state?.health ?? prev.health,
+          location: commandResponse.game_state?.location ?? prev.location,
+          inventory: commandResponse.game_state?.inventory ?? prev.inventory,
+          // Update other stats as needed
+          stamina: (commandResponse.game_state?.stamina as number) ?? prev.stamina,
+          gold: (commandResponse.game_state?.gold as number) ?? prev.gold,
+          experience: (commandResponse.game_state?.experience as number) ?? prev.experience,
+          level: (commandResponse.game_state?.level as number) ?? prev.level,
         }));
       }
     } catch (err) {
@@ -211,6 +283,7 @@ export default function PlayPage() {
 
   return (
     <div className="crt-container">
+      <div>TEST TEST TEST</div>
       <style jsx>{`
         @font-face {
           font-family: "Press Start 2P";
@@ -762,7 +835,6 @@ export default function PlayPage() {
           }
         }
       `}</style>
-
       <div className="crt-frame"></div>
       <div className="crt-content">
         {/* Game Title Header */}

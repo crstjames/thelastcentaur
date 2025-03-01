@@ -1,0 +1,18 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install dependencies first
+COPY frontend/package*.json ./
+
+# Use clean install to avoid dependency issues
+RUN npm ci || npm install
+
+# Copy the rest of the frontend application
+COPY frontend/ .
+
+# Expose the port the app runs on
+EXPOSE 3002
+
+# Command to run the application in development mode
+CMD ["npm", "run", "dev", "--", "-p", "3002"] 

@@ -13,6 +13,7 @@ class GameStatus(str, Enum):
 class GameInstanceCreate(BaseModel):
     """Schema for creating a game instance."""
     name: str
+    max_players: int = 1
     description: Optional[str] = None
 
 class GameInstanceUpdate(BaseModel):
@@ -27,35 +28,14 @@ class GameInstanceResponse(BaseModel):
     id: str
     user_id: str
     name: str
-    is_active: bool
+    status: GameStatus
+    max_players: int
+    current_players: int
+    description: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    game_state: Dict[str, Any] = {}
 
     model_config = ConfigDict(from_attributes=True)
-    
-    @property
-    def description(self) -> Optional[str]:
-        """Get description from game_state if available."""
-        if self.game_state and "description" in self.game_state:
-            return self.game_state["description"]
-        return None
-    
-    @property
-    def status(self) -> GameStatus:
-        """
-        Get status from game_state if available, otherwise fallback to is_active.
-        This ensures backward compatibility while preserving all status values.
-        """
-        if self.game_state and "status" in self.game_state:
-            status_str = self.game_state["status"]
-            try:
-                return GameStatus(status_str)
-            except ValueError:
-                pass
-                
-        # Fallback to simple active/archived if no explicit status is stored
-        return GameStatus.ACTIVE if self.is_active else GameStatus.ARCHIVED
 
 class GameStateCreate(BaseModel):
     """Schema for creating a game state."""
