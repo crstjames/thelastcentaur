@@ -133,6 +133,56 @@ class DiscoverySystem:
             item_reward="pretty_flower"
         )
         
+        # Shadow-related discoveries
+        self.discoveries["shadow_essence_fragment"] = HiddenDiscovery(
+            id="shadow_essence_fragment",
+            name="Shadow Essence Fragment",
+            description="A fragment of pure shadow that swirls with dark energy.",
+            discovery_text="You examine the shadow essence fragment closely. It appears to be a swirling mass of pure darkness, contained within a ghostly membrane that seems to pulse with arcane energy. The fragment feels unnaturally cold to the touch and seems to absorb the light around it. This appears to be a component needed for advanced shadow magic or stealth techniques. Combined with other shadow essences, it could be powerful enough to pierce the veil between realms.",
+            terrain_types=["FOREST", "CLEARING", "RUINS", "SHADOW_DOMAIN", "FORGOTTEN_GROVE", "TWILIGHT_GLADE"],
+            required_interaction="examine",
+            required_keywords=["shadow_essence_fragment", "shadow essence fragment", "shadow", "essence", "fragment"],
+            chance_to_find=1.0,
+            unique=False
+        )
+        
+        # Inscription discoveries
+        self.discoveries["ancient_inscription"] = HiddenDiscovery(
+            id="ancient_inscription",
+            name="Ancient Inscription",
+            description="An inscription carved into ancient stone.",
+            discovery_text="You examine the ancient inscription carefully. It reads: 'Three paths lead to the final challenge. The path of the warrior requires strength and honor. The path of the mystic requires wisdom and knowledge. The path of shadows requires cunning and stealth. Choose wisely, for only one path will lead to victory.'",
+            terrain_types=["CLEARING", "RUINS", "FOREST", "MOUNTAIN", "CAVE", "VALLEY", "DESERT"],
+            required_interaction="examine",
+            required_keywords=["inscription", "ancient_inscription", "stone", "carving", "ancient writing"],
+            chance_to_find=1.0,
+            unique=False
+        )
+        
+        self.discoveries["path_marker"] = HiddenDiscovery(
+            id="path_marker",
+            name="Path Marker",
+            description="A marker indicating different paths.",
+            discovery_text="The path marker has three symbols carved into it:\n\n- A sword (pointing east): 'The Warrior's Path - test your strength and courage'\n- A crystal (pointing west): 'The Mystic's Path - test your wisdom and insight'\n- A shadowy figure (pointing north): 'The Shadow Path - test your cunning and stealth'",
+            terrain_types=["CLEARING", "RUINS", "FOREST", "MOUNTAIN", "CAVE", "VALLEY", "DESERT"],
+            required_interaction="examine",
+            required_keywords=["path_marker", "marker", "signpost", "sign", "directions"],
+            chance_to_find=1.0,
+            unique=False
+        )
+        
+        self.discoveries["warrior_inscription"] = HiddenDiscovery(
+            id="warrior_inscription",
+            name="Warrior Inscription",
+            description="An inscription detailing the warrior's path.",
+            discovery_text="The warrior inscription reads: 'To follow the path of the warrior, seek the Ancient Sword in the ruins. With it, claim the War Horn, and face the Shadow Guardian to prove your strength.'",
+            terrain_types=["RUINS", "ANCIENT_RUINS"],
+            required_interaction="examine",
+            required_keywords=["warrior_inscription", "warrior inscription", "warrior", "inscription"],
+            chance_to_find=1.0,
+            unique=False
+        )
+        
         # Forest discoveries
         self.discoveries["ancient_rune"] = HiddenDiscovery(
             id="ancient_rune",

@@ -265,6 +265,13 @@ GAME_MAP = {
                 direction=Direction.NORTH,
                 requirements=["shadow_key"],
                 description="A shadowy path leads to a mysterious glade."
+            ),
+            AreaConnection(
+                from_area=StoryArea.TRIALS_PATH,
+                to_area=StoryArea.AWAKENING_WOODS,
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="The path leads back to the awakening woods where your journey began."
             )
         ],
         terrain_type=TerrainType.CLEARING,
