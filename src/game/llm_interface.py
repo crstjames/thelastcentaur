@@ -61,11 +61,7 @@ class LLMInterface:
         - If the game shows "shadow_scout" as an NPC, and the player says "talk to the scout", you MUST return "talk shadow_scout"
         
         NPC INTERACTIONS: When the player wants to talk to an NPC, you MUST use the exact NPC ID as it appears in the game state. NPCs are listed in the "NPCs present" section of the context. For example:
-        - If "shadow_scout" is listed as an NPC, and the player says "talk to the scout", you MUST return "talk shadow_scout"
-        - If "village_elder" is listed as an NPC, and the player says "speak with the elder", you MUST return "talk village_elder"
-        - If "mystic_sage" is listed as an NPC, and the player says "ask the sage about the prophecy", you MUST return "talk mystic_sage"
-        - If "warrior_trainer" is listed as an NPC, and the player says "chat with the trainer", you MUST return "talk warrior_trainer"
-        
+
         ENVIRONMENTAL INTERACTIONS: The player can interact with environmental elements that aren't explicitly listed but would naturally be present based on the terrain type and description. For example:
         - In a forest: leaves, twigs, bark, berries, moss, flowers, herbs
         - Near mountains: rocks, stones, pebbles, dirt, snow, ice
@@ -173,8 +169,7 @@ class LLMInterface:
         IMPORTANT FORMATTING REQUIREMENTS:
         - Your response MUST be no more than TWO paragraphs
         - Each paragraph MUST contain no more than TWO sentences
-        - Total response should be approximately 50-80 words
-        - Focus on quality over quantity - be concise but evocative
+        - Your response MUST contain all of the information that is needed to describre the entirety of the tile, but do not be overly descriptive when it's not necessary
         
         Important: Never contradict or omit information from the original response. All items, enemies, exits, and game mechanics must be preserved exactly as they appear in the original.
         """

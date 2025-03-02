@@ -303,6 +303,31 @@ export const gameAPI = {
   },
 
   /**
+   * Delete a game
+   */
+  deleteGame: async (token: string, gameId: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error(`Failed to delete game: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to delete game: ${response.status}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Network error when deleting game:", error);
+      throw error; // Re-throw to be handled by the component
+    }
+  },
+
+  /**
    * Send a command to the game
    */
   sendCommand: async (
