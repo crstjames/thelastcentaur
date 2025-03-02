@@ -38,7 +38,7 @@ class GameInstance(TimestampMixin, Base):
     
     # Relationships
     user: Mapped["User"] = relationship(back_populates="game_instances")
-    tiles: Mapped[List["Tile"]] = relationship(back_populates="game_instance")
+    tiles: Mapped[List["Tile"]] = relationship(back_populates="game_instance", cascade="all, delete-orphan")
 
 class Tile(TimestampMixin, GameInstanceMixin, Base):
     """Tile model representing a single tile in the game map."""
@@ -63,7 +63,7 @@ class Tile(TimestampMixin, GameInstanceMixin, Base):
     exits: Mapped[List[Direction]] = mapped_column(JSON, default=[])
     
     # Relationships
-    history: Mapped[List["TileHistory"]] = relationship(back_populates="tile")
+    history: Mapped[List["TileHistory"]] = relationship(back_populates="tile", cascade="all, delete-orphan")
 
 class TileHistory(TimestampMixin, GameInstanceMixin, Base):
     """History model for tracking events on a tile."""

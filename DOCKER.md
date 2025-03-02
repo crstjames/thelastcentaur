@@ -20,9 +20,25 @@ Without this key, the game will still run, but you won't get the rich, immersive
 
 ## Quick Start
 
-### Option 1: Using Docker Compose (Recommended)
+### Option 1: Using the Docker Manager (Recommended)
 
-If you have Docker Compose installed, you can use the following command:
+The easiest way to manage Docker containers is using our Docker manager script:
+
+```bash
+./docker-manager.sh
+```
+
+This interactive script provides a menu with the following options:
+
+1. **Start Docker containers** - Builds and starts all containers
+2. **Stop Docker containers** - Stops and removes all containers
+3. **Restart Docker containers** - Stops and then starts all containers
+4. **Check Docker container status** - Verifies if all services are running properly
+5. **View Docker logs** - Shows logs from all containers or a specific one
+
+### Option 2: Using Docker Compose
+
+If you prefer to use the scripts directly, you can use:
 
 ```bash
 ./run-docker.sh
@@ -36,9 +52,9 @@ This script will:
 4. Build and start all containers
 5. Check if services are running properly
 
-### Option 2: Using Direct Docker Commands
+### Option 3: Using Direct Docker Commands
 
-If you don't have Docker Compose, you can use the following command:
+If you don't have Docker Compose, you can use:
 
 ```bash
 ./run-docker-simple.sh

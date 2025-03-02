@@ -36,6 +36,8 @@ git clone https://github.com/yourusername/thelastcentaur.git
 cd thelastcentaur
 ```
 
+### Option 1: Local Installation
+
 2. Create and activate a virtual environment:
 
 ```bash
@@ -73,7 +75,31 @@ cp .env.example .env
 
 The application will automatically create the database and tables on startup if they don't exist.
 
+### Option 2: Docker Installation (Recommended)
+
+If you prefer to use Docker, we provide several scripts to make Docker management easy:
+
+1. Make sure Docker is installed and running on your system.
+
+2. Use our Docker manager script for a convenient interface:
+
+```bash
+./docker-manager.sh
+```
+
+This interactive script provides options to:
+
+- Start Docker containers
+- Stop Docker containers
+- Restart Docker containers
+- Check Docker container status
+- View Docker logs
+
+For more detailed Docker setup instructions, see [DOCKER.md](DOCKER.md).
+
 ## Quick Start
+
+### Using Local Installation
 
 1. Start the game server:
 
@@ -88,6 +114,22 @@ cd frontend && npm run dev -- -p 3002
 ```
 
 3. Open your web browser and navigate to:
+
+```
+http://localhost:3002
+```
+
+### Using Docker
+
+1. Start all services with a single command:
+
+```bash
+./docker-manager.sh
+```
+
+2. Select option 1 to start Docker containers.
+
+3. Once the containers are running, access the application at:
 
 ```
 http://localhost:3002

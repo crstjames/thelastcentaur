@@ -23,6 +23,9 @@ export default function GamesPage() {
   const [newGameName, setNewGameName] = useState("");
   const [newGameDescription, setNewGameDescription] = useState("");
   const [creatingGame, setCreatingGame] = useState(false);
+  const [gameToDelete, setGameToDelete] = useState<Game | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingGame, setDeletingGame] = useState(false);
 
   const router = useRouter();
   const { isAuthenticated, token, logout, user } = useAuth();
@@ -93,6 +96,38 @@ export default function GamesPage() {
       setError("An unexpected error occurred. Please try again later.");
     } finally {
       setCreatingGame(false);
+    }
+  };
+
+  const handleShowDeleteModal = (e: React.MouseEvent, game: Game) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setGameToDelete(game);
+    setShowDeleteModal(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteModal(false);
+    setGameToDelete(null);
+  };
+
+  const handleDeleteGame = async () => {
+    if (!gameToDelete || !token) return;
+
+    setDeletingGame(true);
+    setError("");
+
+    try {
+      await gameAPI.deleteGame(token, gameToDelete.id);
+      // Remove the deleted game from the state
+      setGames(games.filter((game) => game.id !== gameToDelete.id));
+      setShowDeleteModal(false);
+      setGameToDelete(null);
+    } catch (err) {
+      console.error("Error deleting game:", err);
+      setError("Failed to delete the adventure. Please try again later.");
+    } finally {
+      setDeletingGame(false);
     }
   };
 
@@ -498,6 +533,40 @@ export default function GamesPage() {
           gap: 20px;
         }
 
+        .game-card-container {
+          position: relative;
+        }
+
+        .delete-button {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background-color: #dc2626;
+          color: white;
+          border: 2px solid #7f1d1d;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          font-weight: bold;
+          cursor: pointer;
+          z-index: 2;
+          opacity: 0.8;
+          transition: all 0.2s ease;
+          font-family: Arial, sans-serif;
+          padding: 0;
+          line-height: 0;
+        }
+
+        .delete-button:hover {
+          opacity: 1;
+          transform: scale(1.1);
+          box-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+        }
+
         .game-card {
           background-color: rgba(0, 0, 0, 0.7);
           border-radius: 10px;
@@ -562,6 +631,107 @@ export default function GamesPage() {
           font-size: 8px;
           color: #f9d71c;
           opacity: 0.7;
+        }
+
+        .modal-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background-color: rgba(0, 0, 0, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 100;
+        }
+
+        .modal-container {
+          background-color: rgba(10, 10, 10, 0.9);
+          border: 3px solid #f97316;
+          border-radius: 8px;
+          width: 90%;
+          max-width: 500px;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+          padding: 20px;
+          animation: modal-appear 0.3s ease-out forwards;
+        }
+
+        @keyframes modal-appear {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .modal-title {
+          font-family: "Press Start 2P", cursive;
+          font-size: 18px;
+          color: #ffd700;
+          text-shadow: 2px 2px 0px #000;
+          margin-bottom: 15px;
+          text-align: center;
+        }
+
+        .modal-content {
+          font-family: "Press Start 2P", cursive;
+          font-size: 12px;
+          color: white;
+          margin-bottom: 20px;
+          line-height: 1.5;
+          text-align: center;
+        }
+
+        .modal-content p {
+          margin-bottom: 10px;
+        }
+
+        .modal-footer {
+          display: flex;
+          justify-content: center;
+          gap: 15px;
+        }
+
+        .cancel-button {
+          font-family: "Press Start 2P", cursive;
+          background-color: #9ca3af;
+          color: #1f2937;
+          border: 2px solid #4b5563;
+          padding: 10px 20px;
+          cursor: pointer;
+          border-radius: 5px;
+          font-size: 12px;
+          transition: all 0.2s ease;
+        }
+
+        .cancel-button:hover {
+          background-color: #d1d5db;
+        }
+
+        .delete-confirm-button {
+          font-family: "Press Start 2P", cursive;
+          background-color: #dc2626;
+          color: white;
+          border: 2px solid #7f1d1d;
+          padding: 10px 20px;
+          cursor: pointer;
+          border-radius: 5px;
+          font-size: 12px;
+          transition: all 0.2s ease;
+        }
+
+        .delete-confirm-button:hover {
+          background-color: #ef4444;
+        }
+
+        .delete-confirm-button:disabled,
+        .cancel-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .footer {
@@ -649,18 +819,29 @@ export default function GamesPage() {
           ) : (
             <div className="games-grid">
               {games.map((game) => (
-                <Link key={game.id} href={`/play/${game.id}`}>
-                  <div className="game-card">
-                    <div className="game-card-content">
-                      <div className="game-card-title">{game.name}</div>
-                      <div className="game-card-description">{game.description}</div>
-                      <div className="game-card-footer">
-                        <div className={`game-status ${game.status !== "ACTIVE" ? "inactive" : ""}`}>{game.status}</div>
-                        <div className="game-date">{new Date(game.created_at).toLocaleDateString()}</div>
+                <div key={game.id} className="game-card-container">
+                  <Link href={`/play/${game.id}`}>
+                    <div className="game-card">
+                      <div className="game-card-content">
+                        <div className="game-card-title">{game.name}</div>
+                        <div className="game-card-description">{game.description}</div>
+                        <div className="game-card-footer">
+                          <div className={`game-status ${game.status !== "ACTIVE" ? "inactive" : ""}`}>
+                            {game.status}
+                          </div>
+                          <div className="game-date">{new Date(game.created_at).toLocaleDateString()}</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
+                  <button
+                    className="delete-button"
+                    onClick={(e) => handleShowDeleteModal(e, game)}
+                    title="Delete adventure"
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -668,6 +849,27 @@ export default function GamesPage() {
 
         <div className="footer">v0.1.0 Alpha • © 2023 The Last Centaur</div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && gameToDelete && (
+        <div className="modal-backdrop">
+          <div className="modal-container">
+            <div className="modal-title">Delete Adventure</div>
+            <div className="modal-content">
+              <p>Are you sure you want to delete &ldquo;{gameToDelete.name}&rdquo;?</p>
+              <p>This action cannot be undone.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-button" onClick={handleCloseDeleteModal} disabled={deletingGame}>
+                Cancel
+              </button>
+              <button className="delete-confirm-button" onClick={handleDeleteGame} disabled={deletingGame}>
+                {deletingGame ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
