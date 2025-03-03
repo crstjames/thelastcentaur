@@ -53,6 +53,7 @@ class LLMInterface:
         - Combat: attack [enemy], defend, dodge
         - Interaction: talk [npc]
         - Game: save, help, hint, map
+        - Debug: debug add_enemy [enemy_id], debug add_item [item_id], debug teleport [area_name]
         
         CRITICAL: Use the provided context to understand what the player is referring to. When the player refers to items, enemies, or NPCs, you MUST use the EXACT names as they appear in the game state. For example:
         - If the game shows "old_map" as an item, and the player says "take the map", you MUST return "take old_map"

@@ -34,19 +34,19 @@ export default function PlayPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
-  // Sample player stats - this would come from your API in real implementation
   const [playerStats, setPlayerStats] = useState<PlayerStats>({
-    health: 75,
+    health: 100,
     maxHealth: 100,
-    stamina: 60,
+    stamina: 100,
     maxStamina: 100,
     level: 1,
-    experience: 250,
-    nextLevelExp: 1000,
-    gold: 15,
-    location: "Forest Edge",
-    inventory: ["Rusty Dagger", "Health Potion", "Torch", "Leather Armor"],
+    experience: 0,
+    nextLevelExp: 100,
+    gold: 0,
+    location: "0,0",
+    inventory: [],
   });
+  const [visitedTiles, setVisitedTiles] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -73,6 +73,18 @@ export default function PlayPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Function to parse coordinates from location string
+  const parseCoordinates = (locationStr: string): [number, number] => {
+    // Try to extract x,y format
+    const coordMatch = locationStr.match(/(\d+),(\d+)/);
+    if (coordMatch) {
+      // Parse as numbers - X is east/west, Y is north/south
+      return [parseInt(coordMatch[1]), parseInt(coordMatch[2])];
+    }
+    // Default position if parsing fails
+    return [0, 0];
+  };
 
   const loadGame = async () => {
     setLoading(true);
@@ -192,6 +204,26 @@ export default function PlayPage() {
         // Extract player stats from game data
         const gameState = gameData.game_state || {};
         console.log("Game state updated:", gameState);
+
+        // Update visited tiles if available
+        interface ExtendedGameState {
+          visited_tiles?: string[];
+          current_position?: { x: number; y: number };
+        }
+        const gameStateExtended = gameState as ExtendedGameState;
+
+        if (gameStateExtended.visited_tiles && Array.isArray(gameStateExtended.visited_tiles)) {
+          // Store visited tiles in our Set
+          setVisitedTiles(new Set(gameStateExtended.visited_tiles));
+        } else if (gameStateExtended.current_position) {
+          // If we don't have visited_tiles but have position, at least mark current position as visited
+          const pos = `${gameStateExtended.current_position.x},${gameStateExtended.current_position.y}`;
+          setVisitedTiles((prev) => {
+            const newSet = new Set(prev);
+            newSet.add(pos);
+            return newSet;
+          });
+        }
 
         // Check both formats - the new nested player object and the old flat structure
         if (gameState.player) {
@@ -319,6 +351,13 @@ export default function PlayPage() {
           if (playerData && typeof playerData === "object" && "position" in playerData && playerData.position) {
             const pos = playerData.position as { x: number; y: number };
             locationStr = `${pos.x},${pos.y}`;
+
+            // Add current position to visited tiles
+            setVisitedTiles((prevTiles) => {
+              const newSet = new Set(prevTiles);
+              newSet.add(locationStr);
+              return newSet;
+            });
           }
 
           return {
@@ -902,6 +941,63 @@ export default function PlayPage() {
           font-family: "Press Start 2P", monospace;
         }
 
+        /* Map styles */
+        .map-section {
+          border-top: 1px solid #4a3520;
+          padding-top: 1rem;
+        }
+
+        .game-map {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          margin-top: 0.5rem;
+          border: 2px solid #4a3520;
+          padding: 6px;
+          background-color: #222;
+        }
+
+        .map-row {
+          display: flex;
+          gap: 4px;
+          height: 20px;
+        }
+
+        .map-tile {
+          width: 20px;
+          height: 20px;
+          flex-shrink: 0;
+          border: 2px solid #111;
+          box-sizing: border-box;
+        }
+
+        .player-position {
+          border-color: #ffd700;
+        }
+
+        .map-legend {
+          font-family: "Press Start 2P", monospace;
+          color: #d97706;
+          margin-top: 0.5rem;
+          font-size: 0.55rem;
+        }
+
+        .direction-markers {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 0.25rem;
+          color: #ffd700;
+          font-size: 0.6rem;
+        }
+
+        .compass-container {
+          display: flex;
+          justify-content: space-between;
+          width: 100%;
+          font-size: 0.55rem;
+          margin-top: 0.25rem;
+        }
+
         .game-footer {
           margin-top: 0.5rem;
           text-align: center;
@@ -1030,49 +1126,12 @@ export default function PlayPage() {
               <div className="stats-panel">
                 {/* Stats header */}
                 <div className="stats-header">
-                  <h2 className="stats-title">CHARACTER STATS</h2>
+                  <h2 className="stats-title">CENTAUR PRIME STATS</h2>
                 </div>
 
                 {/* Stats content */}
                 <div className="stats-content">
                   <div className="stats-sections">
-                    {/* Character info section */}
-                    <div className="character-section">
-                      <div className="character-info">
-                        <h3 className="character-name">{user?.username || "crstjames"}</h3>
-                        <div className="character-level">Level {playerStats.level}</div>
-                      </div>
-
-                      {/* Experience */}
-                      <div className="exp-container">
-                        <div className="stat-label-row">
-                          <span>Experience</span>
-                          <span>
-                            {playerStats.experience} / {playerStats.nextLevelExp}
-                          </span>
-                        </div>
-                        <div className="progress-bar">
-                          <div
-                            className="progress-fill exp-fill"
-                            style={{
-                              width: `${Math.min(100, (playerStats.experience / playerStats.nextLevelExp) * 100)}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      <div className="character-stats">
-                        <div className="stat-row">
-                          <span>Gold:</span>
-                          <span>{playerStats.gold}</span>
-                        </div>
-                        <div className="stat-row">
-                          <span>Location:</span>
-                          <span>{playerStats.location}</span>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Vitals section */}
                     <div className="vitals-section">
                       <h3 className="section-title">VITALS</h3>
@@ -1118,13 +1177,131 @@ export default function PlayPage() {
                     <div className="inventory-section">
                       <h3 className="section-title">INVENTORY</h3>
                       <div className="inventory-items">
-                        {playerStats.inventory.map((item, index) => (
-                          <div key={index} className="inventory-item">
-                            <span>{item}</span>
-                          </div>
-                        ))}
+                        {playerStats.inventory
+                          .filter((item) => item !== "old_map")
+                          .map((item, index) => (
+                            <div key={index} className="inventory-item">
+                              <span>{item}</span>
+                            </div>
+                          ))}
                       </div>
                     </div>
+
+                    {/* Map section - still show if player has the old_map but don't display the item */}
+                    {playerStats.inventory.includes("old_map") && (
+                      <div className="map-section">
+                        <h3 className="section-title">MAP</h3>
+
+                        {/* Add north marker */}
+                        <div className="direction-markers">N</div>
+
+                        <div className="game-map">
+                          {/* Map is rendered with north at the top (decreasing Y values) */}
+                          {Array.from({ length: 10 }, (_, rowIndex) => {
+                            // Invert the row index to flip the map vertically
+                            // This makes north (decreasing Y) go up on the screen
+                            const row = 9 - rowIndex; // Flip the Y-axis (0 at bottom, 9 at top)
+
+                            return (
+                              <div key={rowIndex} className="map-row">
+                                {Array.from({ length: 10 }, (_, colIndex) => {
+                                  // X-coordinate stays the same (east to right)
+                                  const col = colIndex;
+
+                                  // Get the current player position
+                                  const [playerX, playerY] = parseCoordinates(playerStats.location);
+
+                                  // Check if this is the player's position
+                                  const isPlayerPosition = playerX === col && playerY === row;
+
+                                  // Check if this tile has been visited
+                                  const tileKey = `${col},${row}`;
+                                  const hasBeenVisited =
+                                    visitedTiles.has(tileKey) ||
+                                    (Math.abs(col - playerX) <= 1 && Math.abs(row - playerY) <= 1);
+
+                                  // Determine the tile color based on terrain
+                                  let tileColor = "#333"; // Default gray for unexplored
+                                  if (hasBeenVisited) {
+                                    // Terrain types now properly aligned with the map orientation
+                                    if (row < 3) tileColor = "#4682B4"; // Water - blue (south/bottom)
+                                    else if (row < 5) tileColor = "#696969"; // Mountain - dark gray (south-central)
+                                    else if (row < 8) tileColor = "#8B4513"; // Plains - brown (central)
+                                    else tileColor = "#228B22"; // Forest - green (north/top)
+                                  }
+
+                                  return (
+                                    <div
+                                      key={col}
+                                      className={`map-tile ${isPlayerPosition ? "player-position" : ""}`}
+                                      style={{
+                                        backgroundColor: tileColor,
+                                        position: "relative",
+                                      }}
+                                    >
+                                      {isPlayerPosition && (
+                                        <div
+                                          style={{
+                                            position: "absolute",
+                                            top: "50%",
+                                            left: "50%",
+                                            transform: "translate(-50%, -50%)",
+                                            width: "10px",
+                                            height: "10px",
+                                            borderRadius: "50%",
+                                            backgroundColor: "#FFD700",
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Add East/West markers */}
+                        <div className="compass-container">
+                          <span>W</span>
+                          <span>E</span>
+                        </div>
+
+                        {/* Add South marker */}
+                        <div className="direction-markers">S</div>
+
+                        <div className="map-legend">
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span>Current: ({playerStats.location})</span>
+                            <span>◆ = You</span>
+                          </div>
+                          <div
+                            style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <div style={{ width: "10px", height: "10px", backgroundColor: "#228B22" }}></div>
+                              <span>Forest</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <div style={{ width: "10px", height: "10px", backgroundColor: "#8B4513" }}></div>
+                              <span>Plains</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <div style={{ width: "10px", height: "10px", backgroundColor: "#696969" }}></div>
+                              <span>Mountain</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <div style={{ width: "10px", height: "10px", backgroundColor: "#4682B4" }}></div>
+                              <span>Water</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <div style={{ width: "10px", height: "10px", backgroundColor: "#333" }}></div>
+                              <span>Unexplored</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

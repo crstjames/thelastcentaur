@@ -473,6 +473,9 @@ class MapSystem:
         starting_node = GAME_MAP[StoryArea.AWAKENING_WOODS]
         starting_node.enemies = self._create_enemies(["wolf_pack", "shadow_stalker"])
         
+        # Fix the Phantom Assassin location
+        self._fix_phantom_assassin_location()
+        
         self.areas = GAME_MAP
         self.position_to_area = {}
         
@@ -480,6 +483,82 @@ class MapSystem:
         for area_id, area_node in self.areas.items():
             self.position_to_area[area_node.position] = area_node
     
+    def _fix_phantom_assassin_location(self):
+        """
+        Ensures the Phantom Assassin enemy is correctly placed at positions defined
+        in the game design and descriptions.
+        
+        This addresses discrepancies between the game description and the actual
+        game data, ensuring players can interact with all described enemies.
+        
+        Places the Phantom Assassin in:
+        1. Position (7, 6) as specified in WORLD_ENEMIES
+        2. The Forgotten Grove at (5, 5) as indicated in the map data
+        """
+        from .world_design import WORLD_ENEMIES
+        
+        # Get the phantom_assassin data from WORLD_ENEMIES
+        phantom_data = next((e for e in WORLD_ENEMIES if e["id"] == "phantom_assassin"), None)
+        if not phantom_data:
+            return  # Can't proceed without phantom data
+        
+        # Create a phantom assassin Enemy object to add to the nodes
+        phantom = Enemy(
+            name=phantom_data["name"],
+            description=phantom_data["description"],
+            health=phantom_data["health"],
+            damage=phantom_data["damage"],
+            drops=phantom_data.get("drops", []),
+            requirements=phantom_data.get("requirements", [])
+        )
+        
+        # Locations to ensure phantom assassin is present
+        target_positions = [(7, 6), (5, 5)]
+        
+        for position in target_positions:
+            # Find the node at this position
+            target_node = None
+            for area, node in GAME_MAP.items():
+                if node.position == position:
+                    target_node = node
+                    break
+                    
+            if target_node:
+                # Initialize the enemies list if it doesn't exist
+                if not hasattr(target_node, 'enemies') or target_node.enemies is None:
+                    target_node.enemies = []
+                
+                # Convert the list to Enemy objects if it contains strings
+                if target_node.enemies and isinstance(target_node.enemies[0], str):
+                    target_node.enemies = self._create_enemies(target_node.enemies)
+                    
+                # Check if phantom_assassin is already in the list
+                phantom_exists = False
+                if target_node.enemies:
+                    for enemy in target_node.enemies:
+                        if isinstance(enemy, Enemy) and enemy.name.lower() == "phantom assassin":
+                            phantom_exists = True
+                            break
+                        elif isinstance(enemy, dict) and enemy.get("name", "").lower() == "phantom assassin":
+                            phantom_exists = True
+                            break
+                        elif isinstance(enemy, str) and enemy == "phantom_assassin":
+                            phantom_exists = True
+                            break
+                
+                # Add phantom_assassin if not already present
+                if not phantom_exists:
+                    # Create a new instance for each node to avoid reference issues
+                    new_phantom = Enemy(
+                        name=phantom_data["name"],
+                        description=phantom_data["description"],
+                        health=phantom_data["health"],
+                        damage=phantom_data["damage"],
+                        drops=phantom_data.get("drops", []),
+                        requirements=phantom_data.get("requirements", [])
+                    )
+                    target_node.enemies.append(new_phantom)
+                    
     def _create_enemies(self, enemy_ids: List[str]) -> List[Enemy]:
         """Convert enemy IDs to Enemy objects based on current time."""
         enemies = []

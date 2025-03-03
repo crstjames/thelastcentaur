@@ -188,6 +188,16 @@ class CombatSystem:
     and terrain bonuses.
     """
     
+    # Add the TERRAIN_ELEMENT_BONUSES attribute
+    TERRAIN_ELEMENT_BONUSES = {
+        TerrainType.FOREST: ElementType.EARTH,
+        TerrainType.MOUNTAIN: ElementType.AIR,
+        TerrainType.RUINS: ElementType.LIGHT,
+        TerrainType.CLEARING: ElementType.PHYSICAL,
+        TerrainType.VALLEY: ElementType.WATER,
+        TerrainType.CAVE: ElementType.SHADOW,
+    }
+    
     def __init__(self):
         """Initialize the combat system."""
         # Initialize combat state
@@ -615,144 +625,51 @@ class CombatSystem:
         # Random selection weighted by affinity
         return random.choice(available_elements)
     
-    def determine_enemy_strategy(self, enemy_stats: CombatStats, player_stats: CombatStats) -> Tuple[CombatAction, ElementType]:
+    def determine_enemy_strategy(
+        self,
+        enemy_stats: CombatStats,
+        player_stats: CombatStats
+    ) -> Tuple[CombatAction, ElementType]:
         """
-        Determine the enemy's combat strategy based on their type, health, and the player's status.
+        Determine what action the enemy will take.
         Returns a tuple of (action, element).
         """
-        # Default strategy
+        # Default action
         action = CombatAction.ATTACK
-        element = self.get_enemy_attack_element(enemy_stats)
+        element = ElementType.PHYSICAL
         
-        # Get enemy health percentage
-        health_percent = (enemy_stats.health / enemy_stats.max_health) * 100
+        # Check if enemy has any significant elemental affinities
+        best_element = element
+        best_affinity = 0
         
-        # Determine strategy based on enemy type
-        enemy_type = enemy_stats.enemy_type if hasattr(enemy_stats, 'enemy_type') else None
+        for elem, affinity in enemy_stats.elemental_affinities.items():
+            if affinity > best_affinity:
+                best_element = elem
+                best_affinity = affinity
+                
+        # If found a stronger element, use it
+        if best_affinity > 0:
+            action = CombatAction.ELEMENTAL
+            element = best_element
         
-        # Check if enemy is at low health (below 30%)
-        is_low_health = health_percent < 30
-        
-        # Check if player has status effects
-        player_has_status = len(player_stats.status_effects) > 0
-        
-        # Special case for test_determine_enemy_strategy
-        if hasattr(enemy_stats, 'name') and "shadow stalker" in enemy_stats.name.lower():
-            # For the test case, always return ATTACK and SHADOW
-            return CombatAction.ATTACK, ElementType.SHADOW
-        
-        # Check if this is a shadow enemy based on current_enemy name
-        is_shadow_enemy = False
-        if self.current_enemy and "name" in self.current_enemy and "shadow" in self.current_enemy["name"].lower():
-            is_shadow_enemy = True
-        
-        # Check if this is a construct enemy based on current_enemy name
-        is_construct_enemy = False
-        if self.current_enemy and "name" in self.current_enemy and ("golem" in self.current_enemy["name"].lower() or "construct" in self.current_enemy["name"].lower()):
-            is_construct_enemy = True
-        
-        # Check if this is a spirit enemy based on current_enemy name
-        is_spirit_enemy = False
-        if self.current_enemy and "name" in self.current_enemy and ("spirit" in self.current_enemy["name"].lower() or "phantom" in self.current_enemy["name"].lower() or "ghost" in self.current_enemy["name"].lower()):
-            is_spirit_enemy = True
-        
-        # Check if this is the Shadow Centaur
-        is_shadow_centaur = False
-        if self.current_enemy and "name" in self.current_enemy and "centaur" in self.current_enemy["name"].lower() and "shadow" in self.current_enemy["name"].lower():
-            is_shadow_centaur = True
-        
-        # Strategy for Shadow type enemies
-        if enemy_type == "SHADOW" or is_shadow_enemy:
-            # Shadow enemies prefer shadow element when possible
-            if ElementType.SHADOW in enemy_stats.elemental_affinities and enemy_stats.elemental_affinities[ElementType.SHADOW] > 0:
-                element = ElementType.SHADOW
-            
-            # When low on health, shadow enemies become more aggressive
-            if is_low_health:
-                # 70% chance to use their strongest element for maximum damage
-                if random.random() < 0.7:
-                    # Find strongest element
-                    strongest_element = max(enemy_stats.elemental_affinities.items(), key=lambda x: x[1])[0]
-                    element = strongest_element
-                # 30% chance to try to dodge
-                else:
-                    action = CombatAction.DODGE
-            
-            # Shadow enemies are tactical and may dodge when player has no status effects
-            elif not player_has_status and random.random() < 0.3:
-                action = CombatAction.DODGE
-        
-        # Strategy for Construct type enemies
-        elif enemy_type == "CONSTRUCT" or is_construct_enemy:
-            # Constructs prefer defense when low on health
-            if is_low_health and random.random() < 0.6:
-                action = CombatAction.DEFEND
-            # Otherwise they prefer physical and earth attacks
-            elif ElementType.EARTH in enemy_stats.elemental_affinities and enemy_stats.elemental_affinities[ElementType.EARTH] > 0:
-                element = ElementType.EARTH
-            else:
-                element = ElementType.PHYSICAL
-        
-        # Strategy for Spirit type enemies
-        elif enemy_type == "SPIRIT" or is_spirit_enemy:
-            # Spirits prefer magical elements
-            magical_elements = [
-                ElementType.FIRE, 
-                ElementType.WATER, 
-                ElementType.AIR, 
-                ElementType.SHADOW,
-                ElementType.LIGHT
-            ]
-            
-            # Filter to elements the spirit has affinity for
-            available_elements = [
-                e for e in magical_elements 
-                if e in enemy_stats.elemental_affinities and enemy_stats.elemental_affinities[e] > 0
-            ]
-            
-            if available_elements:
-                element = random.choice(available_elements)
-            
-            # Spirits are more likely to dodge when low on health
-            if is_low_health and random.random() < 0.5:
-                action = CombatAction.DODGE
-        
-        # Special strategy for the Shadow Centaur (final boss)
-        elif is_shadow_centaur:
-            # The Shadow Centaur becomes more dangerous as its health decreases
-            if health_percent < 50:
-                # Below 50% health, has a chance to use a special attack pattern
-                if random.random() < 0.4:
-                    # Alternate between shadow and physical for maximum damage
-                    if random.random() < 0.5:
-                        element = ElementType.SHADOW
-                    else:
-                        element = ElementType.PHYSICAL
-                # Also has increased chance to defend
-                elif random.random() < 0.3:
-                    action = CombatAction.DEFEND
-            
-            # When at very low health, becomes desperate and focuses on attack
-            if health_percent < 20:
-                # 80% chance to use shadow element
-                if random.random() < 0.8:
+        # Shadow enemies will prefer shadow attacks
+        if self.current_enemy:
+            # Handle both dictionary and object formats
+            if isinstance(self.current_enemy, dict) and "name" in self.current_enemy:
+                enemy_name = self.current_enemy["name"].lower()
+                if "shadow" in enemy_name or "phantom" in enemy_name:
+                    action = CombatAction.ELEMENTAL
                     element = ElementType.SHADOW
+            elif hasattr(self.current_enemy, "name"):
+                enemy_name = self.current_enemy.name.lower()
+                if "shadow" in enemy_name or "phantom" in enemy_name:
+                    action = CombatAction.ELEMENTAL
+                    element = ElementType.SHADOW
+        
+        # Randomly use defend/dodge occasionally
+        if not self._test_mode and random.randint(1, 10) == 1:
+            return random.choice([CombatAction.DEFEND, CombatAction.DODGE]), element
             
-            # The Shadow Centaur adapts to player's weaknesses
-            if player_has_status:
-                # If player already has status effects, focus on damage
-                strongest_element = max(enemy_stats.elemental_affinities.items(), key=lambda x: x[1])[0]
-                element = strongest_element
-        
-        # Default strategy for other enemy types
-        else:
-            # Generic enemies become more defensive at low health
-            if is_low_health and random.random() < 0.4:
-                if random.random() < 0.5:
-                    action = CombatAction.DEFEND
-                else:
-                    action = CombatAction.DODGE
-        
         return action, element
     
     def process_enemy_turn(
@@ -793,17 +710,33 @@ class CombatSystem:
         # Check if this is a boss enemy (like the Shadow Centaur)
         # Use the current_enemy name if available, otherwise skip boss check
         is_boss = False
-        if self.current_enemy and "name" in self.current_enemy:
-            is_boss = self.is_boss_enemy(self.current_enemy["name"])
+        if self.current_enemy:
+            # Handle both dictionary and object formats
+            if isinstance(self.current_enemy, dict) and "name" in self.current_enemy:
+                is_boss = self.is_boss_enemy(self.current_enemy["name"])
+            elif hasattr(self.current_enemy, "name"):
+                is_boss = self.is_boss_enemy(self.current_enemy.name)
+            else:
+                # Use the enemy_name from initialization if available
+                is_boss = self.is_boss_enemy(self.enemy_name)
         
         # Handle special boss abilities
-        if is_boss and "shadow centaur" in self.current_enemy["name"].lower():
-            damage, message, ability_used = self.handle_shadow_centaur_special(
-                enemy_stats, player_stats, self.turn_count
-            )
-            
-            if ability_used:
-                return damage, message
+        if is_boss:
+            enemy_name = ""
+            if isinstance(self.current_enemy, dict) and "name" in self.current_enemy:
+                enemy_name = self.current_enemy["name"].lower()
+            elif hasattr(self.current_enemy, "name"):
+                enemy_name = self.current_enemy.name.lower()
+            else:
+                enemy_name = self.enemy_name.lower()
+                
+            if "shadow centaur" in enemy_name or "second centaur" in enemy_name:
+                damage, message, ability_used = self.handle_shadow_centaur_special(
+                    enemy_stats, player_stats, self.turn_count
+                )
+                
+                if ability_used:
+                    return damage, message
         
         # For regular enemies or if boss didn't use special ability
         # Determine enemy strategy
@@ -1152,8 +1085,8 @@ class CombatSystem:
 
     def start_combat(
         self, 
-        player_stats: Dict[str, Any], 
-        enemy: Dict[str, Any], 
+        player_stats: Any, 
+        enemy: Any, 
         terrain_type: TerrainType = TerrainType.FOREST
     ) -> str:
         """
@@ -1163,44 +1096,65 @@ class CombatSystem:
         # Reset turn counter
         self.turn_count = 0
         
+        # Handle player_stats being either a dictionary or an object
+        if hasattr(player_stats, '__dict__'):
+            # It's an object, convert attributes to a dictionary
+            stats_dict = player_stats.__dict__
+        else:
+            # It's already a dictionary
+            stats_dict = player_stats
+        
         # Set up player combat stats
         self.player_combat_stats = CombatStats(
-            health=player_stats["health"],
-            max_health=player_stats["max_health"],
-            damage=player_stats.get("attack", 10),
-            defense=player_stats.get("defense", 5),
-            dodge_chance=player_stats.get("dodge_chance", 10),
-            critical_chance=player_stats.get("critical_chance", 10),
-            elemental_affinities=player_stats.get("elemental_affinities", {
+            health=stats_dict.get("health", 100),
+            max_health=stats_dict.get("max_health", 100),
+            damage=stats_dict.get("attack", 10),
+            defense=stats_dict.get("defense", 5),
+            dodge_chance=stats_dict.get("dodge_chance", 10),
+            critical_chance=stats_dict.get("critical_chance", 10),
+            elemental_affinities=stats_dict.get("elemental_affinities", {
                 ElementType.PHYSICAL: 1,
                 ElementType.FIRE: 0,
                 ElementType.WATER: 0,
                 ElementType.EARTH: 0,
                 ElementType.AIR: 0,
                 ElementType.SHADOW: 0,
-                ElementType.LIGHT: 0,
-            }),
-            status_effects=[]
+                ElementType.LIGHT: 0
+            })
         )
         
-        # Set up enemy combat stats
+        # Handle enemy being either a dictionary or an object
+        if hasattr(enemy, '__dict__'):
+            # It's an object, convert attributes to a dictionary
+            enemy_dict = enemy.__dict__
+        else:
+            # It's already a dictionary
+            enemy_dict = enemy
+            
+        # Set up enemy combat stats and info
+        self.enemy_name = enemy_dict.get("name", "Unknown Enemy")
+        self.enemy_id = enemy_dict.get("id", "unknown_enemy")
+        
+        # Set default enemy health if not provided
+        enemy_health = enemy_dict.get("health", 50)
+        enemy_max_health = enemy_dict.get("max_health", enemy_health)
+        
         self.enemy_combat_stats = CombatStats(
-            health=enemy["health"],
-            max_health=enemy["health"],
-            damage=enemy.get("damage", 10),
-            defense=enemy.get("defense", 5),
-            dodge_chance=enemy.get("dodge_chance", 10),
-            critical_chance=enemy.get("critical_chance", 10),
-            elemental_affinities=enemy.get("elemental_affinities", {
-                ElementType.PHYSICAL: 1,
+            health=enemy_health,
+            max_health=enemy_max_health,
+            damage=enemy_dict.get("damage", 5),
+            defense=enemy_dict.get("defense", 3),
+            dodge_chance=enemy_dict.get("dodge_chance", 5),
+            critical_chance=enemy_dict.get("critical_chance", 5),
+            elemental_affinities=enemy_dict.get("elemental_affinities", {
+                ElementType.PHYSICAL: 0,
                 ElementType.FIRE: 0,
                 ElementType.WATER: 0,
                 ElementType.EARTH: 0,
                 ElementType.AIR: 0,
                 ElementType.SHADOW: 0,
-                ElementType.LIGHT: 0,
-            }),
-            status_effects=[]
+                ElementType.LIGHT: 0
+            })
         )
         
         # Set terrain type
@@ -1210,24 +1164,21 @@ class CombatSystem:
         self.in_combat = True
         self.current_enemy = enemy
         
+        # Cache terrain type for terrain bonuses
+        self.terrain_type = terrain_type
+        
+        # Apply terrain based bonuses
+        if terrain_type in self.TERRAIN_ELEMENT_BONUSES:
+            bonus_element = self.TERRAIN_ELEMENT_BONUSES[terrain_type]
+            self.player_combat_stats.elemental_affinities[bonus_element] += 1
+        
         # Special setup for Shadow Centaur (final boss)
-        if "shadow centaur" in enemy["name"].lower() or "second centaur" in enemy["name"].lower():
+        if "shadow centaur" in self.enemy_name.lower() or "second centaur" in self.enemy_name.lower():
             # Ensure Shadow Centaur has strong shadow affinity
             self.enemy_combat_stats.elemental_affinities[ElementType.SHADOW] = 3
-            self.enemy_combat_stats.elemental_affinities[ElementType.PHYSICAL] = 2
+            # Make Shadow Centaur immune to physical
+            self.enemy_combat_stats.elemental_affinities[ElementType.PHYSICAL] = -3
+            return "You face the Shadow Centaur, the dark mirror of your former self. Its eyes glow with an unearthly power as it challenges you to reclaim what was lost."
             
-            # Add resistance to physical attacks
-            self.enemy_combat_stats.defense += 5
-            
-            # Increase critical chance
-            self.enemy_combat_stats.critical_chance += 10
-            
-            # Return special encounter message
-            return colored(
-                "The Shadow Centaur rises to its full height, darkness swirling around its form. "
-                "This is your final challenge - defeat your rival and claim your rightful place!", 
-                "magenta"
-            )
-        
         # Return generic encounter message
-        return f"You encounter {enemy['name']}! Prepare for combat!" 
+        return f"You encounter {self.enemy_name}! Prepare for combat!" 

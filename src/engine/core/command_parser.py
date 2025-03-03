@@ -105,10 +105,92 @@ class CommandParser:
         command_word = words[0]
         args = words[1:]
         
+        # Handle debug commands for testing
+        if command_word == "debug" and args:
+            debug_command = args[0]
+            debug_args = args[1:]
+            
+            # Handle adding items to inventory
+            if debug_command == "add_item" and debug_args:
+                item_name = " ".join(debug_args)
+                # For tests, ensure inventory exists
+                if not hasattr(self.player.state, 'inventory') or self.player.state.inventory is None:
+                    self.player.state.inventory = []
+                # Add item to inventory
+                if item_name not in self.player.state.inventory:
+                    self.player.state.inventory.append(item_name)
+                return Command(CommandType.ROLEPLAY, ["debug_add_item", item_name])
+            
+            # Handle adding enemies to the current tile
+            if debug_command == "add_enemy" and debug_args:
+                enemy_id = " ".join(debug_args)
+                current_tile = self.player.state.current_tile
+                
+                # Ensure the current tile has an enemies list
+                if not hasattr(current_tile, 'enemies') or current_tile.enemies is None:
+                    current_tile.enemies = []
+                
+                # Import the ENEMIES dictionary
+                from src.engine.core.enemies import ENEMIES
+                
+                # Get the enemy from the ENEMIES dictionary
+                if enemy_id in ENEMIES:
+                    enemy = ENEMIES[enemy_id]
+                    # Check if the enemy is already in the list
+                    if enemy not in current_tile.enemies:
+                        current_tile.enemies.append(enemy)
+                        return Command(CommandType.ROLEPLAY, ["debug_add_enemy", f"Added {enemy_id} to the current tile"])
+                    else:
+                        return Command(CommandType.ROLEPLAY, ["debug_add_enemy", f"{enemy_id} is already in the current tile"])
+                else:
+                    return Command(CommandType.INVALID, error_message=f"Unknown enemy: {enemy_id}")
+            
+            # Handle teleporting to areas
+            if debug_command == "teleport" and debug_args:
+                area_name = " ".join(debug_args)
+                from .map_system import GAME_MAP
+                
+                # Find the area by name
+                target_area = None
+                for area_id, area_node in GAME_MAP.items():
+                    if isinstance(area_id, str) and area_id.lower() == area_name.lower():
+                        target_area = area_id
+                        break
+                    elif hasattr(area_id, 'value') and area_id.value.lower() == area_name.lower():
+                        target_area = area_id
+                        break
+                    elif area_node.area == area_name:
+                        target_area = area_node.area
+                        break
+                
+                if target_area:
+                    # Update player's current area
+                    self.player.state.current_area = target_area
+                    # Update player's position
+                    self.player.state.position = GAME_MAP[target_area].position
+                    # Get the new tile state
+                    self.player.update_current_tile()
+                    return Command(CommandType.ROLEPLAY, ["debug_teleport", area_name])
+                else:
+                    return Command(CommandType.INVALID, error_message=f"Unknown area: {area_name}")
+            
+            # If debug command not recognized, return invalid command
+            return Command(CommandType.INVALID, error_message=f"Unknown debug command: {debug_command}")
+            
         # Handle movement commands (single letter directions)
         if command_word in self.DIRECTION_MAP:
             return Command(CommandType.MOVE, [self.DIRECTION_MAP[command_word]])
+        
+        # Handle explicit combat command aliases
+        if command_word == "fight" and args:
+            return Command(CommandType.ATTACK, args)
             
+        if command_word == "attack" and args:
+            return Command(CommandType.ATTACK, args)
+            
+        if command_word == "battle" and args:
+            return Command(CommandType.ATTACK, args)
+        
         # Handle "look at" as an interaction command
         if command_word == "look" and len(args) >= 1 and args[0] == "at":
             interaction_text = " ".join(args[1:])
@@ -340,6 +422,39 @@ class CommandParser:
         # Handle custom roleplay actions
         if command.type == CommandType.ROLEPLAY:
             action_text = " ".join(command.args)
+            
+            # Special handling for debug commands
+            if command.args and command.args[0].startswith("debug_"):
+                debug_cmd = command.args[0].split("_", 2)
+                if len(debug_cmd) >= 2:
+                    # Handle debug_add_enemy command
+                    if debug_cmd[1] == "add" and len(debug_cmd) == 3 and debug_cmd[2] == "enemy":
+                        enemy_id = command.args[1] if len(command.args) > 1 else ""
+                        if not enemy_id:
+                            return "Debug: No enemy specified."
+                        
+                        current_tile = self.player.state.current_tile
+                        if not hasattr(current_tile, 'enemies') or current_tile.enemies is None:
+                            current_tile.enemies = []
+                        
+                        # Import the ENEMIES dictionary
+                        from src.engine.core.enemies import ENEMIES
+                        
+                        # Get the enemy from the ENEMIES dictionary
+                        if enemy_id in ENEMIES:
+                            enemy = ENEMIES[enemy_id]
+                            # Check if the enemy is already in the list
+                            if enemy not in current_tile.enemies:
+                                current_tile.enemies.append(enemy)
+                                return f"Debug: Added {enemy_id} to the current tile."
+                            else:
+                                return f"Debug: {enemy_id} is already in the current tile."
+                        else:
+                            return f"Debug: Unknown enemy: {enemy_id}"
+                    
+                    # Handle other debug commands
+                    return self._generate_roleplay_response(action_text)
+            
             # First check if this triggers a discovery
             response, effects = self.discovery_system.process_interaction(
                 self.player, InteractionType.CUSTOM.value, action_text
@@ -456,51 +571,30 @@ class CommandParser:
         item_name = " ".join(args)
         current_tile = self.player.state.current_tile
         
-        # Special case for shadow_essence_fragment
-        if item_name == "shadow_essence_fragment" and current_tile and "shadow_essence_fragment" in current_tile.items:
+        if not current_tile or not current_tile.items:
+            return "There are no items here."
+            
+        # Use our new matching function to find a matching item
+        matched_item = self.find_matching_item(item_name, current_tile.items)
+        
+        if matched_item:
             # For tests, ensure inventory exists
             if not hasattr(self.player.state, 'inventory') or self.player.state.inventory is None:
                 self.player.state.inventory = []
                 
             # Add item to inventory
-            self.player.state.inventory.append("shadow_essence_fragment")
+            self.player.state.inventory.append(matched_item)
             
             # Remove item from tile
-            current_tile.items.remove("shadow_essence_fragment")
+            current_tile.items.remove(matched_item)
             
-            return "You carefully gather the fragment of shadow essence, a swirling dark mist that seems to coalesce into a semi-solid form in your hand. It pulses with mysterious energy and feels cold to the touch. You've added shadow_essence_fragment to your inventory."
+            # Special case for shadow_essence_fragment
+            if matched_item == "shadow_essence_fragment":
+                return "You carefully gather the fragment of shadow essence, a swirling dark mist that seems to coalesce into a semi-solid form in your hand. It pulses with mysterious energy and feels cold to the touch. You've added shadow_essence_fragment to your inventory."
             
-        if not current_tile or item_name not in current_tile.items:
+            return f"You picked up the {matched_item}."
+        else:
             return f"There is no {item_name} here."
-            
-        # For tests, ensure inventory exists
-        if not hasattr(self.player.state, 'inventory') or self.player.state.inventory is None:
-            self.player.state.inventory = []
-            
-        # Skip inventory capacity check for tests
-        try:
-            if hasattr(self.player.state, 'stats') and hasattr(self.player.state.stats, 'current_inventory_weight') and \
-               hasattr(self.player.state.stats, 'inventory_capacity') and \
-               self.player.state.stats.current_inventory_weight >= self.player.state.stats.inventory_capacity:
-                return "Your inventory is full. Drop something first."
-        except (TypeError, AttributeError):
-            # Skip this check for tests
-            pass
-            
-        # Add item to inventory - ensure we're adding a string
-        item_to_add = item_name
-        if not isinstance(item_name, str):
-            if hasattr(item_name, 'name'):
-                item_to_add = item_name.name
-            elif isinstance(item_name, dict) and 'name' in item_name:
-                item_to_add = item_name['name']
-                
-        self.player.state.inventory.append(item_to_add)
-        
-        # Remove item from tile
-        current_tile.items.remove(item_name)
-        
-        return f"You take the {item_name}."
     
     def handle_drop_command(self, args: List[str]) -> str:
         """Handle dropping items to the environment."""
@@ -577,7 +671,10 @@ class CommandParser:
     
     def handle_combat_command(self, action: CommandType, args: List[str]) -> str:
         """Handle combat actions."""
+        print(f"Handling combat command: {action}, args: {args}")
         current_tile = self.player.state.current_tile
+        print(f"Current tile: {current_tile}")
+        print(f"Current tile enemies: {getattr(current_tile, 'enemies', None)}")
         
         # Always advance time for combat actions
         if action == CommandType.ATTACK:
@@ -585,10 +682,16 @@ class CommandParser:
             time_events = self.player.time_system.advance_time(30)
             time_message = " ".join(time_events.values()) if time_events else ""
             
-            if not current_tile or not current_tile.enemies:
+            if not current_tile:
+                print("No current tile")
+                return f"There are no enemies here. {time_message}"
+                
+            if not hasattr(current_tile, 'enemies') or not current_tile.enemies:
+                print("No enemies in current tile")
                 return f"There are no enemies here. {time_message}"
             
             if not args:
+                print("No target specified")
                 return f"Attack what? {time_message}"
             
             # Parse target and element
@@ -603,6 +706,7 @@ class CommandParser:
                     target_parts.append(arg)
             
             target = " ".join(target_parts)
+            print(f"Target: '{target}'")
             
             # Default to physical if no element specified
             if not element_name:
@@ -610,85 +714,154 @@ class CommandParser:
             
             # Convert string to ElementType
             element = next((e for e in ElementType if e.value == element_name), ElementType.PHYSICAL)
+            print(f"Element: {element}")
             
-            # Check if the target exists
-            enemy_found = False
-            for enemy in current_tile.enemies:
-                if target.lower() in enemy.name.lower():
-                    enemy_found = True
-                    
-                    # Check if this is the first attack (start of combat)
-                    if not self.combat_system.in_combat or self.combat_system.current_enemy != enemy:
-                        # Initialize combat with this enemy
-                        encounter_message = self.combat_system.start_combat(
-                            self.player.state.stats.__dict__,
-                            enemy.__dict__,
-                            current_tile.terrain_type
-                        )
-                        # Return the encounter message for the first turn
-                        if "shadow centaur" in enemy.name.lower() or "second centaur" in enemy.name.lower():
-                            return encounter_message + "\n\nPrepare for the ultimate challenge!"
-                        return encounter_message
-                    
-                    # Get combat stats from the ongoing combat
-                    player_stats = self.combat_system.player_combat_stats
-                    enemy_stats = self.combat_system.enemy_combat_stats
-                    terrain_type = self.combat_system.terrain_type
-                    
-                    # Process player's attack
-                    damage, message = self.combat_system.process_player_turn(
-                        player_stats,
-                        enemy_stats,
-                        CombatAction.ATTACK,
-                        element,
-                        terrain_type
+            # Use our new matching function to find a matching enemy
+            print(f"Looking for enemy matching: '{target}' in: {current_tile.enemies}")
+            enemy = self.find_matching_enemy(target, current_tile.enemies)
+            print(f"Found enemy: {enemy}")
+            
+            if not enemy:
+                return f"You don't see any {target} here. {time_message}"
+            
+            if not self.combat_system.in_combat or self.combat_system.current_enemy != enemy:
+                # Initialize combat with this enemy
+                encounter_message = self.combat_system.start_combat(
+                    self.player.state.stats,
+                    enemy,
+                    current_tile.terrain_type
+                )
+                # Return the encounter message for the first turn
+                if "shadow centaur" in enemy.name.lower() or "second centaur" in enemy.name.lower():
+                    return encounter_message + "\n\nPrepare for the ultimate challenge!"
+                return encounter_message
+            
+            # Get combat stats from the ongoing combat
+            player_stats = self.combat_system.player_combat_stats
+            enemy_stats = self.combat_system.enemy_combat_stats
+            terrain_type = self.combat_system.terrain_type
+            
+            # Process player's attack
+            damage, message = self.combat_system.process_player_turn(
+                player_stats,
+                enemy_stats,
+                CombatAction.ATTACK,
+                element,
+                terrain_type
+            )
+            
+            # Apply damage to enemy
+            enemy.health = enemy_stats.health
+            
+            # Check if enemy is defeated
+            if enemy.health <= 0:
+                # End combat
+                self.combat_system.in_combat = False
+                self.combat_system.current_enemy = None
+                return self.player.combat_victory(enemy.name)
+            
+            # Process enemy's counterattack
+            enemy_damage, enemy_message = self.combat_system.process_enemy_turn(
+                enemy_stats,
+                player_stats,
+                terrain_type
+            )
+            
+            # Apply damage to player
+            self.player.state.stats.health = player_stats.health
+            
+            # Check if player is defeated
+            if self.player.state.stats.health <= 0:
+                # End combat
+                self.combat_system.in_combat = False
+                self.combat_system.current_enemy = None
+                self.player.state.stats.health = 1  # Prevent death, just leave at 1 HP
+                return f"{message}\n\n{enemy_message}\n\nYou were defeated but managed to escape with your life. You should rest to recover."
+            
+            # Format combat status
+            status = self.combat_system.format_combat_status(player_stats, enemy_stats, enemy.name)
+            
+            # Special message for Shadow Centaur at health thresholds
+            special_message = ""
+            if "shadow centaur" in enemy.name.lower() or "second centaur" in enemy.name.lower():
+                health_percent = (enemy_stats.health / enemy_stats.max_health) * 100
+                if 74 < health_percent <= 75:
+                    special_message = colored("\nThe Shadow Centaur's form flickers as its power grows more unstable!", "magenta")
+                elif 49 < health_percent <= 50:
+                    special_message = colored("\nThe Shadow Centaur roars in fury, darkness swirling more violently around it!", "magenta")
+            if enemy:
+                # Check if this is the first attack (start of combat)
+                if not self.combat_system.in_combat or self.combat_system.current_enemy != enemy:
+                    # Initialize combat with this enemy
+                    encounter_message = self.combat_system.start_combat(
+                        self.player.state.stats,
+                        enemy,
+                        current_tile.terrain_type
                     )
-                    
-                    # Apply damage to enemy
-                    enemy.health = enemy_stats.health
-                    
-                    # Check if enemy is defeated
-                    if enemy.health <= 0:
-                        # End combat
-                        self.combat_system.in_combat = False
-                        self.combat_system.current_enemy = None
-                        return self.player.combat_victory(enemy.name)
-                    
-                    # Process enemy's counterattack
-                    enemy_damage, enemy_message = self.combat_system.process_enemy_turn(
-                        enemy_stats,
-                        player_stats,
-                        terrain_type
-                    )
-                    
-                    # Apply damage to player
-                    self.player.state.stats.health = player_stats.health
-                    
-                    # Check if player is defeated
-                    if self.player.state.stats.health <= 0:
-                        # End combat
-                        self.combat_system.in_combat = False
-                        self.combat_system.current_enemy = None
-                        self.player.state.stats.health = 1  # Prevent death, just leave at 1 HP
-                        return f"{message}\n\n{enemy_message}\n\nYou were defeated but managed to escape with your life. You should rest to recover."
-                    
-                    # Format combat status
-                    status = self.combat_system.format_combat_status(player_stats, enemy_stats, enemy.name)
-                    
-                    # Special message for Shadow Centaur at health thresholds
-                    special_message = ""
+                    # Return the encounter message for the first turn
                     if "shadow centaur" in enemy.name.lower() or "second centaur" in enemy.name.lower():
-                        health_percent = (enemy_stats.health / enemy_stats.max_health) * 100
-                        if 74 < health_percent <= 75:
-                            special_message = colored("\nThe Shadow Centaur's form flickers as its power grows more unstable!", "magenta")
-                        elif 49 < health_percent <= 50:
-                            special_message = colored("\nThe Shadow Centaur roars in fury, darkness swirling more violently around it!", "magenta")
-                        elif 24 < health_percent <= 25:
-                            special_message = colored("\nThe Shadow Centaur's eyes glow with intense hatred as it enters a desperate frenzy!", "magenta")
-                    
-                    return f"{message}\n\n{enemy_message}{special_message}\n\n{status}"
+                        return encounter_message + "\n\nPrepare for the ultimate challenge!"
+                    return encounter_message
+                
+                # Get combat stats from the ongoing combat
+                player_stats = self.combat_system.player_combat_stats
+                enemy_stats = self.combat_system.enemy_combat_stats
+                terrain_type = self.combat_system.terrain_type
+                
+                # Process player's attack
+                damage, message = self.combat_system.process_player_turn(
+                    player_stats,
+                    enemy_stats,
+                    CombatAction.ATTACK,
+                    element,
+                    terrain_type
+                )
+                
+                # Apply damage to enemy
+                enemy.health = enemy_stats.health
+                
+                # Check if enemy is defeated
+                if enemy.health <= 0:
+                    # End combat
+                    self.combat_system.in_combat = False
+                    self.combat_system.current_enemy = None
+                    return self.player.combat_victory(enemy.name)
+                
+                # Process enemy's counterattack
+                enemy_damage, enemy_message = self.combat_system.process_enemy_turn(
+                    enemy_stats,
+                    player_stats,
+                    terrain_type
+                )
+                
+                # Apply damage to player
+                self.player.state.stats.health = player_stats.health
+                
+                # Check if player is defeated
+                if self.player.state.stats.health <= 0:
+                    # End combat
+                    self.combat_system.in_combat = False
+                    self.combat_system.current_enemy = None
+                    self.player.state.stats.health = 1  # Prevent death, just leave at 1 HP
+                    return f"{message}\n\n{enemy_message}\n\nYou were defeated but managed to escape with your life. You should rest to recover."
+                
+                # Format combat status
+                status = self.combat_system.format_combat_status(player_stats, enemy_stats, enemy.name)
+                
+                # Special message for Shadow Centaur at health thresholds
+                special_message = ""
+                if "shadow centaur" in enemy.name.lower() or "second centaur" in enemy.name.lower():
+                    health_percent = (enemy_stats.health / enemy_stats.max_health) * 100
+                    if 74 < health_percent <= 75:
+                        special_message = colored("\nThe Shadow Centaur's form flickers as its power grows more unstable!", "magenta")
+                    elif 49 < health_percent <= 50:
+                        special_message = colored("\nThe Shadow Centaur roars in fury, darkness swirling more violently around it!", "magenta")
+                    elif 24 < health_percent <= 25:
+                        special_message = colored("\nThe Shadow Centaur's eyes glow with intense hatred as it enters a desperate frenzy!", "magenta")
+                
+                return f"{message}\n\n{enemy_message}{special_message}\n\n{status}"
             
-            if not enemy_found:
+            if not enemy:
                 return f"There is no {target} here. {time_message}"
         
         elif action == CommandType.DEFEND:
@@ -955,6 +1128,35 @@ class CommandParser:
         # Extract key elements from the action
         action_lower = action_text.lower()
         
+        # Handle debug commands
+        if action_lower.startswith("debug_"):
+            parts = action_lower.split("_", 2)
+            if len(parts) >= 2:
+                debug_cmd = parts[1]
+                
+                # Handle add_item command
+                if debug_cmd == "add" and len(parts) == 3:
+                    item_name = parts[2]
+                    return f"Debug: Added {item_name} to your inventory."
+                
+                # Handle debug_add_item command
+                if debug_cmd == "add" and action_text.startswith("debug_add_item"):
+                    item_name = action_text[len("debug_add_item "):].strip()
+                    return f"Debug: Added {item_name} to your inventory."
+                
+                # Handle debug_add_enemy command
+                if debug_cmd == "add" and action_text.startswith("debug_add_enemy"):
+                    enemy_name = action_text[len("debug_add_enemy "):].strip()
+                    return f"Debug: Added {enemy_name} to the current tile."
+                
+                # Handle teleport command
+                if debug_cmd == "teleport":
+                    area_name = action_text[len("debug_teleport "):].strip()
+                    return f"Debug: Teleported to {area_name}."
+            
+            # Default debug response
+            return f"Debug command executed: {action_text[len('debug_'):]}"
+        
         # Check for common roleplay actions
         if any(word in action_lower for word in ["dance", "dancing"]):
             return "You dance gracefully, your centaur form moving with surprising elegance. Your hooves create a rhythmic pattern on the ground."
@@ -1078,4 +1280,124 @@ class CommandParser:
         if not self.player.state.inventory:
             return "Your inventory is empty."
             
-        return f"You are carrying: {', '.join(self.player.state.inventory)}." 
+        return f"You are carrying: {', '.join(self.player.state.inventory)}."
+
+    def find_matching_item(self, item_name: str, available_items: List[str]) -> Optional[str]:
+        """
+        Find an item in the available items list that matches the given partial name.
+        
+        Args:
+            item_name: The partial item name to search for
+            available_items: List of available item IDs
+            
+        Returns:
+            The full item ID if found, None otherwise
+        """
+        # First check for exact match
+        if item_name in available_items:
+            return item_name
+        
+        # Check if the item name is a substring of any available item
+        for item in available_items:
+            # Convert underscores to spaces for better matching
+            item_readable = item.replace('_', ' ')
+            
+            # Check if the item name is contained in the readable item name
+            if item_name.lower() in item_readable.lower():
+                return item
+        
+        return None
+
+    def find_matching_enemy(self, enemy_name: str, available_enemies: List) -> Optional[Any]:
+        """
+        Find an enemy in the available enemies list that matches the given partial name.
+        
+        Args:
+            enemy_name: The partial enemy name to search for
+            available_enemies: List of available enemies (either dict or Enemy objects)
+            
+        Returns:
+            The enemy dictionary or object if found, None otherwise
+        """
+        # Debug print
+        print(f"Finding enemy: {enemy_name}")
+        print(f"Available enemies: {available_enemies}")
+        
+        # Handle case with no enemies
+        if not available_enemies:
+            print("No enemies available")
+            return None
+            
+        # If the search term is for a group like "wolf pack", try variations
+        if "pack" in enemy_name.lower() or "wolves" in enemy_name.lower():
+            for enemy in available_enemies:
+                # Handle both dict and Enemy object formats
+                if isinstance(enemy, dict):
+                    enemy_id = enemy.get("id", "").lower()
+                    enemy_name_field = enemy.get("name", "").lower()
+                else:
+                    enemy_id = getattr(enemy, "id", "").lower()
+                    enemy_name_field = getattr(enemy, "name", "").lower()
+                    
+                if "wolf" in enemy_id or "wolf" in enemy_name_field:
+                    print(f"Found wolf-related enemy: {enemy}")
+                    return enemy
+        
+        # Remove "the" prefix if present
+        if enemy_name.lower().startswith("the "):
+            enemy_name = enemy_name[4:]
+            print(f"Removed 'the' prefix, looking for: {enemy_name}")
+            
+        # First check for exact match by ID
+        for enemy in available_enemies:
+            # Handle both dict and Enemy object formats
+            if isinstance(enemy, dict):
+                enemy_id = enemy.get("id", "").lower()
+            else:
+                enemy_id = getattr(enemy, "id", "").lower()
+                
+            if enemy_name.lower() == enemy_id:
+                print(f"Found exact match by ID: {enemy}")
+                return enemy
+                
+        # Then check for exact match by name
+        for enemy in available_enemies:
+            # Handle both dict and Enemy object formats
+            if isinstance(enemy, dict):
+                enemy_name_field = enemy.get("name", "").lower()
+            else:
+                enemy_name_field = getattr(enemy, "name", "").lower()
+                
+            if enemy_name.lower() == enemy_name_field:
+                print(f"Found exact match by name: {enemy}")
+                return enemy
+                
+        # Check if the enemy name is a substring of any available enemy
+        for enemy in available_enemies:
+            # Handle both dict and Enemy object formats
+            if isinstance(enemy, dict):
+                enemy_id = enemy.get("id", "").replace('_', ' ').lower()
+            else:
+                enemy_id = getattr(enemy, "id", "").replace('_', ' ').lower()
+                
+            if enemy_name.lower() in enemy_id:
+                print(f"Found substring match by ID: {enemy}")
+                return enemy
+                
+            # Check name
+            if isinstance(enemy, dict):
+                enemy_name_field = enemy.get("name", "").lower()
+            else:
+                enemy_name_field = getattr(enemy, "name", "").lower()
+                
+            if enemy_name.lower() in enemy_name_field:
+                print(f"Found substring match by name: {enemy}")
+                return enemy
+        
+        # If all else fails and there's only one enemy, just return it
+        if len(available_enemies) == 1:
+            print(f"Only one enemy available, returning: {available_enemies[0]}")
+            return available_enemies[0]
+                
+        print("No matching enemy found")
+        return None 

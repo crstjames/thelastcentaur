@@ -98,7 +98,7 @@ ENEMIES = {
         drops=["wolf_fang", "shadow_touched_pelt"],
         requirements=[],
         weakness=["fire", "light_magic"],
-        behavior_notes="Surrounds prey and attacks from multiple directions. Stronger at night."
+        behavior_notes="Coordinates attacks, flanking and surrounding their prey."
     ),
     
     # New Minor Enemies
@@ -221,5 +221,37 @@ ENEMIES = {
         requirements=["crystal_focus", "phantom_dagger"],
         weakness=["light_magic", "holy_magic"],
         behavior_notes="Can create areas of absolute darkness. Immune to physical damage."
+    ),
+    
+    # Add Phantom Assassin definition
+    "phantom_assassin": Enemy(
+        id="phantom_assassin",
+        name="Phantom Assassin",
+        type=EnemyType.SHADOW,
+        description="A deadly spirit that guards the secret paths. Masters of shadow and stealth, they strike without warning.",
+        combat_style=CombatStyle.STEALTH,
+        health=80,
+        damage=50,
+        abilities=[ABILITIES["shadow_strike"]],
+        drops=["shadow_essence", "phantom_dagger"],
+        requirements=["stealth_cloak"],
+        weakness=["light_magic", "mystic_abilities"],
+        behavior_notes="Uses stealth tactics, disappearing and reappearing to attack from unexpected angles."
+    ),
+    
+    # Add Shadow Stalker definition
+    "shadow_stalker": Enemy(
+        id="shadow_stalker",
+        name="Shadow Stalker",
+        type=EnemyType.SHADOW,
+        description="A creature of pure darkness that hunts at night. Nearly invisible in shadows.",
+        combat_style=CombatStyle.STEALTH,
+        health=80,
+        damage=25,
+        abilities=[ABILITIES["shadow_strike"]],
+        drops=["shadow_essence", "stealth_cloak"],
+        requirements=[],
+        weakness=["light_magic", "fire"],
+        behavior_notes="Prefers to ambush from darkness. More powerful at night or in dark areas."
     )
 } 

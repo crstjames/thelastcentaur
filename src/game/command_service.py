@@ -30,15 +30,30 @@ class CommandService:
     
     async def process_command(self, command_text: str, game_id: str) -> str:
         """Process a command with context awareness and special handling."""
+        # Debug print
+        print(f"Processing command: {command_text}")
+        
         # Check for special commands first
         command_parts = command_text.strip().lower().split()
         if command_parts and command_parts[0] in self.special_commands:
+            print(f"Special command detected: {command_parts[0]}")
             return await self.special_commands[command_parts[0]](command_parts[1:], game_id)
+            
+        # Handle combat aliases explicitly
+        combat_aliases = ["fight", "battle", "strike"]
+        if command_parts and command_parts[0] in combat_aliases and len(command_parts) > 1:
+            # Convert to attack command
+            print(f"Combat alias detected: {command_parts[0]} -> attack")
+            command_text = "attack " + " ".join(command_parts[1:])
         
         # Use the command parser for regular commands
+        print(f"Parsing command: {command_text}")
         command = self.command_parser.parse_command(command_text)
+        print(f"Parsed command type: {command.type if command else 'None'}")
+        
         if not command:
             # If command not recognized, try to suggest alternatives
+            print("Command not recognized")
             suggestions = self._suggest_commands(command_text)
             if suggestions:
                 return f"Unknown command: '{command_text}'. Did you mean: {', '.join(suggestions)}?"
@@ -70,8 +85,19 @@ class CommandService:
         # Add special commands
         special_cmds = list(self.special_commands.keys())
         
+        # Add combat command aliases
+        combat_aliases = {
+            "fight": "attack",
+            "battle": "attack",
+            "strike": "attack"
+        }
+        
         # Combine all commands
-        all_commands = available_commands + list(direction_shortcuts.keys()) + list(direction_shortcuts.values()) + special_cmds
+        all_commands = (available_commands + 
+                       list(direction_shortcuts.keys()) + 
+                       list(direction_shortcuts.values()) + 
+                       special_cmds + 
+                       list(combat_aliases.keys()))
         
         # Find similar commands (simple string matching)
         suggestions = []
