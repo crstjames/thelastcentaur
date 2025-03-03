@@ -786,14 +786,14 @@ export default function PlayPage() {
         }
 
         .stats-panel {
-          width: 33%;
+          width: 34%;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
           background-color: rgba(26, 26, 26, 0.9);
           border: 2px solid #996633;
           border-radius: 0.375rem;
-          display: flex;
-          flex-direction: column;
           overflow: hidden;
-          box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
         }
 
         .stats-header {
@@ -822,6 +822,30 @@ export default function PlayPage() {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
+        }
+
+        .vitals-container {
+          width: 100%;
+          margin-bottom: 1rem;
+        }
+
+        .map-inventory-container {
+          display: flex;
+          flex-direction: row;
+          gap: 1rem;
+          width: 100%;
+        }
+
+        .map-column {
+          width: 50%;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .inventory-column {
+          width: 50%;
+          display: flex;
+          flex-direction: column;
         }
 
         .character-section {
@@ -920,9 +944,11 @@ export default function PlayPage() {
         }
 
         .inventory-section {
+          padding-top: 0;
+          margin-top: 0;
         }
 
-        .inventory-items {
+        .inventory-list {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
@@ -941,10 +967,16 @@ export default function PlayPage() {
           font-family: "Press Start 2P", monospace;
         }
 
-        /* Map styles */
+        .inventory-empty {
+          text-align: center;
+          color: #d97706;
+          font-size: 0.7rem;
+        }
+
+        /* Map styles adjustment to align with inventory */
         .map-section {
-          border-top: 1px solid #4a3520;
-          padding-top: 1rem;
+          padding-top: 0;
+          margin-top: 0;
         }
 
         .game-map {
@@ -1124,71 +1156,83 @@ export default function PlayPage() {
 
               {/* Character stats panel - 1/3 width */}
               <div className="stats-panel">
-                {/* Stats header */}
                 <div className="stats-header">
                   <h2 className="stats-title">CENTAUR PRIME STATS</h2>
                 </div>
-
-                {/* Stats content */}
                 <div className="stats-content">
-                  <div className="stats-sections">
-                    {/* Vitals section */}
+                  {/* Vitals in a single column at the top */}
+                  <div className="vitals-container">
+                    {/* Character section hidden for now */}
+                    {/* <div className="character-section">
+                      <div className="character-info">
+                        <div className="character-name">CENTAUR PRIME</div>
+                        <div className="character-level">Level {playerStats.level}</div>
+                      </div>
+
+                      <div className="exp-container">
+                        <div className="stat-label-row">
+                          <span>EXP</span>
+                          <span>
+                            {playerStats.experience} / {playerStats.nextLevelExp}
+                          </span>
+                        </div>
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill exp-fill"
+                            style={{
+                              width: `${(playerStats.experience / playerStats.nextLevelExp) * 100}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      <div className="character-stats">
+                        <div className="stat-row">
+                          <span>GOLD:</span>
+                          <span>{playerStats.gold}</span>
+                        </div>
+                      </div>
+                    </div> */}
+
                     <div className="vitals-section">
                       <h3 className="section-title">VITALS</h3>
-
-                      {/* Health */}
-                      <div className="health-container">
-                        <div className="stat-label-row">
-                          <span>Health</span>
-                          <span>
-                            {playerStats.health} / {playerStats.maxHealth}
-                          </span>
-                        </div>
-                        <div className="progress-bar">
-                          <div
-                            className="progress-fill health-fill"
-                            style={{
-                              width: `${Math.min(100, (playerStats.health / playerStats.maxHealth) * 100)}%`,
-                            }}
-                          ></div>
-                        </div>
+                      <div className="stat-label-row">
+                        <span>Health</span>
+                        <span>
+                          {playerStats.health} / {playerStats.maxHealth}
+                        </span>
+                      </div>
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill health-fill"
+                          style={{
+                            width: `${(playerStats.health / playerStats.maxHealth) * 100}%`,
+                          }}
+                        ></div>
                       </div>
 
-                      {/* Stamina */}
-                      <div>
-                        <div className="stat-label-row">
-                          <span>Stamina</span>
-                          <span>
-                            {playerStats.stamina} / {playerStats.maxStamina}
-                          </span>
-                        </div>
-                        <div className="progress-bar">
-                          <div
-                            className="progress-fill stamina-fill"
-                            style={{
-                              width: `${Math.min(100, (playerStats.stamina / playerStats.maxStamina) * 100)}%`,
-                            }}
-                          ></div>
-                        </div>
+                      <div className="stat-label-row" style={{ marginTop: "0.5rem" }}>
+                        <span>Stamina</span>
+                        <span>
+                          {playerStats.stamina} / {playerStats.maxStamina}
+                        </span>
+                      </div>
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill stamina-fill"
+                          style={{
+                            width: `${(playerStats.stamina / playerStats.maxStamina) * 100}%`,
+                          }}
+                        ></div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Inventory section */}
-                    <div className="inventory-section">
-                      <h3 className="section-title">INVENTORY</h3>
-                      <div className="inventory-items">
-                        {playerStats.inventory
-                          .filter((item) => item !== "old_map")
-                          .map((item, index) => (
-                            <div key={index} className="inventory-item">
-                              <span>{item}</span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-
-                    {/* Map section - still show if player has the old_map but don't display the item */}
-                    {playerStats.inventory.includes("old_map") && (
+                  {/* Map and Inventory in two columns below vitals */}
+                  <div className="map-inventory-container">
+                    {/* Left column - Map */}
+                    <div className="map-column">
+                      {/* Map section - adjusting to align with inventory */}
                       <div className="map-section">
                         <h3 className="section-title">MAP</h3>
 
@@ -1273,35 +1317,34 @@ export default function PlayPage() {
                         <div className="map-legend">
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
                             <span>Current: ({playerStats.location})</span>
-                            <span>◆ = You</span>
-                          </div>
-                          <div
-                            style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              <div style={{ width: "10px", height: "10px", backgroundColor: "#228B22" }}></div>
-                              <span>Forest</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              <div style={{ width: "10px", height: "10px", backgroundColor: "#8B4513" }}></div>
-                              <span>Plains</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              <div style={{ width: "10px", height: "10px", backgroundColor: "#696969" }}></div>
-                              <span>Mountain</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              <div style={{ width: "10px", height: "10px", backgroundColor: "#4682B4" }}></div>
-                              <span>Water</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              <div style={{ width: "10px", height: "10px", backgroundColor: "#333" }}></div>
-                              <span>Unexplored</span>
-                            </div>
+                            <span>
+                              {/* Map key using unicode markers */}
+                              <span style={{ color: "#228B22" }}>■</span> Forest{" "}
+                              <span style={{ color: "#8B4513" }}>■</span> Plains{" "}
+                              <span style={{ color: "#696969" }}>■</span> Mountain{" "}
+                              <span style={{ color: "#4682B4" }}>■</span> Water
+                            </span>
                           </div>
                         </div>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Right column - Inventory */}
+                    <div className="inventory-column">
+                      <div className="inventory-section">
+                        <h3 className="section-title">INVENTORY</h3>
+                        <div className="inventory-list">
+                          {playerStats.inventory
+                            .filter((item) => item !== "old_map")
+                            .map((item, index) => (
+                              <div key={index} className="inventory-item">
+                                {item.replace(/_/g, " ")}
+                              </div>
+                            ))}
+                          {playerStats.inventory.length === 0 && <div className="inventory-empty">No items</div>}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -89,10 +89,10 @@ WEATHER_EFFECTS = {
 
 # Map Layout Definition
 GAME_MAP = {
-    # Starting Area
+    # Starting Area - Now at (0,0) for bottom-left starting position
     StoryArea.AWAKENING_WOODS: AreaNode(
         area=StoryArea.AWAKENING_WOODS,
-        position=(5, 0),
+        position=(0, 0),  # Changed from (5, 0) to (0, 0)
         connections=[
             AreaConnection(
                 from_area=StoryArea.AWAKENING_WOODS,
@@ -108,355 +108,449 @@ GAME_MAP = {
                 requirements=[],
                 description="A small path leads to a warrior's camp."
             ),
-            AreaConnection(
-                from_area=StoryArea.AWAKENING_WOODS,
-                to_area="druids_grove",
-                direction=Direction.WEST,
-                requirements=[],
-                description="A mystical path leads to a secluded grove."
-            )
+            # Removed south and west connections as this is now the bottom-left starting position
         ],
         terrain_type=TerrainType.FOREST,
-        base_description="Ancient woods where you first awakened, stripped of your power.",
+        base_description="You stand in a ancient forest clearing. The air is thick with magic and mystery.",
         requirements=[],
-        enemies=["wolf_pack", "corrupted_sprite"],
-        items=["basic_supplies", "old_map"],
-        weather_effects=["spirit_winds"]
+        enemies=["forest_guardian"],
+        items=["rusty_sword", "leather_pouch"]
     ),
-    
-    # Hermit Druid's Grove
-    "druids_grove": AreaNode(
-        area="druids_grove",
-        position=(4, 0),
-        connections=[
-            AreaConnection(
-                from_area="druids_grove",
-                to_area=StoryArea.AWAKENING_WOODS,
-                direction=Direction.EAST,
-                requirements=[],
-                description="The path leads back to the ancient woods."
-            )
-        ],
-        terrain_type=TerrainType.FOREST,
-        base_description="A peaceful grove where the Hermit Druid contemplates the mysteries of the past.",
-        requirements=[],
-        enemies=[],
-        items=["crystal_focus", "ancient_scroll"],
-        weather_effects=["spirit_winds"],
-        npcs=["hermit_druid"]
-    ),
-    
-    # Fallen Warrior's Camp
+
+    # Warrior Path area to the east at (1, 0)
     "warriors_camp": AreaNode(
         area="warriors_camp",
-        position=(6, 0),
+        position=(1, 0),
         connections=[
             AreaConnection(
                 from_area="warriors_camp",
                 to_area=StoryArea.AWAKENING_WOODS,
                 direction=Direction.WEST,
                 requirements=[],
-                description="The path leads back to the ancient woods."
-            )
+                description="The path leads back to the forest clearing."
+            ),
+            AreaConnection(
+                from_area="warriors_camp",
+                to_area="mountain_base",
+                direction=Direction.NORTH,
+                requirements=[],
+                description="A steep trail winds up into the mountains."
+            ),
+            AreaConnection(
+                from_area="warriors_camp",
+                to_area="training_grounds",
+                direction=Direction.EAST,
+                requirements=[],
+                description="You see combat training dummies in the distance."
+            ),
         ],
         terrain_type=TerrainType.CLEARING,
-        base_description="A small camp where the Fallen Warrior resides, surrounded by old battle standards.",
+        base_description="A small encampment with training equipment and weapon racks. Warriors hone their skills here.",
         requirements=[],
-        enemies=[],
-        items=["warrior_map"],
-        weather_effects=["spirit_winds"],
-        npcs=["fallen_warrior"]
+        enemies=["training_dummy"],
+        items=["basic_shield"]
     ),
-    
-    # New Minor Area: Twilight Glade
-    "twilight_glade": AreaNode(
-        area="twilight_glade",
-        position=(4, 3),
-        connections=[
-            AreaConnection(
-                from_area="twilight_glade",
-                to_area=StoryArea.FORGOTTEN_GROVE,
-                direction=Direction.NORTH,
-                requirements=["shadow_key"],
-                description="Shadows coalesce into a hidden path.",
-                shortcut=True
-            )
-        ],
-        terrain_type=TerrainType.FOREST,
-        base_description="A small clearing where twilight seems to linger eternally.",
-        requirements=[],
-        enemies=["shadow_hound"],
-        items=["shadow_essence_fragment"],
-        hazards=[HAZARD_TYPES["shadow_veil"]],
-        weather_effects=["shadow_mist"],
-        is_minor_area=True
-    ),
-    
-    # New Minor Area: Warrior's Rest
-    "warriors_rest": AreaNode(
-        area="warriors_rest",
-        position=(6, 3),
-        connections=[
-            AreaConnection(
-                from_area="warriors_rest",
-                to_area=StoryArea.ANCIENT_RUINS,
-                direction=Direction.EAST,
-                requirements=["warrior_token"],
-                description="A hidden path marked by ancient battle standards.",
-                shortcut=True
-            )
-        ],
-        terrain_type=TerrainType.RUINS,
-        base_description="A sheltered hollow where ancient warriors once made camp.",
-        requirements=[],
-        enemies=["spectral_sentinel", "corrupted_centaur_spirit"],
-        items=["warrior_token", "ancient_battle_plan"],
-        hazards=[HAZARD_TYPES["spectral_winds"]],
-        weather_effects=["spirit_winds"],
-        is_minor_area=True
-    ),
-    
-    # New Minor Area: Crystal Outpost
-    "crystal_outpost": AreaNode(
-        area="crystal_outpost",
-        position=(2, 5),
-        connections=[
-            AreaConnection(
-                from_area="crystal_outpost",
-                to_area=StoryArea.CRYSTAL_CAVES,
-                direction=Direction.NORTH,
-                requirements=["crystal_key"],
-                description="A crystalline archway pulses with stored magical energy.",
-                shortcut=True
-            )
-        ],
-        terrain_type=TerrainType.MOUNTAIN,
-        base_description="A former research post of the centaur mystics, now overrun by crystal formations.",
-        requirements=["crystal_focus"],
-        enemies=["crystal_golem", "mana_wraith"],
-        items=["crystal_key", "mystic_research_notes"],
-        hazards=[HAZARD_TYPES["crystal_storm"]],
-        weather_effects=["crystal_rain"],
-        is_minor_area=True
-    ),
-    
-    # Central Hub Area
+
+    # Trials path to the north at (0, 1)
     StoryArea.TRIALS_PATH: AreaNode(
         area=StoryArea.TRIALS_PATH,
-        position=(5, 2),
+        position=(0, 1),  # Updated from original position
         connections=[
-            AreaConnection(
-                from_area=StoryArea.TRIALS_PATH,
-                to_area=StoryArea.MYSTIC_MOUNTAINS,
-                direction=Direction.WEST,
-                requirements=["crystal_focus"],
-                description="A path spirals up into the misty mountains, crackling with magical energy."
-            ),
-            AreaConnection(
-                from_area=StoryArea.TRIALS_PATH,
-                to_area=StoryArea.ANCIENT_RUINS,
-                direction=Direction.EAST,
-                requirements=["warrior_map"],
-                description="Ancient stone steps lead to crumbling ruins of a forgotten stronghold."
-            ),
-            AreaConnection(
-                from_area=StoryArea.TRIALS_PATH,
-                to_area="twilight_glade",
-                direction=Direction.NORTH,
-                requirements=["shadow_key"],
-                description="A shadowy path leads to a mysterious glade."
-            ),
             AreaConnection(
                 from_area=StoryArea.TRIALS_PATH,
                 to_area=StoryArea.AWAKENING_WOODS,
                 direction=Direction.SOUTH,
                 requirements=[],
-                description="The path leads back to the awakening woods where your journey began."
-            )
-        ],
-        terrain_type=TerrainType.CLEARING,
-        base_description="A crossroads where the three paths diverge, each leading to a different destiny.",
-        requirements=[],
-        enemies=["wandering_spirit", "lost_warrior"],
-        items=["path_marker", "ancient_inscription"],
-        npcs=["shadow_scout"]
-    ),
-    
-    # Mystic Path Areas
-    StoryArea.MYSTIC_MOUNTAINS: AreaNode(
-        area=StoryArea.MYSTIC_MOUNTAINS,
-        position=(3, 4),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.MYSTIC_MOUNTAINS,
-                to_area=StoryArea.CRYSTAL_CAVES,
-                direction=Direction.NORTH,
-                requirements=["crystal_focus"],
-                description="Crystal formations mark the entrance to deep, resonating caves.",
-                hazards=[HAZARD_TYPES["crystal_storm"]]
+                description="The path leads back to the forest clearing."
             ),
             AreaConnection(
-                from_area=StoryArea.MYSTIC_MOUNTAINS,
-                to_area="crystal_outpost",
-                direction=Direction.WEST,
-                requirements=["crystal_focus"],
-                description="A narrow path winds down to a crystal-encrusted structure.",
-                shortcut=True
-            )
-        ],
-        terrain_type=TerrainType.MOUNTAIN,
-        base_description="Jagged peaks pulse with ancient power, their surfaces etched with glowing runes.",
-        requirements=["crystal_focus"],
-        enemies=["mountain_guardian", "storm_elemental", "crystal_golem"],
-        items=["crystal_shard", "runic_inscription"],
-        hazards=[HAZARD_TYPES["magic_barrier"]],
-        weather_effects=["magical_storm", "crystal_rain"]
-    ),
-    
-    # Crystal Caves Area
-    StoryArea.CRYSTAL_CAVES: AreaNode(
-        area=StoryArea.CRYSTAL_CAVES,
-        position=(3, 6),
-        connections=[
+                from_area=StoryArea.TRIALS_PATH,
+                to_area="mountain_base",
+                direction=Direction.EAST,
+                requirements=[],
+                description="A path winds toward the base of the mountains."
+            ),
             AreaConnection(
-                from_area=StoryArea.CRYSTAL_CAVES,
+                from_area=StoryArea.TRIALS_PATH,
                 to_area=StoryArea.SHADOW_DOMAIN,
                 direction=Direction.NORTH,
-                requirements=["crystal_key", "guardian_essence"],
-                description="The crystal-lined tunnel leads to the corrupted domain.",
-                hazards=[HAZARD_TYPES["crystal_storm"], HAZARD_TYPES["magic_barrier"]]
+                requirements=["shadow_key"],
+                description="A shimmering portal leads to a shadowy realm."
+            ),
+        ],
+        terrain_type=TerrainType.FOREST,
+        base_description="Ancient stone markers line this path, each inscribed with forgotten runes.",
+        requirements=[],
+        enemies=["forest_wolf"],
+        items=["healing_herb"]
+    ),
+
+    # Mountain Base area at (1, 1) - connecting warrior and mystic paths
+    "mountain_base": AreaNode(
+        area="mountain_base",
+        position=(1, 1),
+        connections=[
+            AreaConnection(
+                from_area="mountain_base",
+                to_area="warriors_camp",
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="The path leads down to the warrior camp."
             ),
             AreaConnection(
-                from_area=StoryArea.CRYSTAL_CAVES,
+                from_area="mountain_base",
+                to_area=StoryArea.TRIALS_PATH,
+                direction=Direction.WEST,
+                requirements=[],
+                description="A path leads toward ancient stone markers."
+            ),
+            AreaConnection(
+                from_area="mountain_base",
+                to_area="training_grounds",
+                direction=Direction.EAST,
+                requirements=[],
+                description="The path continues eastward to training grounds."
+            ),
+            AreaConnection(
+                from_area="mountain_base",
+                to_area=StoryArea.MYSTIC_MOUNTAINS,
+                direction=Direction.NORTH,
+                requirements=[],
+                description="A steep trail winds higher into the mountains."
+            ),
+        ],
+        terrain_type=TerrainType.MOUNTAIN,
+        base_description="The terrain becomes rocky as you approach the mountain base. A cool breeze flows down from the peaks.",
+        requirements=[],
+        enemies=["mountain_goat"],
+        items=["climbing_rope"]
+    ),
+
+    # Training grounds at (2, 0) - deeper into warrior path
+    "training_grounds": AreaNode(
+        area="training_grounds",
+        position=(2, 0),
+        connections=[
+            AreaConnection(
+                from_area="training_grounds",
+                to_area="warriors_camp",
+                direction=Direction.WEST,
+                requirements=[],
+                description="The path leads back to the warrior camp."
+            ),
+            AreaConnection(
+                from_area="training_grounds",
+                to_area="mountain_base",
+                direction=Direction.NORTH,
+                requirements=[],
+                description="A path leads to the mountain base."
+            ),
+            AreaConnection(
+                from_area="training_grounds",
+                to_area="honor_shrine",
+                direction=Direction.EAST,
+                requirements=["warrior_token"],
+                description="A path to a sacred shrine is visible eastward."
+            ),
+        ],
+        terrain_type=TerrainType.CLEARING,
+        base_description="Advanced training equipment and weapon racks. The ground is packed from countless sparring matches.",
+        requirements=[],
+        enemies=["veteran_warrior"],
+        items=["steel_sword"]
+    ),
+
+    # Stealth Path - Shadow Domain at (0, 2)
+    StoryArea.SHADOW_DOMAIN: AreaNode(
+        area=StoryArea.SHADOW_DOMAIN,
+        position=(0, 2),
+        connections=[
+            AreaConnection(
+                from_area=StoryArea.SHADOW_DOMAIN,
+                to_area=StoryArea.TRIALS_PATH,
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="The shimmering portal leads back to the trials path."
+            ),
+            AreaConnection(
+                from_area=StoryArea.SHADOW_DOMAIN,
+                to_area="shadow_training",
+                direction=Direction.EAST,
+                requirements=[],
+                description="A path of shadows extends eastward."
+            ),
+            AreaConnection(
+                from_area=StoryArea.SHADOW_DOMAIN,
+                to_area="forgotten_temple",
+                direction=Direction.NORTH,
+                requirements=["shadow_cloak"],
+                description="A nearly invisible path leads to a forgotten temple."
+            ),
+        ],
+        terrain_type=TerrainType.RUINS,
+        base_description="Shadows move with a life of their own here. Light seems to be absorbed rather than reflected.",
+        requirements=["shadow_key"],
+        enemies=["shadow_stalker"],
+        items=["phantom_dagger"]
+    ),
+
+    # Mystic Mountains at (1, 2) - start of mystic path
+    StoryArea.MYSTIC_MOUNTAINS: AreaNode(
+        area=StoryArea.MYSTIC_MOUNTAINS,
+        position=(1, 2),
+        connections=[
+            AreaConnection(
+                from_area=StoryArea.MYSTIC_MOUNTAINS,
+                to_area="mountain_base",
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="The path leads back down the mountain."
+            ),
+            AreaConnection(
+                from_area=StoryArea.MYSTIC_MOUNTAINS,
+                to_area="shadow_training",
+                direction=Direction.WEST,
+                requirements=["shadow_key"],
+                description="A nearly invisible path leads westward."
+            ),
+            AreaConnection(
+                from_area=StoryArea.MYSTIC_MOUNTAINS,
+                to_area="crystal_pond",
+                direction=Direction.EAST,
+                requirements=[],
+                description="A trail leads toward a shimmering glow."
+            ),
+            AreaConnection(
+                from_area=StoryArea.MYSTIC_MOUNTAINS,
+                to_area=StoryArea.ENCHANTED_VALLEY,
+                direction=Direction.NORTH,
+                requirements=[],
+                description="The path continues upward, entering a hidden valley."
+            ),
+        ],
+        terrain_type=TerrainType.MOUNTAIN,
+        base_description="The air thins as you climb. Strange energies dance at the edge of perception.",
+        requirements=[],
+        enemies=["mountain_spirit"],
+        items=["crystal_focus"]
+    ),
+
+    # Shadow training at (0, 3) - deeper into stealth path
+    "shadow_training": AreaNode(
+        area="shadow_training",
+        position=(0, 3),
+        connections=[
+            AreaConnection(
+                from_area="shadow_training",
+                to_area=StoryArea.SHADOW_DOMAIN,
+                direction=Direction.WEST,
+                requirements=[],
+                description="The shadow path leads back to the domain entrance."
+            ),
+            AreaConnection(
+                from_area="shadow_training",
+                to_area=StoryArea.MYSTIC_MOUNTAINS,
+                direction=Direction.EAST,
+                requirements=[],
+                description="A faint trail leads toward the mountain."
+            ),
+            AreaConnection(
+                from_area="shadow_training",
+                to_area="forgotten_temple",
+                direction=Direction.NORTH,
+                requirements=["stealth_token"],
+                description="A concealed passage leads to an ancient temple."
+            ),
+        ],
+        terrain_type=TerrainType.RUINS,
+        base_description="Training dummies made of shadow stand motionless, waiting for practice.",
+        requirements=[],
+        enemies=["shadow_initiate"],
+        items=["smoke_bomb", "stealth_cloak"]
+    ),
+
+    # Crystal pond at (2, 2) - deeper into mystic path
+    "crystal_pond": AreaNode(
+        area="crystal_pond",
+        position=(2, 2),
+        connections=[
+            AreaConnection(
+                from_area="crystal_pond",
+                to_area=StoryArea.MYSTIC_MOUNTAINS,
+                direction=Direction.WEST,
+                requirements=[],
+                description="The path leads back to the mountains."
+            ),
+            AreaConnection(
+                from_area="crystal_pond",
+                to_area=StoryArea.ENCHANTED_VALLEY,
+                direction=Direction.NORTH,
+                requirements=[],
+                description="A serene path leads upward into a valley."
+            ),
+            AreaConnection(
+                from_area="crystal_pond",
+                to_area="meditation_circle",
+                direction=Direction.EAST,
+                requirements=["mystic_token"],
+                description="A path of glowing stones leads to a meditation circle."
+            ),
+        ],
+        terrain_type=TerrainType.VALLEY,
+        base_description="A small pond whose waters glow with inner light. Crystals grow from the surrounding rocks.",
+        requirements=[],
+        enemies=["crystal_elemental"],
+        items=["mana_crystal", "mystic_herbs"]
+    ),
+
+    # Adding the rest of the important areas to complete the paths
+
+    # Honor Shrine (3, 0) - warrior path culmination
+    "honor_shrine": AreaNode(
+        area="honor_shrine",
+        position=(3, 0),
+        connections=[
+            AreaConnection(
+                from_area="honor_shrine",
+                to_area="training_grounds",
+                direction=Direction.WEST,
+                requirements=[],
+                description="The path leads back to the training grounds."
+            ),
+        ],
+        terrain_type=TerrainType.RUINS,
+        base_description="An ancient shrine dedicated to honor and courage. Weapons of legendary warriors decorate the walls.",
+        requirements=["warrior_token"],
+        enemies=["honor_guardian"],
+        items=["warrior_talisman", "ancient_sword"]
+    ),
+
+    # Forgotten Temple (0, 4) - stealth path culmination
+    "forgotten_temple": AreaNode(
+        area="forgotten_temple",
+        position=(0, 4),
+        connections=[
+            AreaConnection(
+                from_area="forgotten_temple",
+                to_area="shadow_training",
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="The concealed passage leads back to the training area."
+            ),
+            AreaConnection(
+                from_area="forgotten_temple",
+                to_area=StoryArea.SHADOW_DOMAIN,
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="A nearly invisible path leads back to the shadow domain."
+            ),
+        ],
+        terrain_type=TerrainType.RUINS,
+        base_description="A temple forgotten by all but the shadows. Ancient assassins once trained here.",
+        requirements=["stealth_token", "shadow_cloak"],
+        enemies=["shadow_master"],
+        items=["shadow_blade", "stealth_talisman"]
+    ),
+
+    # Meditation Circle (3, 2) - mystic path culmination
+    "meditation_circle": AreaNode(
+        area="meditation_circle",
+        position=(3, 2),
+        connections=[
+            AreaConnection(
+                from_area="meditation_circle",
+                to_area="crystal_pond",
+                direction=Direction.WEST,
+                requirements=[],
+                description="The path of glowing stones leads back to the crystal pond."
+            ),
+        ],
+        terrain_type=TerrainType.VALLEY,
+        base_description="A perfect circle of ancient stones, humming with magical energy. The air itself seems to enhance focus.",
+        requirements=["mystic_token"],
+        enemies=["spirit_guide"],
+        items=["mystic_talisman", "spell_focus"]
+    ),
+
+    # Enchanted Valley (1, 3) - high-level mystic area
+    StoryArea.ENCHANTED_VALLEY: AreaNode(
+        area=StoryArea.ENCHANTED_VALLEY,
+        position=(1, 3),
+        connections=[
+            AreaConnection(
+                from_area=StoryArea.ENCHANTED_VALLEY,
                 to_area=StoryArea.MYSTIC_MOUNTAINS,
                 direction=Direction.SOUTH,
                 requirements=[],
-                description="The path leads back to the mystic mountains."
-            )
-        ],
-        terrain_type=TerrainType.MOUNTAIN,
-        base_description="A vast network of crystal-lined caves, humming with ancient magical frequencies.",
-        requirements=["crystal_key"],
-        enemies=["crystal_guardian", "resonance_spirit"],
-        items=["mystic_crystal", "resonance_key", "guardian_essence"],
-        hazards=[HAZARD_TYPES["crystal_storm"]],
-        weather_effects=["crystal_rain", "magical_storm"]
-    ),
-    
-    # Warrior Path Areas
-    StoryArea.ANCIENT_RUINS: AreaNode(
-        area=StoryArea.ANCIENT_RUINS,
-        position=(7, 4),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.ANCIENT_RUINS,
-                to_area=StoryArea.ENCHANTED_VALLEY,
-                direction=Direction.NORTH,
-                requirements=["war_horn"],
-                description="The path to the valley is guarded by ancient spirits."
+                description="The path leads back down the mountain."
             ),
             AreaConnection(
-                from_area=StoryArea.ANCIENT_RUINS,
-                to_area="warriors_armory",
-                direction=Direction.EAST,
-                requirements=["ancient_sword"],
-                description="A hidden chamber that holds ancient weapons of war."
-            )
+                from_area=StoryArea.ENCHANTED_VALLEY,
+                to_area="crystal_pond",
+                direction=Direction.SOUTH,
+                requirements=[],
+                description="A path leads down to a glowing pond."
+            ),
+            AreaConnection(
+                from_area=StoryArea.ENCHANTED_VALLEY,
+                to_area=StoryArea.CRYSTAL_CAVES,
+                direction=Direction.NORTH,
+                requirements=["crystal_key"],
+                description="A hidden entrance to mysterious caves is visible."
+            ),
         ],
-        terrain_type=TerrainType.RUINS,
-        base_description="Crumbling ruins of a mighty centaur stronghold, echoing with memories of battle.",
-        requirements=["warrior_map"],
-        enemies=["stone_guardian", "phantom_warrior"],
-        items=["ancient_sword", "battle_relic", "warrior_inscription"]
+        terrain_type=TerrainType.VALLEY,
+        base_description="A valley hidden from the world, where magic flows freely and strange plants grow.",
+        requirements=[],
+        enemies=["fae_guardian"],
+        items=["mystic_token", "crystal_key"]
     ),
-    
-    # New Minor Area: Warrior's Armory
-    "warriors_armory": AreaNode(
-        area="warriors_armory",
-        position=(8, 5),
+
+    # Crystal Caves (1, 4) - end game area
+    StoryArea.CRYSTAL_CAVES: AreaNode(
+        area=StoryArea.CRYSTAL_CAVES,
+        position=(1, 4),
         connections=[
             AreaConnection(
-                from_area="warriors_armory",
-                to_area=StoryArea.ANCIENT_RUINS,
-                direction=Direction.WEST,
+                from_area=StoryArea.CRYSTAL_CAVES,
+                to_area=StoryArea.ENCHANTED_VALLEY,
+                direction=Direction.SOUTH,
                 requirements=[],
-                description="The path leads back to the main ruins."
-            )
+                description="The cave exit leads back to the enchanted valley."
+            ),
+            AreaConnection(
+                from_area=StoryArea.CRYSTAL_CAVES,
+                to_area=StoryArea.FORGOTTEN_GROVE,
+                direction=Direction.EAST,
+                requirements=["all_talismans"],
+                description="A crystal arch forms a portal to a mysterious grove."
+            ),
         ],
-        terrain_type=TerrainType.RUINS,
-        base_description="An ancient armory where the mightiest weapons of the centaur wars were kept.",
-        requirements=["ancient_sword"],
-        enemies=[],
-        items=["war_horn"],
-        weather_effects=["spirit_winds"]
+        terrain_type=TerrainType.CAVE,
+        base_description="Massive crystals grow from floor to ceiling, humming with ancient power.",
+        requirements=["crystal_key"],
+        enemies=["crystal_guardian"],
+        items=["power_crystal"]
     ),
-    
-    # Stealth Path Areas
+
+    # Forgotten Grove (2, 4) - final area
     StoryArea.FORGOTTEN_GROVE: AreaNode(
         area=StoryArea.FORGOTTEN_GROVE,
-        position=(5, 5),
+        position=(2, 4),
         connections=[
             AreaConnection(
                 from_area=StoryArea.FORGOTTEN_GROVE,
-                to_area=StoryArea.SHADOW_DOMAIN,
-                direction=Direction.NORTH,
-                requirements=["stealth_cloak", "phantom_dagger", "shadow_essence", "shadow_essence_fragment"],
-                description="The grove's shadows deepen, leading to the domain of your rival. With both shadow essences combined, you can slip through the veil of reality itself.",
-                shortcut=True
-            )
+                to_area=StoryArea.CRYSTAL_CAVES,
+                direction=Direction.WEST,
+                requirements=[],
+                description="The crystal portal leads back to the caves."
+            ),
         ],
         terrain_type=TerrainType.FOREST,
-        base_description="A mysterious grove where shadows move with purpose and secrets hide in plain sight.",
-        requirements=["shadow_key"],
-        enemies=["shadow_stalker", "phantom_assassin"],
-        items=["stealth_cloak", "phantom_dagger", "shadow_essence"],
-        weather_effects=["shadow_mist"]
-    ),
-    
-    # Final Area
-    StoryArea.SHADOW_DOMAIN: AreaNode(
-        area=StoryArea.SHADOW_DOMAIN,
-        position=(5, 9),
-        connections=[],
-        terrain_type=TerrainType.RUINS,
-        base_description="The corrupted throne of your rival, where reality itself bends to their will.",
-        requirements=[],
-        enemies=["shadow_guardian", "second_centaur", "shadow_knight", "void_walker"],
-        items=["crown_of_dominion"],
-        hazards=[
-            HAZARD_TYPES["magic_barrier"],
-            HAZARD_TYPES["shadow_veil"],
-            HAZARD_TYPES["spectral_winds"]
-        ],
-        weather_effects=["magical_storm", "shadow_mist", "spirit_winds"]
-    ),
-    
-    # Enchanted Valley Area
-    StoryArea.ENCHANTED_VALLEY: AreaNode(
-        area=StoryArea.ENCHANTED_VALLEY,
-        position=(7, 5),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.ENCHANTED_VALLEY,
-                to_area=StoryArea.SHADOW_DOMAIN,
-                direction=Direction.NORTH,
-                requirements=["guardian_essence"],
-                description="The path to the Shadow Domain lies ahead, guarded by the Shadow Guardian."
-            ),
-            AreaConnection(
-                from_area=StoryArea.ENCHANTED_VALLEY,
-                to_area=StoryArea.ANCIENT_RUINS,
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The ancient ruins lie to the south."
-            )
-        ],
-        terrain_type=TerrainType.VALLEY,
-        base_description="A valley of ancient battlefields, where the spirits of fallen warriors still linger.",
-        requirements=["war_horn"],
-        enemies=["shadow_guardian"],
-        items=["guardian_essence"],
-        weather_effects=["spirit_winds"]
+        base_description="The legendary grove where the last centaurs made their final stand.",
+        requirements=["all_talismans"],
+        enemies=["ancient_guardian"],
+        items=["centaur_relic"]
     ),
 }
 
@@ -471,7 +565,7 @@ class MapSystem:
         
         # Initialize starting area with proper Enemy objects
         starting_node = GAME_MAP[StoryArea.AWAKENING_WOODS]
-        starting_node.enemies = self._create_enemies(["wolf_pack", "shadow_stalker"])
+        starting_node.enemies = self._create_enemies(["forest_guardian"])
         
         # Fix the Phantom Assassin location
         self._fix_phantom_assassin_location()
@@ -484,81 +578,17 @@ class MapSystem:
             self.position_to_area[area_node.position] = area_node
     
     def _fix_phantom_assassin_location(self):
-        """
-        Ensures the Phantom Assassin enemy is correctly placed at positions defined
-        in the game design and descriptions.
-        
-        This addresses discrepancies between the game description and the actual
-        game data, ensuring players can interact with all described enemies.
-        
-        Places the Phantom Assassin in:
-        1. Position (7, 6) as specified in WORLD_ENEMIES
-        2. The Forgotten Grove at (5, 5) as indicated in the map data
-        """
-        from .world_design import WORLD_ENEMIES
-        
-        # Get the phantom_assassin data from WORLD_ENEMIES
-        phantom_data = next((e for e in WORLD_ENEMIES if e["id"] == "phantom_assassin"), None)
-        if not phantom_data:
-            return  # Can't proceed without phantom data
-        
-        # Create a phantom assassin Enemy object to add to the nodes
-        phantom = Enemy(
-            name=phantom_data["name"],
-            description=phantom_data["description"],
-            health=phantom_data["health"],
-            damage=phantom_data["damage"],
-            drops=phantom_data.get("drops", []),
-            requirements=phantom_data.get("requirements", [])
-        )
-        
-        # Locations to ensure phantom assassin is present
-        target_positions = [(7, 6), (5, 5)]
-        
-        for position in target_positions:
-            # Find the node at this position
-            target_node = None
-            for area, node in GAME_MAP.items():
-                if node.position == position:
-                    target_node = node
-                    break
-                    
-            if target_node:
-                # Initialize the enemies list if it doesn't exist
-                if not hasattr(target_node, 'enemies') or target_node.enemies is None:
-                    target_node.enemies = []
-                
-                # Convert the list to Enemy objects if it contains strings
-                if target_node.enemies and isinstance(target_node.enemies[0], str):
-                    target_node.enemies = self._create_enemies(target_node.enemies)
-                    
-                # Check if phantom_assassin is already in the list
-                phantom_exists = False
-                if target_node.enemies:
-                    for enemy in target_node.enemies:
-                        if isinstance(enemy, Enemy) and enemy.name.lower() == "phantom assassin":
-                            phantom_exists = True
-                            break
-                        elif isinstance(enemy, dict) and enemy.get("name", "").lower() == "phantom assassin":
-                            phantom_exists = True
-                            break
-                        elif isinstance(enemy, str) and enemy == "phantom_assassin":
-                            phantom_exists = True
-                            break
-                
-                # Add phantom_assassin if not already present
-                if not phantom_exists:
-                    # Create a new instance for each node to avoid reference issues
-                    new_phantom = Enemy(
-                        name=phantom_data["name"],
-                        description=phantom_data["description"],
-                        health=phantom_data["health"],
-                        damage=phantom_data["damage"],
-                        drops=phantom_data.get("drops", []),
-                        requirements=phantom_data.get("requirements", [])
-                    )
-                    target_node.enemies.append(new_phantom)
-                    
+        """Fix the phantom assassin location to ensure it's at the shadow training area."""
+        # Find the shadow training area
+        shadow_training = self.get_area_node("shadow_training")
+        if shadow_training:
+            # Add phantom assassin to shadow training area
+            if "phantom_assassin" not in shadow_training.enemies:
+                shadow_training.enemies.append("phantom_assassin")
+                print("Added phantom_assassin to shadow_training area")
+        else:
+            print("Warning: shadow_training area not found")
+    
     def _create_enemies(self, enemy_ids: List[str]) -> List[Enemy]:
         """Convert enemy IDs to Enemy objects based on current time."""
         enemies = []
@@ -743,14 +773,16 @@ class MapSystem:
                     if "The land lies under a blanket of stars" not in node.base_description:
                         node.base_description += " The land lies under a blanket of stars."
     
+    def get_position_for_area(self, area: StoryArea) -> Tuple[int, int]:
+        """Get the position coordinates for an area."""
+        node = self.get_area_node(area)
+        if node:
+            return node.position
+        return (0, 0)  # Default to starting position
+                
     def get_tile_at_position(self, position: Tuple[int, int]) -> Optional[AreaNode]:
-        """
-        Get the area node at a specific position.
-        
-        Args:
-            position: The (x, y) position to check
-            
-        Returns:
-            The AreaNode at the position, or None if no area exists there
-        """
-        return self.position_to_area.get(position) 
+        """Get the area node at a specific position."""
+        for area, node in GAME_MAP.items():
+            if node.position == position:
+                return node
+        return None 

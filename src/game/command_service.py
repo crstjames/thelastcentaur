@@ -46,6 +46,18 @@ class CommandService:
             print(f"Combat alias detected: {command_parts[0]} -> attack")
             command_text = "attack " + " ".join(command_parts[1:])
         
+        # Handle direction shortcuts
+        direction_shortcuts = {
+            "n": "north",
+            "s": "south",
+            "e": "east",
+            "w": "west",
+        }
+        if command_parts and command_parts[0] in direction_shortcuts:
+            # Convert to full direction command
+            print(f"Direction shortcut detected: {command_parts[0]} -> {direction_shortcuts[command_parts[0]]}")
+            command_text = direction_shortcuts[command_parts[0]]
+        
         # Use the command parser for regular commands
         print(f"Parsing command: {command_text}")
         command = self.command_parser.parse_command(command_text)
@@ -64,6 +76,10 @@ class CommandService:
         
         # Enhance the result with context-aware information
         enhanced_result = await self._enhance_result(result, command, game_id)
+        
+        # Update player position if this was a movement command
+        if command.type == CommandType.MOVE:
+            await self._update_player_position(command, game_id)
         
         return enhanced_result
     
@@ -420,4 +436,50 @@ G - Grass
         # Combine map and legend
         map_display = "\n".join(map_grid) + legend
         
-        return f"```\n{map_display}\n```" 
+        return f"```\n{map_display}\n```"
+    
+    async def _update_player_position(self, command, game_id: str):
+        """Update the player's position after movement."""
+        try:
+            # Get the current game state
+            async with self.db_session.begin():
+                game_query = select(GameInstance).where(GameInstance.id == game_id)
+                game_result = await self.db_session.execute(game_query)
+                game = game_result.scalar_one_or_none()
+                
+                if not game:
+                    print(f"Game not found: {game_id}")
+                    return
+                
+                # Get the current position
+                current_position = game.player_state.get("location", "0,0")
+                x, y = map(int, current_position.split(","))
+                
+                # Update position based on direction
+                direction = command.args.get("direction", "").lower()
+                new_x, new_y = x, y
+                
+                if direction == "north":
+                    new_y += 1
+                elif direction == "south":
+                    new_y -= 1
+                elif direction == "east":
+                    new_x += 1
+                elif direction == "west":
+                    new_x -= 1
+                
+                # Ensure we don't move out of bounds
+                new_x = max(0, min(9, new_x))
+                new_y = max(0, min(9, new_y))
+                
+                # Update the player's position
+                new_position = f"{new_x},{new_y}"
+                game.player_state["location"] = new_position
+                
+                # Update the game state
+                await self.db_session.commit()
+                print(f"Updated player position to {new_position}")
+                
+        except Exception as e:
+            print(f"Error updating player position: {e}")
+            await self.db_session.rollback() 
