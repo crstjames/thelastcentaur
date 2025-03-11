@@ -1,28 +1,73 @@
 #!/usr/bin/env python3
 """
-Run all API tests for The Last Centaur.
+API Test Runner for The Last Centaur.
 
-This script is a convenience wrapper around api_tests.test_runner.
+This script runs the API tests that verify the game works through the API without LLM dependencies.
 """
 
 import os
 import sys
-import asyncio
+import argparse
+import subprocess
+import logging
 
-# Add the current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("api_test_runner")
 
-# Run the tests
-if __name__ == "__main__":
+def main():
+    """Run the specified API tests."""
+    parser = argparse.ArgumentParser(description="Run API tests")
+    parser.add_argument(
+        "--test", 
+        choices=["movement", "combat", "puzzle", "simple", "all"],
+        default="simple",
+        help="Which API test to run: movement, combat, puzzle, simple (mocked), or all tests"
+    )
+    
+    args = parser.parse_args()
+    
+    # Build pytest command
+    pytest_cmd = ["python", "-m", "pytest", "-xvs"]
+    
+    # Determine which test file to run
+    if args.test == "all":
+        # Run all API tests
+        pytest_cmd.append("tests/test_api_simple.py")
+        pytest_cmd.append("tests/test_api_movement.py")
+        pytest_cmd.append("tests/test_api_combat_system.py")
+        pytest_cmd.append("tests/test_api_puzzle_system.py")
+    elif args.test == "movement":
+        # Run movement API tests
+        pytest_cmd.append("tests/test_api_movement.py")
+    elif args.test == "combat":
+        # Run combat API tests
+        pytest_cmd.append("tests/test_api_combat_system.py")
+    elif args.test == "puzzle":
+        # Run puzzle API tests
+        pytest_cmd.append("tests/test_api_puzzle_system.py")
+    elif args.test == "simple":
+        # Run simplified API tests
+        pytest_cmd.append("tests/test_api_simple.py")
+    
+    logger.info(f"Running API tests with command: {' '.join(pytest_cmd)}")
+    
     try:
-        # Import and run the test runner
-        from api_tests.test_runner import main
-        main()
-    except ImportError as e:
-        print(f"Error importing test runner: {e}")
-        print("Make sure you've installed the required packages:")
-        print("pip install -r api_tests/requirements.txt")
-        sys.exit(1)
+        # Run the pytest command
+        result = subprocess.run(pytest_cmd, check=False)
+        
+        # Check the result
+        if result.returncode == 0:
+            logger.info("API tests completed successfully")
+        else:
+            logger.error(f"API tests failed with exit code {result.returncode}")
+            sys.exit(result.returncode)
     except Exception as e:
-        print(f"Error running tests: {e}")
-        sys.exit(1) 
+        logger.error(f"Error running API tests: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main() 
