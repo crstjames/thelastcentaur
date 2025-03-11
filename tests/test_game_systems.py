@@ -17,7 +17,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.engine.core.player import Player
-from src.engine.core.map_system import MapSystem
+from src.engine.core.map_system import MapManager
 from src.engine.core.game_systems import (
     TimeSystem, 
     AchievementSystem, 
@@ -25,13 +25,13 @@ from src.engine.core.game_systems import (
     LeaderboardSystem, 
     LeaderboardEntry
 )
-from src.engine.core.models import Direction, StoryArea, PathType
+from src.engine.core.models import Direction, StoryArea, TerrainType
 from src.engine.core.command_parser import CommandParser
 
 def test_time_system():
     """Test the game's time progression system."""
     # Initialize game systems
-    map_system = MapSystem()
+    map_system = MapManager()
     player = Player(map_system, player_id="test_player", player_name="Test Player")
     command_parser = CommandParser(player)
     
@@ -82,7 +82,7 @@ def test_time_system():
 
 def test_achievement_system():
     """Test the achievement tracking system."""
-    map_system = MapSystem()
+    map_system = MapManager()
     player = Player(map_system, player_id="test_player", player_name="Test Player")
     command_parser = CommandParser(player)
     
@@ -158,7 +158,7 @@ def test_achievement_system():
 
 def test_title_system():
     """Test the title unlocking and selection system."""
-    map_system = MapSystem()
+    map_system = MapManager()
     player = Player(map_system, player_id="test_player", player_name="Test Player")
     command_parser = CommandParser(player)
     
@@ -203,7 +203,7 @@ def test_title_system():
 
 def test_time_based_events():
     """Test events and mechanics that depend on game time."""
-    map_system = MapSystem()
+    map_system = MapManager()
     player = Player(map_system, player_id="test_player", player_name="Test Player")
     command_parser = CommandParser(player)
     
@@ -240,7 +240,7 @@ def test_time_based_events():
 def test_leaderboard_system():
     """Test the leaderboard tracking and display."""
     # Create multiple players for testing
-    map_system = MapSystem()
+    map_system = MapManager()
     players = [
         Player(map_system, f"player_{i}", f"Player {i}")
         for i in range(1, 4)

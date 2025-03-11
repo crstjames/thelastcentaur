@@ -92,6 +92,26 @@ python ./scripts/run_game_tests.py --path mystic
 python ./scripts/run_game_tests.py --path stealth
 ```
 
+### run_core_tests.py
+
+A Python script that runs core engine tests without API or LLM dependencies. This is useful for testing the fundamental game mechanics directly.
+
+**Usage:**
+
+```bash
+# Run all core engine tests
+python ./scripts/run_core_tests.py --test all
+
+# Test specific functionality
+python ./scripts/run_core_tests.py --test warrior     # Test warrior path
+python ./scripts/run_core_tests.py --test mystic      # Test mystic path
+python ./scripts/run_core_tests.py --test stealth     # Test stealth path
+python ./scripts/run_core_tests.py --test movement    # Test movement system
+python ./scripts/run_core_tests.py --test board       # Test full board exploration
+python ./scripts/run_core_tests.py --test items       # Test item pickup
+python ./scripts/run_core_tests.py --test combat      # Test combat system
+```
+
 ## Development Scripts
 
 Additional scripts may be added in the future to assist with:

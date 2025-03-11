@@ -14,6 +14,9 @@ from .player import Player
 from .world_design import WORLD_NPCS
 from .discovery_system import DiscoverySystem, InteractionType
 from .combat_system import CombatSystem, ElementType, CombatAction
+from .puzzle_system import PuzzleSystem, PuzzleType
+from .item_system import ItemManager
+from .narrative_manager import NarrativeManager
 
 class CommandType(str, Enum):
     """Types of commands available to the player."""
@@ -55,6 +58,14 @@ class CommandType(str, Enum):
     THINK = "think"
     TALK = "talk"      # Talk to NPCs
     
+    # Puzzle Commands
+    COMBINE = "combine" # Combine items
+    TOUCH = "touch"     # Touch objects
+    SOLVE = "solve"     # Solve puzzles
+    HINT = "hint"       # Get hints
+    EXAMINE = "examine" # Examine objects
+    ROTATE = "rotate"   # Rotate objects
+    
     # Test Commands
     DEFEAT = "defeat"  # Instantly defeat an enemy
     INTERACT = "interact"
@@ -87,13 +98,42 @@ class CommandParser:
     # NPC interaction aliases
     NPC_ALIASES = ["talk", "speak", "converse"]
     
-    def __init__(self, player: Player):
+    # Puzzle related command aliases
+    PUZZLE_ALIASES = {
+        "combine": ["mix", "merge", "craft", "join"],
+        "touch": ["tap", "press", "activate"],
+        "solve": ["answer", "complete", "finish"],
+        "examine": ["inspect", "study", "analyze"],
+        "rotate": ["turn", "twist", "spin"]
+    }
+    
+    def __init__(self, player: Player, narrative_manager: Optional[NarrativeManager] = None, 
+                item_manager: Optional[ItemManager] = None, puzzle_system: Optional[PuzzleSystem] = None):
+        """Initialize the command parser.
+        
+        Args:
+            player: The player object
+            narrative_manager: The narrative manager
+            item_manager: The item manager
+            puzzle_system: The puzzle system
+        """
         self.player = player
         self.discovery_system = DiscoverySystem()
-        self.combat_system = CombatSystem()
+        self.narrative_manager = narrative_manager
+        self.item_manager = item_manager
+        self.puzzle_system = puzzle_system
+        self.current_area = self.player.current_area
+        self.active_puzzles = {}  # Tracks puzzles the player is currently working on
     
     def parse_command(self, command_text: str) -> Command:
-        """Parse a command string into a Command object."""
+        """Parse a command string into a structured Command object.
+        
+        Args:
+            command_text: The raw command text from the player
+            
+        Returns:
+            A Command object representing the parsed command
+        """
         if not command_text:
             return Command(CommandType.INVALID, error_message="No command provided")
             
@@ -304,14 +344,51 @@ class CommandParser:
         if command_word in ["emote", "say", "think"]:
             return Command(getattr(CommandType, command_word.upper()), args)
         
+        # Add puzzle-related command parsing
+        # Check if the command is a puzzle-related command
+        first_word = words[0].lower() if words else ""
+        
+        # Handle puzzle commands
+        for cmd_type, aliases in self.PUZZLE_ALIASES.items():
+            if first_word == cmd_type or first_word in aliases:
+                if cmd_type == "combine":
+                    return Command(type=CommandType.COMBINE, args=words[1:])
+                elif cmd_type == "touch":
+                    return Command(type=CommandType.TOUCH, args=words[1:])
+                elif cmd_type == "solve":
+                    return Command(type=CommandType.SOLVE, args=words[1:])
+                elif cmd_type == "examine":
+                    return Command(type=CommandType.EXAMINE, args=words[1:])
+                elif cmd_type == "rotate":
+                    return Command(type=CommandType.ROTATE, args=words[1:])
+        
         # If we get here, treat it as a roleplay action
         return Command(CommandType.ROLEPLAY, words)
     
     def execute_command(self, command: Command) -> str:
-        """Execute a command and return the result."""
-        if command.type == CommandType.INVALID:
-            return f"Invalid command. {command.error_message}"
+        """Execute a command and return the result.
+        
+        Args:
+            command: The command to execute
             
+        Returns:
+            The result of executing the command
+        """
+        # Update current area
+        self.current_area = self.player.current_area
+        
+        # Check for narrative events that might be triggered
+        triggered_events = []
+        if self.narrative_manager:
+            triggered_events = self.narrative_manager.check_event_triggers()
+            if triggered_events:
+                event_text = "\n".join([event.description for event in triggered_events])
+                return event_text
+        
+        # Execute command based on type
+        if command.type == CommandType.INVALID:
+            return f"I'm not sure what you mean by that. Try 'help' for a list of commands."
+        
         # Handle movement commands
         if command.type == CommandType.MOVE:
             return self.handle_move_command(command.args)
@@ -503,7 +580,21 @@ class CommandParser:
                             self.player.state.current_tile.items.append(item)
                     return f"You defeated the {enemy.name}! Any items they dropped are now on the ground."
             return f"There is no {enemy_name} here to defeat."
-            
+        
+        # Add puzzle command handling
+        elif command.type == CommandType.COMBINE:
+            return self.handle_combine_command(command.args)
+        elif command.type == CommandType.TOUCH:
+            return self.handle_touch_command(command.args)
+        elif command.type == CommandType.SOLVE:
+            return self.handle_solve_command(command.args)
+        elif command.type == CommandType.HINT:
+            return self.handle_hint_command(command.args)
+        elif command.type == CommandType.EXAMINE:
+            return self.handle_examine_command(command.args)
+        elif command.type == CommandType.ROTATE:
+            return self.handle_rotate_command(command.args)
+        
         return "Command not implemented yet."
     
     def execute_map(self) -> str:
@@ -1275,29 +1366,42 @@ class CommandParser:
             return "You can't go that way right now."
     
     def handle_talk_command(self, args: List[str]) -> str:
-        """Handle talking to NPCs."""
+        """Handle talking to NPCs.
+        
+        Args:
+            args: Command arguments
+            
+        Returns:
+            Response string
+        """
         if not args:
             return "Talk to whom?"
         
-        npc_id = args[0].lower()
+        target = " ".join(args).lower()
         
-        # Check if the NPC is in the current area
+        # Extract topic if provided
+        topic = "general"
+        if " about " in target:
+            parts = target.split(" about ", 1)
+            target = parts[0]
+            topic = parts[1]
+        
+        # Find matching NPC in the current area
         if not self.player.state.current_tile or not self.player.state.current_tile.npcs:
-            return f"There is no {npc_id} here to talk to."
+            return f"There is no {target} here to talk to."
         
-        if npc_id not in self.player.state.current_tile.npcs:
-            return f"There is no {npc_id} here to talk to."
+        if target not in self.player.state.current_tile.npcs:
+            return f"There is no {target} here to talk to."
         
         # Find the NPC in the world design
-        from .world_design import WORLD_NPCS
         npc = None
         for world_npc in WORLD_NPCS:
-            if world_npc.id == npc_id:
+            if world_npc.id == target:
                 npc = world_npc
                 break
             
         if not npc:
-            return f"You attempt to talk to {npc_id}, but they don't respond."
+            return f"You attempt to talk to {target}, but they don't respond."
         
         # Determine player's progress state (start, mid_game, or pre_final)
         # For simplicity, we'll use 'start' for now
@@ -1307,10 +1411,14 @@ class CommandParser:
         dialogue = npc.dialogue.get(progress_state, "...")
         
         # Special handling for the shadow_scout
-        if npc_id == "shadow_scout" and "shadow_key" not in self.player.state.inventory:
+        if target == "shadow_scout" and "shadow_key" not in self.player.state.inventory:
             # Add the shadow_key to the player's inventory
             self.player.state.inventory.append("shadow_key")
             return f"{npc.name}: \"{dialogue}\"\n\nThe {npc.name} slips a small key into your hand. You now have the shadow_key."
+        
+        # Use narrative manager for rich character dialogue if available
+        if self.narrative_manager and target in WORLD_NPCS:
+            return self.narrative_manager.get_character_dialogue(target, topic)
         
         # Return the NPC's dialogue
         return f"{npc.name}: \"{dialogue}\""
@@ -1508,3 +1616,313 @@ class CommandParser:
                 
         print("No matching enemy found")
         return None 
+
+    def handle_combine_command(self, args: List[str]) -> str:
+        """Handle combining items for puzzles.
+        
+        Args:
+            args: Command arguments
+            
+        Returns:
+            Response string
+        """
+        if not self.puzzle_system or not self.item_manager:
+            return "You're not sure how to combine things."
+            
+        if len(args) < 3:
+            return "Combine what? (e.g., 'combine item1 with item2')"
+            
+        # Extract item names
+        item_names = []
+        for arg in args:
+            if arg.lower() not in ["with", "and", "using", "to", "into"]:
+                item_names.append(arg)
+                
+        # Make sure we have items to combine
+        if len(item_names) < 2:
+            return "You need at least two items to combine."
+            
+        # Check if items are in inventory
+        item_ids = []
+        for name in item_names:
+            item = self.item_manager.get_item_by_name(name)
+            if not item:
+                return f"You don't have a {name}."
+            if item.id not in self.player.inventory:
+                return f"You don't have a {item.name} in your inventory."
+            item_ids.append(item.id)
+            
+        # Try to combine the items
+        if len(item_ids) == 2:
+            result = self.item_manager.combine_items(item_ids[0], item_ids[1])
+            if result:
+                # Remove the component items from inventory
+                self.player.remove_item(item_ids[0])
+                self.player.remove_item(item_ids[1])
+                
+                # Add the result to inventory
+                self.player.add_item(result.id)
+                
+                # Check if this combination solves a puzzle
+                puzzle_result = self.puzzle_system.check_item_combination(item_ids)
+                if puzzle_result:
+                    puzzle, reward = puzzle_result
+                    return f"You successfully combined the items. {puzzle.reward_description}"
+                
+                return f"You combine the {item_names[0]} and {item_names[1]} to create a {result.name}!"
+            else:
+                return f"You can't combine these items."
+                
+        elif len(item_ids) == 3:
+            result = self.item_manager.combine_three_items(item_ids[0], item_ids[1], item_ids[2])
+            if result:
+                # Remove the component items from inventory
+                for item_id in item_ids:
+                    self.player.remove_item(item_id)
+                
+                # Add the result to inventory
+                self.player.add_item(result.id)
+                
+                # Check if this combination solves a puzzle
+                puzzle_result = self.puzzle_system.check_item_combination(item_ids)
+                if puzzle_result:
+                    puzzle, reward = puzzle_result
+                    return f"You successfully combined the items. {puzzle.reward_description}"
+                
+                item_names_str = f"{item_names[0]}, {item_names[1]}, and {item_names[2]}"
+                return f"You combine the {item_names_str} to create a {result.name}!"
+            else:
+                return f"You can't combine these items."
+        else:
+            return "You can only combine up to three items at once."
+    
+    def handle_touch_command(self, args: List[str]) -> str:
+        """Handle touching objects for puzzles.
+        
+        Args:
+            args: Command arguments
+            
+        Returns:
+            Response string
+        """
+        if not self.puzzle_system:
+            return "You touch it, but nothing happens."
+            
+        if not args:
+            return "Touch what?"
+            
+        # Get the object being touched
+        object_name = " ".join(args).lower()
+        
+        # Check for sequence puzzles in the current area
+        area_puzzles = self.puzzle_system.get_puzzles_in_area(self.current_area)
+        sequence_puzzle = None
+        
+        for puzzle in area_puzzles:
+            if puzzle.puzzle_type == PuzzleType.SEQUENCE:
+                sequence_puzzle = puzzle
+                break
+                
+        if not sequence_puzzle:
+            return f"You touch the {object_name}, but nothing happens."
+            
+        # Start the puzzle if not already started
+        if sequence_puzzle.id not in self.puzzle_system.active_sequence_actions:
+            self.puzzle_system.start_sequence_puzzle(sequence_puzzle.id)
+            
+        # Add the action to the sequence
+        action = f"touch {object_name}"
+        result = self.puzzle_system.add_sequence_action(sequence_puzzle.id, action)
+        
+        if result:
+            return result
+        else:
+            return f"You touch the {object_name}, but nothing notable happens."
+    
+    def handle_solve_command(self, args: List[str]) -> str:
+        """Handle solving puzzles.
+        
+        Args:
+            args: Command arguments
+            
+        Returns:
+            Response string
+        """
+        if not self.puzzle_system:
+            return "There are no puzzles to solve."
+            
+        if not args:
+            return "Solve what?"
+            
+        # Determine what the player is trying to solve
+        puzzle_text = " ".join(args).lower()
+        
+        # Check if this is a riddle solution
+        if "riddle" in puzzle_text and "with" in puzzle_text:
+            parts = puzzle_text.split("with", 1)
+            riddle_name = parts[0].strip()
+            answer = parts[1].strip()
+            
+            # Find matching riddle puzzle
+            area_puzzles = self.puzzle_system.get_puzzles_in_area(self.current_area)
+            riddle_puzzle = None
+            
+            for puzzle in area_puzzles:
+                if puzzle.puzzle_type == PuzzleType.RIDDLE and "riddle" in puzzle.name.lower():
+                    riddle_puzzle = puzzle
+                    break
+                    
+            if not riddle_puzzle:
+                return "There's no riddle to solve here."
+                
+            # Try to solve the riddle
+            if self.puzzle_system.solve_riddle(riddle_puzzle.id, answer):
+                return riddle_puzzle.reward_description
+            else:
+                return "That doesn't seem to be the correct answer."
+        
+        # For other types of puzzles, give a hint
+        area_puzzles = self.puzzle_system.get_puzzles_in_area(self.current_area)
+        if not area_puzzles:
+            return "There are no puzzles to solve in this area."
+            
+        # Give a hint about the first unsolved puzzle
+        for puzzle in area_puzzles:
+            if not self.puzzle_system.is_puzzle_solved(puzzle.id):
+                hint = self.puzzle_system.get_hint(puzzle.id)
+                if hint:
+                    return f"Hint for {puzzle.name}: {hint}"
+                else:
+                    return f"You notice {puzzle.description}"
+                
+        return "All puzzles in this area have been solved."
+    
+    def handle_hint_command(self, args: List[str]) -> str:
+        """Handle getting hints for puzzles.
+        
+        Args:
+            args: Command arguments
+            
+        Returns:
+            Response string
+        """
+        if not self.puzzle_system:
+            return "There are no puzzles to provide hints for."
+            
+        # Get puzzles in the current area
+        area_puzzles = self.puzzle_system.get_puzzles_in_area(self.current_area)
+        if not area_puzzles:
+            return "There are no puzzles in this area."
+            
+        # If specific puzzle mentioned
+        if args:
+            puzzle_name = " ".join(args).lower()
+            for puzzle in area_puzzles:
+                if puzzle_name in puzzle.name.lower() or puzzle_name in puzzle.description.lower():
+                    if self.puzzle_system.is_puzzle_solved(puzzle.id):
+                        return f"You've already solved the {puzzle.name}."
+                    
+                    hint = self.puzzle_system.get_hint(puzzle.id)
+                    if hint:
+                        return f"Hint for {puzzle.name}: {hint}"
+                    else:
+                        return f"There are no hints available for {puzzle.name}."
+            
+            return f"There's no puzzle called '{puzzle_name}' in this area."
+        
+        # Otherwise, hint for the first unsolved puzzle
+        for puzzle in area_puzzles:
+            if not self.puzzle_system.is_puzzle_solved(puzzle.id):
+                hint = self.puzzle_system.get_hint(puzzle.id)
+                if hint:
+                    return f"Hint for {puzzle.name}: {hint}"
+                else:
+                    return f"You notice {puzzle.description}"
+                
+        return "All puzzles in this area have been solved."
+    
+    def handle_examine_command(self, args: List[str]) -> str:
+        """Handle examining objects, which can reveal puzzles.
+        
+        Args:
+            args: Command arguments
+            
+        Returns:
+            Response string
+        """
+        if not args:
+            return "Examine what?"
+            
+        object_name = " ".join(args).lower()
+        
+        # Check for puzzles that might be revealed by examination
+        if self.puzzle_system:
+            area_puzzles = self.puzzle_system.get_puzzles_in_area(self.current_area)
+            for puzzle in area_puzzles:
+                # Simple check if the object name is in the puzzle description
+                if object_name in puzzle.description.lower():
+                    if puzzle.state == PuzzleState.UNDISCOVERED:
+                        discovered_puzzle = self.puzzle_system.discover_puzzle(puzzle.id)
+                        if discovered_puzzle:
+                            return f"You examine the {object_name} and discover {discovered_puzzle.description}"
+                    elif not self.puzzle_system.is_puzzle_solved(puzzle.id):
+                        return puzzle.description
+                    else:
+                        return f"You've already solved the puzzle with the {object_name}."
+        
+        # If no puzzle is found, use the narrative manager for environmental storytelling
+        if self.narrative_manager:
+            # Simple implementation - in a real game, this would be more sophisticated
+            # with a database of examinable objects
+            area_id = self.current_area.value
+            if area_id == "crystal_pond" and "crystal" in object_name:
+                return "The crystal glimmers with inner light, pulsing in a rhythm that seems almost like a heartbeat. Ancient runes are carved around its base."
+            elif area_id == "forgotten_temple" and ("altar" in object_name or "basin" in object_name):
+                return "The stone altar stands in the center, with channels radiating outward like a sunburst. A shallow basin sits atop it, dry and waiting."
+            
+        # Default examination response
+        return f"You examine the {object_name}, but don't see anything unusual about it."
+    
+    def handle_rotate_command(self, args: List[str]) -> str:
+        """Handle rotating objects for environmental puzzles.
+        
+        Args:
+            args: Command arguments
+            
+        Returns:
+            Response string
+        """
+        if not self.puzzle_system:
+            return "You rotate it, but nothing happens."
+            
+        if not args:
+            return "Rotate what?"
+            
+        # Get the object being rotated
+        object_name = " ".join(args).lower()
+        
+        # Check for environmental puzzles in the current area
+        area_puzzles = self.puzzle_system.get_puzzles_in_area(self.current_area)
+        env_puzzle = None
+        
+        for puzzle in area_puzzles:
+            if puzzle.puzzle_type == PuzzleType.ENVIRONMENTAL or puzzle.puzzle_type == PuzzleType.SEQUENCE:
+                if object_name in " ".join(puzzle.solution_sequence).lower():
+                    env_puzzle = puzzle
+                    break
+                
+        if not env_puzzle:
+            return f"You rotate the {object_name}, but nothing happens."
+            
+        # Start the puzzle if not already started
+        if env_puzzle.id not in self.puzzle_system.active_sequence_actions:
+            self.puzzle_system.start_sequence_puzzle(env_puzzle.id)
+            
+        # Add the action to the sequence
+        action = f"rotate {object_name}"
+        result = self.puzzle_system.add_sequence_action(env_puzzle.id, action)
+        
+        if result:
+            return result
+        else:
+            return f"You rotate the {object_name}. It moves, but nothing notable happens yet." 

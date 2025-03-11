@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Import engine components for fixtures
 from src.engine.core.models import Direction, StoryArea, TerrainType
 from src.engine.core.player import Player
-from src.engine.core.map_system import MapSystem
+from src.engine.core.map_system import MapManager
 from src.engine.core.game_systems import TimeSystem
 from src.engine.core.command_parser import CommandParser
 from src.engine.core.discovery_system import DiscoverySystem, HiddenDiscovery, InteractionType
@@ -354,7 +354,7 @@ def command_parser(mock_player):
 @pytest.fixture
 def real_map_system():
     """Return a real map system for testing."""
-    return MapSystem()
+    return MapManager()
 
 @pytest.fixture
 def real_player(real_map_system):

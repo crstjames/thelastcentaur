@@ -6,6 +6,9 @@ This module implements various game systems including:
 - Achievement tracking
 - Title system
 - Leaderboard functionality
+- Puzzle system
+- Narrative system
+- Item system
 """
 
 from enum import Enum
@@ -13,8 +16,9 @@ from typing import Dict, List, Optional, Set, Tuple, Any
 from dataclasses import dataclass, field
 import random
 from datetime import datetime, timedelta
+from termcolor import colored
 
-from .models import PathType
+from .models import PathType, StoryArea
 
 # Forward reference for type hints
 from typing import TYPE_CHECKING
@@ -22,6 +26,9 @@ if TYPE_CHECKING:
     from .quest_system import QuestSystem
     from .path_system import PathSystem
     from .discovery_system import DiscoverySystem
+    from .puzzle_system import PuzzleSystem
+    from .item_system import ItemManager
+    from .narrative_manager import NarrativeManager
 
 class TimeOfDay(str, Enum):
     """Different times of day that affect gameplay."""
@@ -767,46 +774,149 @@ class LeaderboardSystem:
         } 
 
 class GameSystems:
-    """Core game systems for The Last Centaur."""
+    """Central manager for all game systems."""
+    
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        """Singleton implementation."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
     
     def __init__(self, db_pool=None):
-        """Initialize game systems."""
-        self.game_time = GameTime()
+        """Initialize the game systems."""
+        if self._initialized:
+            return
+            
+        self.db_pool = db_pool
         self.achievement_system = AchievementSystem()
         self.title_system = TitleSystem()
-        self.leaderboard = LeaderboardSystem(db_pool)
+        self.leaderboard_system = LeaderboardSystem(db_pool)
+        self.time_system = TimeSystem()
         
-        # Import here to avoid circular imports
-        from .quest_system import QuestSystem
-        from .path_system import PathSystem
-        from .discovery_system import DiscoverySystem
+        # Initialize new systems
+        self.item_manager = None
+        self.puzzle_system = None
+        self.narrative_manager = None
         
-        self.quest_system = QuestSystem()
-        self.path_system = PathSystem(self.quest_system)
-        self.discovery_system = DiscoverySystem()
-        
-        # Register other systems with each other as needed
+        # Link systems
         self.achievement_system.register_title_system(self.title_system)
         
-        # Initialize systems
-        self._initialize_systems()
+        # Path-specific systems
+        self.quest_system = None
+        self.path_system = None
+        self.warrior_path = None
+        self.mystic_path = None
+        self.stealth_path = None
         
-        # Add resource depletion tracking
-        self.resource_depletion = {
-            "hunger": 0.0,  # 0.0-1.0, affects stamina regen
-            "fatigue": 0.0,  # 0.0-1.0, affects health regen
-            "mental_strain": 0.0,  # 0.0-1.0, affects mana regen
-            "last_meal_time": 0,  # Game time when last ate
-            "last_rest_time": 0,  # Game time when last rested properly
-            "last_meditation_time": 0  # Game time when last meditated
-        }
+        # Initialize the systems
+        self._initialize_systems()
+        self._initialized = True
     
     def _initialize_systems(self):
         """Initialize all game systems."""
         self._initialize_achievements()
         self._initialize_titles()
-        # Initialize other systems as needed
+
+    def initialize_item_system(self):
+        """Initialize the item system."""
+        from .item_system import ItemManager
+        self.item_manager = ItemManager()
+        return self.item_manager
     
+    def initialize_puzzle_system(self, player):
+        """Initialize the puzzle system.
+        
+        Args:
+            player: The player object
+            
+        Returns:
+            The puzzle system instance
+        """
+        if not self.item_manager:
+            self.initialize_item_system()
+            
+        from .puzzle_system import PuzzleSystem
+        self.puzzle_system = PuzzleSystem(player, self.item_manager)
+        return self.puzzle_system
+    
+    def initialize_narrative_system(self, player):
+        """Initialize the narrative system.
+        
+        Args:
+            player: The player object
+            
+        Returns:
+            The narrative manager instance
+        """
+        from .narrative_manager import NarrativeManager
+        self.narrative_manager = NarrativeManager(player)
+        return self.narrative_manager
+    
+    def get_item_manager(self):
+        """Get the item manager instance.
+        
+        Returns:
+            The item manager instance
+        """
+        if not self.item_manager:
+            self.initialize_item_system()
+        return self.item_manager
+    
+    def get_puzzle_system(self, player):
+        """Get the puzzle system instance.
+        
+        Args:
+            player: The player object
+            
+        Returns:
+            The puzzle system instance
+        """
+        if not self.puzzle_system:
+            self.initialize_puzzle_system(player)
+        return self.puzzle_system
+    
+    def get_narrative_manager(self, player):
+        """Get the narrative manager instance.
+        
+        Args:
+            player: The player object
+            
+        Returns:
+            The narrative manager instance
+        """
+        if not self.narrative_manager:
+            self.initialize_narrative_system(player)
+        return self.narrative_manager
+    
+    def initialize_command_parser(self, player):
+        """Initialize the command parser with all necessary systems.
+        
+        Args:
+            player: The player object
+            
+        Returns:
+            The command parser instance
+        """
+        from .command_parser import CommandParser
+        
+        # Initialize all necessary systems
+        item_manager = self.get_item_manager()
+        puzzle_system = self.get_puzzle_system(player)
+        narrative_manager = self.get_narrative_manager(player)
+        
+        # Create the command parser with all systems
+        command_parser = CommandParser(
+            player=player,
+            narrative_manager=narrative_manager,
+            item_manager=item_manager,
+            puzzle_system=puzzle_system
+        )
+        
+        return command_parser
+
     def _initialize_achievements(self):
         """Initialize the achievement system with predefined achievements."""
         # Path-specific achievements
@@ -1148,7 +1258,7 @@ class GameSystems:
         
         # Increase hunger over time (faster during physical activity)
         base_hunger_rate = 0.01 * (minutes_passed / 60)  # Base rate per hour
-        if hasattr(self, 'last_combat_time') and (self.game_time.total_minutes - self.last_combat_time) < 30:
+        if hasattr(self, 'last_combat_time') and (self.time_system.time.total_minutes - self.last_combat_time) < 30:
             # Combat in the last 30 minutes increases hunger
             base_hunger_rate *= 1.5
         
@@ -1156,16 +1266,16 @@ class GameSystems:
         
         # Increase fatigue over time (faster during night or combat)
         base_fatigue_rate = 0.005 * (minutes_passed / 60)  # Base rate per hour
-        if self.game_time.get_time_of_day() == TimeOfDay.NIGHT:
+        if self.time_system.time.get_time_of_day() == TimeOfDay.NIGHT:
             base_fatigue_rate *= 1.3  # Fatigue increases faster at night
-        if hasattr(self, 'last_combat_time') and (self.game_time.total_minutes - self.last_combat_time) < 30:
+        if hasattr(self, 'last_combat_time') and (self.time_system.time.total_minutes - self.last_combat_time) < 30:
             base_fatigue_rate *= 2.0  # Combat greatly increases fatigue
             
         self.resource_depletion["fatigue"] = min(1.0, self.resource_depletion["fatigue"] + base_fatigue_rate)
         
         # Increase mental strain over time (faster when using abilities)
         base_strain_rate = 0.003 * (minutes_passed / 60)  # Base rate per hour
-        if hasattr(self, 'last_ability_time') and (self.game_time.total_minutes - self.last_ability_time) < 30:
+        if hasattr(self, 'last_ability_time') and (self.time_system.time.total_minutes - self.last_ability_time) < 30:
             base_strain_rate *= 1.8  # Using abilities increases mental strain
             
         self.resource_depletion["mental_strain"] = min(1.0, self.resource_depletion["mental_strain"] + base_strain_rate)
@@ -1205,7 +1315,7 @@ class GameSystems:
         
         food_data = food_items[food_item]
         self.resource_depletion["hunger"] = max(0.0, self.resource_depletion["hunger"] - food_data["hunger_reduction"])
-        self.resource_depletion["last_meal_time"] = self.game_time.total_minutes
+        self.resource_depletion["last_meal_time"] = self.time_system.time.total_minutes
         
         result_message = f"You consume the {food_item}. {food_data['description']}"
         

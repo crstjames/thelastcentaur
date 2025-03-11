@@ -73,6 +73,27 @@ class StoryArea(str, Enum):
     GUARDIAN_OVERLOOK = "guardian_overlook"
     ANCIENT_SANCTUARY = "ancient_sanctuary"
 
+class ItemType(str, Enum):
+    """Types of items in the game."""
+    WEAPON = "weapon"
+    ARMOR = "armor"
+    KEY = "key"
+    CONSUMABLE = "consumable"
+    CRAFTING = "crafting"
+    QUEST = "quest"
+    TREASURE = "treasure"
+    MAGICAL = "magical"
+
+class ElementType(str, Enum):
+    """Elemental types that can be associated with items, abilities, etc."""
+    NONE = "none"
+    FIRE = "fire"
+    WATER = "water"
+    EARTH = "earth"
+    AIR = "air"
+    LIGHT = "light"
+    SHADOW = "shadow"
+
 class EventType(str, Enum):
     """Types of events that can occur in the game."""
     INTERACTION = "interaction"      # Player directly interacts with environment
@@ -116,6 +137,34 @@ class GameEvent(BaseModel):
             "persistence": self.persistence
         }
 
+class NarrativeEvent(BaseModel):
+    """Represents a narrative event in the game's storyline."""
+    
+    id: str
+    title: str
+    description: str
+    requirements: Dict[str, Union[str, List[str]]] = Field(default_factory=dict)
+    consequences: Dict[str, Any] = Field(default_factory=dict)
+    completed: bool = False
+    related_area: Optional[StoryArea] = None
+    story_phase: str = "beginning"  # beginning, revelation, confrontation, etc.
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        json_schema_extra={
+            "example": {
+                "id": "first_encounter",
+                "title": "First Encounter with the Shadow",
+                "description": "You encounter an echo of the Shadow Centaur",
+                "requirements": {"items": ["mystic_crystal"], "areas_visited": ["crystal_pond"]},
+                "consequences": {"reveal_area": "forgotten_temple"},
+                "completed": False,
+                "related_area": "crystal_pond",
+                "story_phase": "revelation"
+            }
+        }
+    )
+
 @dataclass
 class EnvironmentalChange:
     """Represents a change to the environment."""
@@ -131,9 +180,12 @@ class Item(BaseModel):
     id: str
     name: str
     description: str
-    type: str
+    type: ItemType
     properties: Dict[str, Union[str, int, bool]] = Field(default_factory=dict)
     requirements: List[str] = Field(default_factory=list)
+    combinable_with: List[str] = Field(default_factory=list)
+    combination_result: Optional[str] = None
+    elemental_type: ElementType = ElementType.NONE
 
 @dataclass
 class Enemy:
@@ -146,10 +198,30 @@ class Enemy:
     requirements: List[str] = None  # Items needed to defeat this enemy
 
 class TileState(Enum):
-    """State of a game tile."""
+    """Represents the exploration state of a game tile."""
     UNEXPLORED = auto()
     VISIBLE = auto()
     EXPLORED = auto()
+
+class TileData(BaseModel):
+    """Model for tile data."""
+    position: Tuple[int, int]
+    terrain_type: str = "default"
+    area: Optional[str] = None
+    description: str = "A nondescript area."
+    items: List[Any] = Field(default_factory=list)
+    enemies: List[Any] = Field(default_factory=list)
+    environmental_changes: List[Any] = Field(default_factory=list)
+    events: List[Any] = Field(default_factory=list)
+    npcs: List[Any] = Field(default_factory=list)
+    is_visited: bool = False
+    exits: List[Direction] = Field(default_factory=list)
+    blocked_paths: List[Direction] = Field(default_factory=list)
+    requirements: Dict[str, Any] = Field(default_factory=dict)
+
+    def get_description(self) -> str:
+        """Return the tile description."""
+        return self.description
 
 class GameState(BaseModel):
     """Represents the complete state of the game."""
@@ -161,6 +233,9 @@ class GameState(BaseModel):
     tiles: Dict[Tuple[int, int], TileState] = Field(default_factory=dict)
     events: List[GameEvent] = Field(default_factory=list)
     game_time: datetime = Field(default_factory=datetime.utcnow)
+    completed_puzzles: List[str] = Field(default_factory=list)
+    narrative_phase: str = "beginning"
+    player_path: Optional[PathType] = None
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -183,5 +258,44 @@ class GameState(BaseModel):
             "current_area": self.current_area,
             "tiles": {str(k): v for k, v in self.tiles.items()},
             "events": self.events,
-            "game_time": self.game_time.isoformat()
-        } 
+            "game_time": self.game_time.isoformat(),
+            "completed_puzzles": self.completed_puzzles,
+            "narrative_phase": self.narrative_phase,
+            "player_path": self.player_path
+        }
+
+class EnemyType(str, Enum):
+    """Types of enemies in the game."""
+    NORMAL = "normal"
+    ELITE = "elite"
+    BOSS = "boss"
+    MINIBOSS = "miniboss"
+    GUARDIAN = "guardian"
+
+class Enemy(BaseModel):
+    """Represents an enemy in the game."""
+    
+    id: str
+    name: str
+    description: str
+    health: int
+    damage: int
+    drops: List[str] = None
+    requirements: List[str] = None  # Items needed to defeat this enemy
+    type: EnemyType
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        json_schema_extra={
+            "example": {
+                "id": "enemy_1",
+                "name": "Goblin",
+                "description": "A small, ugly creature",
+                "health": 10,
+                "damage": 2,
+                "drops": ["rusty dagger"],
+                "requirements": ["rusty dagger"],
+                "type": "normal"
+            }
+        }
+    ) 

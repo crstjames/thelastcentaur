@@ -4,15 +4,13 @@ Player state and movement mechanics for The Last Centaur.
 This module handles Centaur Prime's state, movement, and related mechanics.
 """
 
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 
-from .models import Direction, TerrainType, PathType
-from src.core.models import TileState, Item, Enemy
+from .models import Direction, TerrainType, PathType, ItemType, StoryArea, Item, Enemy, TileState, TileData, EnemyType
 from .map_system import MapManager
-from .models import StoryArea
 from .game_systems import TimeSystem, TimeOfDay, AchievementSystem, TitleSystem, LeaderboardSystem, LeaderboardEntry
 
 @dataclass
@@ -36,7 +34,7 @@ class PlayerState:
     inventory: List[str] = field(default_factory=list)
     visited_tiles: Set[Tuple[int, int]] = field(default_factory=set)
     blocked_paths: Dict[Tuple[int, int], List[Direction]] = field(default_factory=dict)
-    current_tile: Optional[TileState] = None
+    current_tile: Optional[TileData] = None
     rest_count: int = 0  # Track number of rest attempts
 
 class MovementError(Exception):
@@ -60,30 +58,33 @@ class Player:
         self.state.visited_tiles.add((5, 0))
         self.path_type = None  # Initialize path_type as None
         
-        # Initialize current tile as TileState
+        # Initialize current tile as TileData
         starting_node = self.map_system.get_area_node(StoryArea.AWAKENING_WOODS)
         
         # Convert item strings to Item objects
         item_objects = []
         for item_id in starting_node.items:
+            # Default to QUEST type for basic compatibility
             item_objects.append(Item(
                 id=item_id,
                 name=item_id.replace('_', ' ').title(),
                 description=f"A {item_id.replace('_', ' ')}",
-                type="item"
+                type=ItemType.QUEST
             ))
             
         # Convert enemy strings to Enemy objects
         enemy_objects = []
         for enemy_id in starting_node.enemies:
             enemy_objects.append(Enemy(
-                name=enemy_id,
+                id=enemy_id,
+                name=enemy_id.replace('_', ' ').title(),
                 description=f"A {enemy_id.replace('_', ' ')}",
                 health=50,
-                damage=10
+                damage=10,
+                type=EnemyType.NORMAL
             ))
         
-        self.state.current_tile = TileState(
+        self.state.current_tile = TileData(
             position=starting_node.position,
             terrain_type=starting_node.terrain_type,
             area=starting_node.area,
@@ -93,6 +94,64 @@ class Player:
             npcs=starting_node.npcs if hasattr(starting_node, 'npcs') and starting_node.npcs else [],
             is_visited=True
         )
+        
+        # Set the current area
+        self.state.current_area = starting_node.area
+    
+    @property
+    def current_area(self) -> StoryArea:
+        """Get the current area of the player.
+        
+        Returns:
+            The current StoryArea
+        """
+        return self.state.current_area
+    
+    @property
+    def inventory(self) -> List[str]:
+        """Get the player's inventory.
+        
+        Returns:
+            List of item IDs in the inventory
+        """
+        return self.state.inventory
+    
+    @property
+    def visited_areas(self) -> Set[StoryArea]:
+        """Get the areas the player has visited.
+        
+        Returns:
+            Set of visited StoryAreas
+        """
+        visited_areas = set()
+        for position in self.state.visited_tiles:
+            area = self._get_area_for_position(position)
+            if area:
+                visited_areas.add(area)
+        return visited_areas
+    
+    def add_item(self, item_id: str) -> None:
+        """Add an item to the player's inventory.
+        
+        Args:
+            item_id: The ID of the item to add
+        """
+        if item_id not in self.state.inventory:
+            self.state.inventory.append(item_id)
+            
+    def remove_item(self, item_id: str) -> bool:
+        """Remove an item from the player's inventory.
+        
+        Args:
+            item_id: The ID of the item to remove
+            
+        Returns:
+            True if the item was removed, False otherwise
+        """
+        if item_id in self.state.inventory:
+            self.state.inventory.remove(item_id)
+            return True
+        return False
     
     def get_current_position(self) -> Tuple[int, int]:
         """Get the player's current position."""

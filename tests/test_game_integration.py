@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch
 from src.engine.core.combat_system import CombatSystem, ElementType, CombatAction
 from src.engine.core.command_parser import CommandParser, CommandType
 from src.engine.core.player import Player
-from src.engine.core.models import Enemy, TerrainType, PathType
+from src.engine.core.models import Enemy, TerrainType, PathType, Direction, StoryArea
 from src.engine.core.game_systems import TimeSystem
-from src.engine.core.map_system import MapSystem
+from src.engine.core.map_system import MapManager
 
 
 class TestCombatIntegration:

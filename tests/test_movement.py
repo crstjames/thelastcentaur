@@ -10,12 +10,21 @@ This module tests the functionality of player movement, including:
 
 import pytest
 from unittest.mock import MagicMock, patch
+from dataclasses import dataclass
 
 from src.engine.core.models import Direction, TileState, TerrainType, StoryArea
 from src.engine.core.player import Player
-from src.engine.core.map_system import MapSystem, AreaNode, AreaConnection
+from src.engine.core.map_system import MapManager, AreaNode
 from src.engine.core.command_parser import CommandParser
 
+@dataclass
+class AreaConnection:
+    """Simple connection between two areas for testing purposes."""
+    from_area: StoryArea
+    to_area: StoryArea
+    direction: Direction
+    requirements: list
+    description: str
 
 class TestMovementSystem:
     """Test suite for the movement system."""
@@ -23,13 +32,13 @@ class TestMovementSystem:
     @pytest.fixture
     def map_system(self):
         """Create a map system with a simple 3x3 grid for testing."""
-        map_system = MapSystem()
+        map_system = MapManager()
         
         # Create a simple 3x3 grid of areas
         positions = {
             (1, 0): StoryArea.AWAKENING_WOODS,
             (1, 1): StoryArea.TRIALS_PATH,
-            (1, 2): StoryArea.ANCIENT_RUINS,
+            (1, 2): StoryArea.CRYSTAL_POND,
             (0, 1): StoryArea.MYSTIC_MOUNTAINS,
             (2, 1): StoryArea.SHADOW_DOMAIN,
         }
@@ -44,19 +53,24 @@ class TestMovementSystem:
                 requirements=[],
                 enemies=[],
                 items=[],
-                npcs=[],
-                connections=[]  # Add empty connections list, we'll populate it later
+                npcs=[]
             )
+            # Add connections attribute to the node
+            node.connections = []
             map_system.position_to_area[position] = node
             map_system.areas[area] = node  # Use areas instead of area_to_node
+            
+            # Add to NAMED_AREAS for the move method
+            from src.engine.core.map_system import NAMED_AREAS
+            NAMED_AREAS[position] = area
         
         # Add connections between areas
         connections = [
             # Vertical connections
             (StoryArea.AWAKENING_WOODS, Direction.NORTH, StoryArea.TRIALS_PATH),
             (StoryArea.TRIALS_PATH, Direction.SOUTH, StoryArea.AWAKENING_WOODS),
-            (StoryArea.TRIALS_PATH, Direction.NORTH, StoryArea.ANCIENT_RUINS),
-            (StoryArea.ANCIENT_RUINS, Direction.SOUTH, StoryArea.TRIALS_PATH),
+            (StoryArea.TRIALS_PATH, Direction.NORTH, StoryArea.CRYSTAL_POND),
+            (StoryArea.CRYSTAL_POND, Direction.SOUTH, StoryArea.TRIALS_PATH),
             
             # Horizontal connections
             (StoryArea.MYSTIC_MOUNTAINS, Direction.EAST, StoryArea.TRIALS_PATH),
@@ -85,16 +99,7 @@ class TestMovementSystem:
         player.state = MagicMock()
         player.state.position = (1, 0)  # Start at AWAKENING_WOODS
         player.state.current_area = StoryArea.AWAKENING_WOODS
-        player.state.current_tile = TileState(
-            position=(1, 0),
-            terrain_type=TerrainType.FOREST,
-            area=StoryArea.AWAKENING_WOODS,
-            description="Test area at (1, 0)",
-            items=[],
-            enemies=[],
-            npcs=[],
-            is_visited=True
-        )
+        player.state.current_tile = TileState.EXPLORED  # Use the enum value
         player.state.inventory = []
         player.state.visited_tiles = {(1, 0)}
         player.state.blocked_paths = {}
@@ -215,5 +220,5 @@ class TestMovementSystem:
         # Try to move further west (off the map)
         success, message = player.move(Direction.WEST)
         assert not success
-        assert "cannot go that way" in message.lower()
+        assert "grid boundary reached" in message.lower()
         assert player.state.position == (0, 1)  # Position unchanged 
