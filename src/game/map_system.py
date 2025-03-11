@@ -1,12 +1,12 @@
 from typing import Dict, List, Optional, Set, Tuple, Any
-from src.engine.core.map_system import MapSystem
+from src.engine.core.map_system import MapManager
 from src.engine.core.models import TileState, StoryArea, TerrainType
 
-class GameMapSystem(MapSystem):
+class GameMapSystem(MapManager):
     """
-    Extended MapSystem for game state management.
+    Extended MapManager for game state management.
     
-    This class extends the engine's MapSystem to add methods needed for
+    This class extends the engine's MapManager to add methods needed for
     game state persistence and loading.
     """
     

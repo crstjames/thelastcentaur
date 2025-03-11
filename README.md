@@ -95,153 +95,86 @@ This interactive script provides options to:
 - Check Docker container status
 - View Docker logs
 
-For more detailed Docker setup instructions, see [DOCKER.md](DOCKER.md).
+For more detailed Docker setup instructions, see [docs/DOCKER.md](docs/DOCKER.md).
 
 ## Quick Start
 
-### Using Local Installation
+After installation, you can play the game in several ways:
 
-1. Start the game server:
+1. **Web Interface**: Run `python play_game.py` to start the game in your web browser.
+2. **Command Line Interface**: Run `python play_game.py --cli` to play in the terminal.
+3. **API Mode**: Start the API server with `uvicorn src.main:app --reload` and interact via HTTP requests.
 
-```bash
-python -m src.main
-```
+## Documentation
 
-2. Start the frontend development server:
+For more detailed information about the project, check out these resources:
 
-```bash
-cd frontend && npm run dev -- -p 3002
-```
+- [Documentation Index](docs/index.md)
+- [Docker Setup](docs/DOCKER.md)
+- [Port Configuration](docs/PORT_CONFIGURATION.md)
+- [LLM Interface Setup](docs/LLM_INTERFACE_SETUP.md)
+- [Unit Tests](tests/README.md)
+- [API Tests](api_tests/README.md)
+- [Game Data](data/README.md)
+- [Utility Scripts](scripts/README.md)
+- [Configuration Files](config/README.md)
 
-3. Open your web browser and navigate to:
+## Project Structure
 
-```
-http://localhost:3002
-```
+The Last Centaur follows a structured organization:
 
-### Using Docker
+- **src/**: Core source code
+  - **core/**: Core game models and utilities
+  - **engine/**: Game engine components
+  - **api/**: FastAPI endpoints
+- **tests/**: Unit tests for direct component testing
+- **api_tests/**: Integration tests through the API
+- **data/**: Game world data files (CSV and JSON)
+- **docs/**: Project documentation
+- **scripts/**: Utility scripts for development and operations
+- **config/**: Configuration files for testing and development
+- **frontend/**: Web interface components
+- **docker/**: Docker-related configuration files
+- **migrations/**: Database migration scripts
 
-1. Start all services with a single command:
+## Game Systems
 
-```bash
-./docker-manager.sh
-```
+The Last Centaur's engine includes several interacting systems:
 
-2. Select option 1 to start Docker containers.
+1. **Movement System**: Navigate through the world using cardinal directions
+2. **Combat System**: Engage in tactical combat with enemies
+3. **Discovery System**: Uncover secrets and hidden paths
+4. **Inventory System**: Collect, use, and manage items
+5. **Quest System**: Receive and complete missions
+6. **LLM Interface**: Communicate using natural language
 
-3. Once the containers are running, access the application at:
+## Development
 
-```
-http://localhost:3002
-```
-
-> **Important**: For details on port configuration and troubleshooting connection issues, see [PORT_CONFIGURATION.md](PORT_CONFIGURATION.md).
-
-### Using the Natural Language Interface
-
-For a more immersive experience, you can use the LLM-powered natural language interface:
-
-1. Make sure you have set up your API keys in the `.env` file:
-
-```
-OPENAI_API_KEY=your_openai_api_key_here
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-```
-
-2. In a separate terminal, run the LLM interface:
-
-```bash
-python play_game.py
-```
-
-3. Follow the prompts to register/login and start playing using natural language!
-
-For more details on the LLM interface, see [README_LLM_INTERFACE.md](README_LLM_INTERFACE.md).
-
-## Testing the Game API
-
-For development and testing purposes, you can interact with the game directly through the API. Follow these steps to test the core functionality:
-
-### 1. Register a New User
+For development work, it is recommended to use a virtual environment:
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "testuser", "email": "test@example.com", "password": "password123"}'
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-**Note:** If you encounter a "Username already registered" error, try a different username.
-
-### 2. Login to Get an Access Token
+Running the tests:
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/auth/login" \
-  -F "username=testuser" \
-  -F "password=password123"
+# Unit tests
+python scripts/run_tests.sh
+
+# API integration tests
+python scripts/run_api_tests.py
+
+# Game path tests
+python scripts/run_game_tests.py --path warrior
 ```
 
-This will return an access token in the format:
+## Contributing
 
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
-```
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-**Important:** Save this token for use in subsequent requests. The token will be valid for 24 hours.
+## License
 
-### 3. Create a Game Instance
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/game" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"name": "My Adventure", "max_players": 1, "description": "A test game instance"}'
-```
-
-This will return a game instance ID that you'll need for further commands.
-
-### 4. View the Game Map
-
-```bash
-curl -X GET "http://localhost:8000/api/v1/game/YOUR_GAME_ID/map" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-### 5. Look Around
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "look"}'
-```
-
-### 6. Try Movement Commands
-
-```bash
-# Move north
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "north"}'
-
-# Other directions: south, east, west
-```
-
-### 7. Other Commands to Try
-
-```bash
-# Check inventory
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "inventory"}'
-
-# Attack an enemy
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "attack wolf"}'
-```
+This project is licensed under the MIT License - see the LICENSE file for details.

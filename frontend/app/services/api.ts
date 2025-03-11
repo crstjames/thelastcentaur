@@ -6,6 +6,46 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_V1_PREFIX = "/api/v1";
 
+// Type definitions
+export interface Game {
+  id: string;
+  name: string;
+  description?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  max_players?: number;
+  current_players?: number;
+  user_id?: string;
+  game_state?: GameState;
+}
+
+export interface GameCommandResponse {
+  command: string;
+  response: string;
+  game_id: string;
+  timestamp: string;
+  game_state?: Record<string, unknown>;
+}
+
+export interface MapResponse {
+  tiles: Array<{
+    id: string;
+    position_x: number;
+    position_y: number;
+    terrain_type: string;
+    description: string;
+    is_visited: boolean;
+    items: Record<string, unknown>;
+    enemies: Record<string, unknown>;
+    exits: string[];
+  }>;
+  current_position: {
+    x: number;
+    y: number;
+  };
+}
+
 // Authentication API
 export const authAPI = {
   /**
@@ -137,19 +177,6 @@ export const authAPI = {
 };
 
 /**
- * Game interface
- */
-export interface Game {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  created_at: string;
-  user_id: string;
-  game_state?: GameState;
-}
-
-/**
  * GameState interface
  */
 export interface GameState {
@@ -160,38 +187,24 @@ export interface GameState {
     max_stamina?: number;
     level?: number;
     experience?: number;
-    gold?: number;
     inventory?: string[];
+    position?: {
+      x: number;
+      y: number;
+    };
+  };
+  environment?: {
+    time_of_day?: string;
+    weather?: string;
+    temperature?: string;
   };
   current_tile?: {
-    terrain_type?: string;
+    id?: string;
     description?: string;
-    items?: Array<{
-      id: string;
-      name: string;
-      description: string;
-      type: string;
-      properties?: Record<string, unknown>;
-    }>;
-    enemies?: Array<{
-      id: string;
-      name: string;
-      description: string;
-      health: number;
-      damage: number;
-      drops?: string[];
-    }>;
+    items?: string[];
     npcs?: string[];
-    exits?: string[];
+    enemies?: string[];
   };
-  // Legacy properties for backward compatibility
-  health?: number;
-  stamina?: number;
-  level?: number;
-  experience?: number;
-  gold?: number;
-  location?: string;
-  inventory?: string[];
 }
 
 /**
@@ -230,7 +243,7 @@ export const gameAPI = {
    */
   listGames: async (token: string): Promise<Game[]> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -255,7 +268,7 @@ export const gameAPI = {
    */
   getGame: async (token: string, gameId: string): Promise<Game> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -280,7 +293,7 @@ export const gameAPI = {
    */
   createGame: async (token: string, name: string, description: string): Promise<Game> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -305,9 +318,9 @@ export const gameAPI = {
   /**
    * Delete a game
    */
-  deleteGame: async (token: string, gameId: string): Promise<boolean> => {
+  deleteGame: async (token: string, gameId: string): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -319,8 +332,6 @@ export const gameAPI = {
         console.error(`Failed to delete game: ${response.status} ${response.statusText}`);
         throw new Error(`Failed to delete game: ${response.status}`);
       }
-
-      return true;
     } catch (error) {
       console.error("Network error when deleting game:", error);
       throw error; // Re-throw to be handled by the component
@@ -328,16 +339,42 @@ export const gameAPI = {
   },
 
   /**
-   * Send a command to the game
+   * Update a game
    */
-  sendCommand: async (
+  updateGame: async (token: string, gameId: string, data: { name?: string; description?: string }): Promise<Game> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        console.error(`Failed to update game: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to update game: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error("Network error when updating game:", error);
+      throw error; // Re-throw to be handled by the component
+    }
+  },
+
+  /**
+   * Execute a command on a game
+   */
+  executeCommand: async (
     token: string,
     gameId: string,
     command: string,
     useLLM: boolean = true
-  ): Promise<CommandResponse> => {
+  ): Promise<GameCommandResponse> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/command`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}/command`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -354,6 +391,31 @@ export const gameAPI = {
       return response.json();
     } catch (error) {
       console.error("Network error when executing command:", error);
+      throw error; // Re-throw to be handled by the component
+    }
+  },
+
+  /**
+   * Get the game map
+   */
+  getMap: async (token: string, gameId: string): Promise<MapResponse> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}/map`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error(`Failed to get map: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to get map: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error("Network error when getting map:", error);
       throw error; // Re-throw to be handled by the component
     }
   },
@@ -381,5 +443,17 @@ export const gameAPI = {
       console.error("Network error when loading game history:", error);
       throw error; // Re-throw to be handled by the component
     }
+  },
+
+  /**
+   * Send a command to the game (alias for executeCommand for backward compatibility)
+   */
+  sendCommand: async (
+    token: string,
+    gameId: string,
+    command: string,
+    useLLM: boolean = true
+  ): Promise<GameCommandResponse> => {
+    return gameAPI.executeCommand(token, gameId, command, useLLM);
   },
 };

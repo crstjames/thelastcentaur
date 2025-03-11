@@ -148,11 +148,14 @@ class CommandParser:
             # Handle teleporting to areas
             if debug_command == "teleport" and debug_args:
                 area_name = " ".join(debug_args)
-                from .map_system import GAME_MAP
+                
+                # Create a map manager instance
+                from .map_system import MapManager
+                map_manager = MapManager()
                 
                 # Find the area by name
                 target_area = None
-                for area_id, area_node in GAME_MAP.items():
+                for area_id, area_node in map_manager.areas.items():
                     if isinstance(area_id, str) and area_id.lower() == area_name.lower():
                         target_area = area_id
                         break
@@ -164,15 +167,18 @@ class CommandParser:
                         break
                 
                 if target_area:
-                    # Update player's current area
-                    self.player.state.current_area = target_area
-                    # Update player's position
-                    self.player.state.position = GAME_MAP[target_area].position
-                    # Get the new tile state
-                    self.player.update_current_tile()
-                    return Command(CommandType.ROLEPLAY, ["debug_teleport", area_name])
-                else:
-                    return Command(CommandType.INVALID, error_message=f"Unknown area: {area_name}")
+                    # Get the area node
+                    area_node = map_manager.get_area_node(target_area)
+                    if area_node:
+                        # Update player's current area
+                        self.player.state.current_area = target_area
+                        # Update player's position
+                        self.player.state.position = area_node.position
+                        # Get the new tile state
+                        self.player.update_current_tile()
+                        return Command(CommandType.ROLEPLAY, ["debug_teleport", area_name])
+                
+                return Command(CommandType.INVALID, error_message=f"Unknown area: {area_name}")
             
             # If debug command not recognized, return invalid command
             return Command(CommandType.INVALID, error_message=f"Unknown debug command: {debug_command}")
@@ -180,6 +186,18 @@ class CommandParser:
         # Handle movement commands (single letter directions)
         if command_word in self.DIRECTION_MAP:
             return Command(CommandType.MOVE, [self.DIRECTION_MAP[command_word]])
+        
+        # Handle "move [direction]" command format
+        if command_word == "move" and args:
+            direction_word = args[0].lower()
+            if direction_word in self.DIRECTION_MAP:
+                return Command(CommandType.MOVE, [self.DIRECTION_MAP[direction_word]])
+        
+        # Handle "go [direction]" command format
+        if command_word == "go" and args:
+            direction_word = args[0].lower()
+            if direction_word in self.DIRECTION_MAP:
+                return Command(CommandType.MOVE, [self.DIRECTION_MAP[direction_word]])
         
         # Handle explicit combat command aliases
         if command_word == "fight" and args:
@@ -245,10 +263,6 @@ class CommandParser:
         if command_word == "take" and args:
             return Command(CommandType.TAKE, args)
         
-        # Check for drop command
-        if command_word == "drop" and args:
-            return Command(CommandType.DROP, args)
-        
         # Check for help command
         if command_word == "help":
             return Command(CommandType.HELP)
@@ -306,7 +320,15 @@ class CommandParser:
         if command.type == CommandType.LOOK:
             if not command.args:
                 # Look at the current tile
-                return self.player.state.current_tile.get_description()
+                current_tile = self.player.state.current_tile
+                if current_tile:
+                    # Safely check if get_description method exists
+                    if hasattr(current_tile, 'get_description') and callable(getattr(current_tile, 'get_description')):
+                        return current_tile.get_description()
+                    # Fallback to description field
+                    if hasattr(current_tile, 'description'):
+                        return current_tile.description
+                return "You look around. Nothing unusual in this area."
             else:
                 # Look in a specific direction
                 direction = command.args[0]
@@ -569,13 +591,25 @@ class CommandParser:
             return "Take what?"
             
         item_name = " ".join(args)
+        print(f"DEBUG: Attempting to take item: '{item_name}'")
+        
         current_tile = self.player.state.current_tile
         
-        if not current_tile or not current_tile.items:
+        if not current_tile:
+            print("DEBUG: No current tile!")
             return "There are no items here."
+            
+        if not hasattr(current_tile, 'items') or not current_tile.items:
+            print(f"DEBUG: No items on tile! Items attribute exists: {hasattr(current_tile, 'items')}")
+            return "There are no items here."
+            
+        # Log available items for debugging
+        print(f"DEBUG: Available items on tile: {current_tile.items}")
             
         # Use our new matching function to find a matching item
         matched_item = self.find_matching_item(item_name, current_tile.items)
+        
+        print(f"DEBUG: Matched item: {matched_item}")
         
         if matched_item:
             # For tests, ensure inventory exists
@@ -591,6 +625,14 @@ class CommandParser:
             # Special case for shadow_essence_fragment
             if matched_item == "shadow_essence_fragment":
                 return "You carefully gather the fragment of shadow essence, a swirling dark mist that seems to coalesce into a semi-solid form in your hand. It pulses with mysterious energy and feels cold to the touch. You've added shadow_essence_fragment to your inventory."
+            
+            # Special case for rusty_sword
+            if matched_item == "rusty_sword":
+                return "You pull the rusty sword from the stump with a satisfying thunk. Despite its worn appearance, it still feels solid in your grip. You've added rusty_sword to your inventory."
+                
+            # Special case for leather_pouch
+            if matched_item == "leather_pouch":
+                return "You pick up the leather pouch, feeling the weight of a few coins inside. It's sturdy and well-crafted, perfect for carrying small treasures. You've added leather_pouch to your inventory."
             
             return f"You picked up the {matched_item}."
         else:
@@ -1182,8 +1224,14 @@ class CommandParser:
             return "Move where?"
             
         direction_str = args[0].lower()
-        direction = self.DIRECTION_MAP.get(direction_str)
+        direction = None
         
+        # Handle both string and Direction enum
+        if isinstance(direction_str, str):
+            direction = self.DIRECTION_MAP.get(direction_str)
+        else:
+            direction = direction_str
+            
         if not direction:
             return f"Unknown direction: {direction_str}"
             
@@ -1192,27 +1240,39 @@ class CommandParser:
         if not current_position:
             return "You are in an unknown location."
             
-        # Check if the path is blocked
+        # Check if the path is blocked - safely check for blocked_paths
         current_tile = self.player.state.current_tile
-        if current_tile and direction in current_tile.blocked_paths:
-            return f"The path to the {direction.value} is blocked."
+        if current_tile:
+            # Safely check if blocked_paths exists and contains the direction
+            blocked_paths = getattr(current_tile, 'blocked_paths', [])
+            if direction in blocked_paths:
+                return f"The path to the {direction.value} is blocked."
             
         # Move the player
-        success, message = self.player.move(direction)
-        
-        if success:
-            # Advance time by 15 minutes for movement
-            time_events = self.player.time_system.advance_time(15)
-            time_message = " ".join(time_events.values()) if time_events else ""
+        try:
+            success, message = self.player.move(direction)
             
-            # Get description of new location
-            new_tile = self.player.state.current_tile
-            if new_tile:
-                description = new_tile.get_description()
-                return f"Moved {direction.value}. {description}\n\n{time_message}"
-            return f"Moved {direction.value}. {time_message}"
-        else:
-            return message 
+            if success:
+                # Advance time by 15 minutes for movement
+                time_events = self.player.time_system.advance_time(15)
+                time_message = " ".join(time_events.values()) if time_events else ""
+                
+                # Get description of new location
+                new_tile = self.player.state.current_tile
+                if new_tile:
+                    description = getattr(new_tile, 'description', "You arrive at a new location.")
+                    # If get_description method exists, use it
+                    if hasattr(new_tile, 'get_description') and callable(getattr(new_tile, 'get_description')):
+                        description = new_tile.get_description()
+                    return f"Moved {direction.value}. {description}\n\n{time_message}"
+                return f"Moved {direction.value}. {time_message}"
+            else:
+                return message 
+        except Exception as e:
+            import traceback
+            print(f"Error moving: {str(e)}")
+            print(traceback.format_exc())
+            return "You can't go that way right now."
     
     def handle_talk_command(self, args: List[str]) -> str:
         """Handle talking to NPCs."""
@@ -1282,30 +1342,77 @@ class CommandParser:
             
         return f"You are carrying: {', '.join(self.player.state.inventory)}."
 
-    def find_matching_item(self, item_name: str, available_items: List[str]) -> Optional[str]:
+    def find_matching_item(self, item_name: str, available_items: List) -> Optional[Any]:
         """
         Find an item in the available items list that matches the given partial name.
         
         Args:
             item_name: The partial item name to search for
-            available_items: List of available item IDs
+            available_items: List of available items (either strings or Item objects)
             
         Returns:
-            The full item ID if found, None otherwise
+            The matched item if found, None otherwise
         """
-        # First check for exact match
-        if item_name in available_items:
-            return item_name
+        # Convert the input to lowercase and remove extra spaces
+        search_term = item_name.lower().strip()
         
-        # Check if the item name is a substring of any available item
+        # Convert available items to a list of (item, name) tuples for easier comparison
+        item_name_pairs = []
         for item in available_items:
-            # Convert underscores to spaces for better matching
-            item_readable = item.replace('_', ' ')
+            if isinstance(item, str):
+                item_name_pairs.append((item, item))
+            elif hasattr(item, 'name'):
+                item_name_pairs.append((item, item.name))
+            elif hasattr(item, 'id'):
+                item_name_pairs.append((item, item.id))
+            elif isinstance(item, dict) and 'name' in item:
+                item_name_pairs.append((item, item['name']))
+            else:
+                # If we can't extract a name, skip this item
+                print(f"WARNING: Could not extract name from item: {item}")
+                continue
+        
+        print(f"DEBUG: Available items with names: {item_name_pairs}")
+        
+        # Special case handling
+        if search_term in ["pouch", "leather pouch", "the pouch", "the leather pouch"]:
+            # Only search the name part, which we know is a string
+            return next((item for item, name in item_name_pairs if "pouch" in name.lower()), None)
+                    
+        if search_term in ["sword", "rusty sword", "the sword", "the rusty sword"]:
+            # Only search the name part, which we know is a string
+            return next((item for item, name in item_name_pairs if "sword" in name.lower()), None)
             
-            # Check if the item name is contained in the readable item name
-            if item_name.lower() in item_readable.lower():
+        # Remove articles like "the", "a", "an" from the search term
+        for article in ["the ", "a ", "an "]:
+            if search_term.startswith(article):
+                search_term = search_term[len(article):]
+        
+        # First check for exact match
+        for item, name in item_name_pairs:
+            if search_term == name.lower():
+                return item
+                
+        # Check for items where the search term matches the complete item name
+        for item, name in item_name_pairs:
+            name_readable = name.replace('_', ' ').lower()
+            if search_term == name_readable:
                 return item
         
+        # Check if the search term is a substring of any available item
+        for item, name in item_name_pairs:
+            # Convert underscores to spaces for better matching
+            name_readable = name.replace('_', ' ').lower()
+            
+            # Check if the search term is contained in the readable item name
+            if search_term in name_readable:
+                return item
+                
+            # Also check the reverse - if the readable name is in the search term
+            if name_readable in search_term:
+                return item
+        
+        # If we get here, no match was found
         return None
 
     def find_matching_enemy(self, enemy_name: str, available_enemies: List) -> Optional[Any]:

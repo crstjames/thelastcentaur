@@ -6,7 +6,7 @@ useful for both development and potentially in-game map features.
 """
 
 from typing import Dict, List, Set, Tuple
-from .map_system import GAME_MAP, AreaNode, AreaConnection
+from .map_system import MapManager, AreaNode, AreaConnection
 from .models import StoryArea, Direction
 
 def create_ascii_map() -> str:
@@ -18,19 +18,19 @@ def create_ascii_map() -> str:
     grid = [[' ' for _ in range(10)] for _ in range(10)]
     
     # Add areas to grid
-    for area, node in GAME_MAP.items():
+    for area, node in MapManager.items():
         x, y = node.position
         # Flip y coordinate since we want (0,0) at bottom
         y = 9 - y
         grid[y][x] = 'O'
     
     # Add connections
-    for area, node in GAME_MAP.items():
+    for area, node in MapManager.items():
         x, y = node.position
         y = 9 - y  # Flip y coordinate
         
         for conn in node.connections:
-            dest = GAME_MAP[conn.to_area]
+            dest = MapManager[conn.to_area]
             dest_x, dest_y = dest.position
             dest_y = 9 - dest_y  # Flip y coordinate
             
@@ -63,7 +63,7 @@ def create_ascii_map() -> str:
 
 def get_area_info(area: StoryArea) -> str:
     """Get detailed information about an area."""
-    node = GAME_MAP[area]
+    node = MapManager[area]
     info = [
         f"Area: {area.value}",
         f"Position: {node.position}",
@@ -121,7 +121,7 @@ def get_path_info(path_type: str) -> str:
     areas = path_areas[path_type]
     
     for i, area in enumerate(areas):
-        node = GAME_MAP[area]
+        node = MapManager[area]
         info.append(f"\n{i+1}. {area.value}")
         info.append(f"   Location: {node.position}")
         if i < len(areas) - 1:

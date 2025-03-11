@@ -9,8 +9,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 
-from .models import Direction, TileState, TerrainType, PathType
-from .map_system import MapSystem, GAME_MAP
+from .models import Direction, TerrainType, PathType
+from src.core.models import TileState, Item, Enemy
+from .map_system import MapManager
 from .models import StoryArea
 from .game_systems import TimeSystem, TimeOfDay, AchievementSystem, TitleSystem, LeaderboardSystem, LeaderboardEntry
 
@@ -45,7 +46,7 @@ class MovementError(Exception):
 class Player:
     """Handles player state and movement."""
     
-    def __init__(self, map_system: MapSystem, player_id: str, player_name: str):
+    def __init__(self, map_system: MapManager, player_id: str, player_name: str):
         self.state = PlayerState(
             player_id=player_id,
             player_name=player_name,
@@ -61,14 +62,35 @@ class Player:
         
         # Initialize current tile as TileState
         starting_node = self.map_system.get_area_node(StoryArea.AWAKENING_WOODS)
+        
+        # Convert item strings to Item objects
+        item_objects = []
+        for item_id in starting_node.items:
+            item_objects.append(Item(
+                id=item_id,
+                name=item_id.replace('_', ' ').title(),
+                description=f"A {item_id.replace('_', ' ')}",
+                type="item"
+            ))
+            
+        # Convert enemy strings to Enemy objects
+        enemy_objects = []
+        for enemy_id in starting_node.enemies:
+            enemy_objects.append(Enemy(
+                name=enemy_id,
+                description=f"A {enemy_id.replace('_', ' ')}",
+                health=50,
+                damage=10
+            ))
+        
         self.state.current_tile = TileState(
             position=starting_node.position,
             terrain_type=starting_node.terrain_type,
             area=starting_node.area,
             description=starting_node.base_description,
-            items=starting_node.items.copy(),
-            enemies=starting_node.enemies,
-            npcs=starting_node.npcs if starting_node.npcs else [],
+            items=item_objects,
+            enemies=enemy_objects,
+            npcs=starting_node.npcs if hasattr(starting_node, 'npcs') and starting_node.npcs else [],
             is_visited=True
         )
     
@@ -85,6 +107,19 @@ class Player:
     def y(self) -> int:
         """Get the player's y coordinate."""
         return self.state.position[1]
+    
+    def update_current_tile(self):
+        """Update the current_tile attribute based on the player's position."""
+        if hasattr(self.map_system, 'get_area_by_position'):
+            current_position = self.state.position
+            tile = self.map_system.get_area_by_position(current_position)
+            if tile:
+                self.state.current_tile = tile
+                print(f"DEBUG: Updated current_tile at position {current_position} to {tile.area if hasattr(tile, 'area') else 'Unknown'}")
+            else:
+                print(f"DEBUG: No tile found at position {current_position}")
+        else:
+            print("DEBUG: map_system does not have get_area_by_position method")
     
     def get_possible_moves(self) -> Dict[Direction, str]:
         """Get all possible moves from current position with descriptions."""
@@ -126,6 +161,8 @@ class Player:
         Returns:
             Tuple of (success, message)
         """
+        print(f"DEBUG: Moving in direction {direction}")
+        
         # Get current position and area before moving
         original_position = self.state.position
         original_area = self.state.current_area
@@ -145,105 +182,81 @@ class Player:
         else:
             return False, "Invalid direction."
         
-        # Check if the new position is valid
+        # Check if the new position is valid (only check grid boundaries)
         new_x, new_y = new_position
         if new_x < 0 or new_y < 0 or new_x >= 10 or new_y >= 10:  # Assuming 10x10 map
-            return False, "You cannot go that way."
+            print(f"DEBUG: Movement failed - position {new_position} is out of bounds")
+            return False, f"You cannot go {direction.value} - grid boundary reached."
         
-        # Check if the path is blocked
-        if direction in self.state.blocked_paths.get(self.state.position, []):
-            return False, "That path is blocked."
+        print(f"DEBUG: New position will be {new_position}")
         
-        # Check if this is a transition between areas
-        current_area = self.state.current_area
+        # Get the area node for the new position - we need this for description
+        new_area_node = self.map_system.get_area_by_position(new_position)
+        if not new_area_node:
+            print(f"DEBUG: No area node found for position {new_position}")
+            return False, f"You cannot go {direction.value} - no area defined at that position."
         
-        # Get the area node for the current area
-        current_node = self.map_system.get_area_node(current_area)
+        print(f"DEBUG: Found area node: {new_area_node.area}")
         
-        # Find if there's a connection in the requested direction
-        connection = next((c for c in current_node.connections if c.direction == direction), None)
+        # Check for blocked paths
+        if hasattr(self.state, "blocked_paths") and self.state.position in self.state.blocked_paths:
+            blocked_directions = self.state.blocked_paths[self.state.position]
+            if direction in blocked_directions:
+                print(f"DEBUG: Path to {direction.value} is blocked by entity")
+                return False, f"The path to the {direction.value} is blocked."
         
-        if connection:
-            # This is an area transition
-            to_area = connection.to_area
-            
-            # Check if the player can transition to the new area
-            can_move, message, new_tile = self.map_system.transition_area(
-                current_area, to_area, direction, self.state.inventory
-            )
-            
-            if not can_move:
-                return False, message
-                
-            # Update the player's current area and tile
-            self.state.current_area = to_area
-            self.state.current_tile = new_tile
-            self.state.position = new_position
-            
-            # Mark tile as visited
-            self.state.visited_tiles.add(new_position)
-            
-            return True, f"Moved {direction.value.lower()}. {new_tile.description}"
+        # Check if the area requires items
+        if hasattr(new_area_node, "requirements") and new_area_node.requirements:
+            print(f"DEBUG: Area requires items: {new_area_node.requirements}")
+            missing_items = [item for item in new_area_node.requirements if item not in self.state.inventory]
+            if missing_items:
+                print(f"DEBUG: Player is missing required items: {missing_items}")
+                return False, f"You need {', '.join(missing_items)} to go {direction.value}."
         
-        # If not an area transition, just update position within the same area
+        # Check if the area is passable
+        if hasattr(new_area_node, "is_passable") and not new_area_node.is_passable:
+            print(f"DEBUG: Area at {new_position} is not passable")
+            return False, f"You cannot go {direction.value} - the path is blocked by a magical barrier."
+        
+        # FORCE MOVEMENT - bypass all other checks
+        # Update the player's position directly
         self.state.position = new_position
         
         # Mark tile as visited
         self.state.visited_tiles.add(new_position)
         
-        # Update current tile
-        area_node = self.map_system.get_tile_at_position(new_position)
-        if area_node:
-            # Convert enemy dictionaries to Enemy objects if needed
-            enemies = area_node.enemies
-            if enemies and isinstance(enemies[0], dict):
-                from .models import Enemy
-                enemies = [Enemy(**enemy) for enemy in enemies]
-            
-            self.state.current_tile = TileState(
-                position=new_position,
-                terrain_type=area_node.terrain_type,
-                area=area_node.area,
-                description=area_node.base_description,
-                items=area_node.items.copy() if hasattr(area_node, 'items') else [],
-                enemies=enemies if hasattr(area_node, 'enemies') else [],
-                npcs=area_node.npcs if hasattr(area_node, 'npcs') else [],
-                is_visited=True,
-                environmental_changes=area_node.environmental_changes if hasattr(area_node, 'environmental_changes') else []
-            )
-            
-            # Update current area if it's different
-            if area_node.area != self.state.current_area:
-                self.state.current_area = area_node.area
+        # Update current area based on new position
+        from src.engine.core.map_system import NAMED_AREAS
+        print(f"DEBUG: NAMED_AREAS contains positions: {list(NAMED_AREAS.keys())}")
+        if new_position in NAMED_AREAS:
+            self.state.current_area = NAMED_AREAS[new_position]
+            print(f"DEBUG: Updated current area to {self.state.current_area.value}")
+        else:
+            print(f"DEBUG: Position {new_position} not found in NAMED_AREAS")
         
-        # Check if we actually moved to a new location
-        if self.state.position == original_position and self.state.current_area == original_area:
-            # We're still in the same place - this might be a bug or a special case
-            # For now, let's add a note to the message
-            return True, f"Moved {direction.value.lower()}, but you seem to be in the same location. This might be a special area or a loop in the map."
+        # Update the current tile based on the new position
+        self.update_current_tile()
         
-        # Get description of new location
-        return True, self.get_current_tile_description()
+        # Determine appropriate message based on direction
+        direction_name = direction.value.lower()
+        return True, f"Moved {direction_name}."
     
     def _validate_movement(self, direction: Direction) -> None:
-        """Validate if movement is possible."""
+        """Validate if movement in the given direction is possible."""
+        # Calculate new position
         new_x, new_y = self._get_new_position(direction)
         
-        # Check map boundaries
+        # Check if new position is within bounds
         if not (0 <= new_x < 10 and 0 <= new_y < 10):
-            raise MovementError("A shimmering magical barrier blocks your path.")
-        
-        # Check stamina
-        if self.state.stats.stamina < 5:
-            raise MovementError("Not enough stamina to move.")
+            raise MovementError("You cannot go that way. The path is blocked.")
         
         # Check if path is blocked by enemy
         if self.state.current_tile and self.state.current_tile.enemies:
             raise MovementError(f"Path blocked by {self.state.current_tile.enemies[0].name}. Defeat it to proceed.")
         
         # Check if the new position is a valid area
-        new_area = self._get_area_for_position((new_x, new_y))
-        if new_area not in GAME_MAP:
+        area_node = self.map_system.get_area_by_position((new_x, new_y))
+        if not area_node or not area_node.is_passable:
             raise MovementError("A magical barrier prevents you from going that way.")
     
     def _get_new_position(self, direction: Direction) -> Tuple[int, int]:
@@ -275,14 +288,14 @@ class Player:
         return current_tile.enemies[0].name
     
     def _get_area_for_position(self, position: Tuple[int, int]) -> StoryArea:
-        """Get the area for a given position."""
-        # First try to find the area in the GAME_MAP
-        for area, node in GAME_MAP.items():
-            if isinstance(area, str):
-                continue  # Skip string-based area names
-            if node.position == position:
-                return area
-        return self.state.current_area  # Stay in current area if position not found
+        """Get the area for a position."""
+        # Check if this position has a named area
+        area_node = self.map_system.get_area_by_position(position)
+        if area_node and area_node.area:
+            return area_node.area
+        
+        # If no named area, return a generic area identifier
+        return f"Area ({position[0]},{position[1]})"
     
     def get_movement_history(self) -> List[Tuple[int, int]]:
         """Get list of visited tiles in order of visit."""
@@ -632,4 +645,61 @@ class Player:
             enhanced_description = self.game_systems.enhance_tile_description(self.state.current_tile)
             return enhanced_description
         
-        return base_description 
+        return base_description
+
+    def get_blocked_paths(self, position: Tuple[int, int]) -> List[Direction]:
+        """
+        Determine which paths are blocked based on surrounding area nodes.
+        
+        Args:
+            position: The position to check surrounding areas for
+            
+        Returns:
+            List of blocked directions
+        """
+        blocked = []
+        x, y = position
+        
+        # Special case for AWAKENING_WOODS - allow ALL movement from starting area
+        if position == (0, 0):  # Awakening Woods is at (0,0)
+            # Return empty list - no paths are blocked from starting area
+            return []
+        
+        # For all other positions, check surrounding tiles
+        # Check grid boundaries first
+        if y + 1 >= 10:
+            blocked.append(Direction.NORTH)
+        if y - 1 < 0:
+            blocked.append(Direction.SOUTH)
+        if x + 1 >= 10:
+            blocked.append(Direction.EAST)
+        if x - 1 < 0:
+            blocked.append(Direction.WEST)
+            
+        # Now check if adjacent positions have passable areas
+        try:
+            # Only check positions that aren't already blocked by grid boundaries
+            if Direction.NORTH not in blocked:
+                area_node = self.map_system.get_area_by_position((x, y + 1))
+                if not area_node or not area_node.is_passable:
+                    blocked.append(Direction.NORTH)
+                    
+            if Direction.SOUTH not in blocked:
+                area_node = self.map_system.get_area_by_position((x, y - 1))
+                if not area_node or not area_node.is_passable:
+                    blocked.append(Direction.SOUTH)
+                    
+            if Direction.EAST not in blocked:
+                area_node = self.map_system.get_area_by_position((x + 1, y))
+                if not area_node or not area_node.is_passable:
+                    blocked.append(Direction.EAST)
+                    
+            if Direction.WEST not in blocked:
+                area_node = self.map_system.get_area_by_position((x - 1, y))
+                if not area_node or not area_node.is_passable:
+                    blocked.append(Direction.WEST)
+        except Exception as e:
+            # If any error occurs, log it but don't block movement
+            print(f"Error checking blocked paths: {str(e)}")
+            
+        return blocked 

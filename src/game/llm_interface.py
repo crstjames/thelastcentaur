@@ -60,6 +60,15 @@ class LLMInterface:
         - If the game shows "Wolf Pack" as an enemy, and the player says "attack wolves", you MUST return "attack Wolf Pack"
         - If the game shows "basic_supplies" as an item, and the player says "get supplies", you MUST return "take basic_supplies"
         - If the game shows "shadow_scout" as an NPC, and the player says "talk to the scout", you MUST return "talk shadow_scout"
+        - If the game shows "rusty_sword" as an item, and the player says "grab the rust sword", you MUST return "take rusty_sword"
+        - If the game shows "leather_pouch" as an item, and the player says "pick up pouch", you MUST return "take leather_pouch"
+        
+        ITEM NAME MATCHING:
+        Players will often use approximate names, abbreviated names, or descriptive phrases for items. You MUST match these to the exact item names:
+        - For item names with underscores, match to parts of the name (e.g., "sword" should match "rusty_sword")
+        - For descriptive item names, match the key noun (e.g., "potion" should match "healing_potion" or "magic_potion")
+        - For items with adjectives, match even if the adjective is slightly different or missing (e.g., "rust sword" or "old sword" should match "rusty_sword")
+        - If the player uses a general category that clearly refers to a specific item, match it (e.g., if the only weapon visible is a "steel_dagger", then "grab the weapon" should match to "take steel_dagger")
         
         NPC INTERACTIONS: When the player wants to talk to an NPC, you MUST use the exact NPC ID as it appears in the game state. NPCs are listed in the "NPCs present" section of the context. For example:
 
@@ -110,6 +119,9 @@ class LLMInterface:
         - "Snag that potion" → "take potion" (or the exact item name from the game state)
         - "Gimme that gold" → "take gold" (or the exact item name from the game state)
         - "Swipe the map" → "take old_map" (if "old_map" is the exact item name in the game state)
+        - "Grab the rusty sword" → "take rusty_sword" (if "rusty_sword" is the exact item name in the game state)
+        - "Grab the rust sword" → "take rusty_sword" (if "rusty_sword" is the exact item name in the game state)
+        - "Get the sword" → "take rusty_sword" (if "rusty_sword" is the only sword visible)
         
         Combat:
         - "Let's throw hands with that wolf" → "attack wolf" (or the exact enemy name from the game state)
@@ -165,8 +177,10 @@ class LLMInterface:
         2. For object interactions (examine, take, etc.): ONLY describe the specific object being interacted with, NOT the entire location.
         3. For NPC interactions (talk, chat): Focus only on the conversation and the NPC's appearance/reaction.
         4. Always maintain all the factual information from the original response.
+        5. CRITICAL: When describing movement, ALWAYS respect the provided movement direction. If the player moves NORTH, your description MUST reflect that they moved NORTH, not any other direction.
         
         RESPONSE FORMAT REQUIREMENTS:
+        - For movement commands: Begin with "As you move [DIRECTION]..." using the EXACT direction provided.
         - For movement/look commands: Use up to two short paragraphs with rich environmental details
         - For object interactions: Use ONLY ONE short paragraph (1-2 sentences) focused specifically on the object
         - For NPC interactions: One paragraph for NPC description/reaction, one for the content of their words
@@ -231,255 +245,50 @@ class LLMInterface:
             logger.error(f"Error processing user input: {e}")
             return f"I encountered an error while processing your request: {str(e)}"
     
-    async def _interpret_command(self, user_input: str, game_state: Dict[str, Any] = None) -> str:
-        """
-        Use LLM to interpret natural language input and convert to a game command.
+    async def _interpret_command(self, command: str, game_state: dict, additional_context: str = ""):
+        """Interpret a natural language command and convert it to a game command."""
+        print(f"LLM-DEBUG: Interpreting command: {command}")
         
-        Args:
-            user_input: The natural language input from the user
-            game_state: The current game state for context
-            
-        Returns:
-            Game command string
-        """
         try:
-            # Extract relevant information from game state if available
-            current_items = []
-            current_enemies = []
-            current_exits = []
-            current_npcs = []  # Added explicit tracking of NPCs
-            tile_description = ""
-            terrain_type = ""
-            weather = ""
-            time_of_day = ""
-            player_inventory = []
+            # Structure the prompt for command interpretation
+            prompt = self._build_interpret_prompt(command, game_state, additional_context)
+            print(f"LLM-DEBUG: Built interpretation prompt of length {len(prompt)}")
             
-            if game_state:
-                # Extract current tile information
-                if "current_tile" in game_state:
-                    current_tile = game_state["current_tile"]
-                    
-                    # Extract visible items in the current location
-                    if "items" in current_tile:
-                        current_items = current_tile["items"]
-                    
-                    # Extract visible enemies
-                    if "enemies" in current_tile:
-                        current_enemies = current_tile["enemies"]
-                    
-                    # Extract available exits
-                    if "exits" in current_tile:
-                        current_exits = current_tile["exits"]
-                    
-                    # Extract NPCs in the current location
-                    if "npcs" in current_tile:
-                        # Process NPCs, ensuring they are all strings
-                        for npc in current_tile["npcs"]:
-                            if isinstance(npc, str):
-                                current_npcs.append(npc)
-                            elif hasattr(npc, 'id'):
-                                current_npcs.append(npc.id)
-                            elif isinstance(npc, dict) and 'id' in npc:
-                                current_npcs.append(npc['id'])
-                            else:
-                                # Log the unexpected NPC type
-                                logger.warning(f"Unexpected NPC type: {type(npc)}, {npc}")
-                                continue
-                        logger.info(f"[INTERPRET] NPCs in current tile: {current_npcs}")
-                    
-                    # Extract tile description
-                    if "description" in current_tile:
-                        tile_description = current_tile["description"]
-                    
-                    # Extract terrain type
-                    if "terrain_type" in current_tile:
-                        terrain_type = current_tile["terrain_type"]
-                
-                # Extract environmental information
-                if "environment" in game_state:
-                    if "weather" in game_state["environment"]:
-                        weather = game_state["environment"]["weather"]
-                    if "time_of_day" in game_state["environment"]:
-                        time_of_day = game_state["environment"]["time_of_day"]
-                
-                # Extract player inventory
-                if "player" in game_state and "inventory" in game_state["player"]:
-                    player_inventory = game_state["player"]["inventory"]
-                elif "inventory" in game_state:
-                    player_inventory = game_state["inventory"]
+            # Debug - check first and last 100 chars of prompt
+            print(f"LLM-DEBUG: Prompt start: {prompt[:100]}")
+            print(f"LLM-DEBUG: Prompt end: {prompt[-100:]}")
             
-            # Check for NPC interaction intent
-            lower_input = user_input.lower()
-            logger.info(f"[INTERPRET] Processing user input: '{lower_input}'")
-            
-            # Special handling for NPC interactions
-            # Check if the user is trying to talk to an NPC
-            talk_keywords = ["talk", "speak", "chat", "converse", "ask", "talk to", "speak to", "talk with", "speak with"]
-            is_talk_intent = False
-            for keyword in talk_keywords:
-                if keyword in lower_input:
-                    is_talk_intent = True
-                    logger.info(f"[INTERPRET] Detected talk keyword: '{keyword}' in input")
-                    break
-                    
-            if is_talk_intent and current_npcs:
-                logger.info(f"[INTERPRET] Detected potential talk intent: '{lower_input}', NPCs: {current_npcs}")
-                # Try to extract the NPC name from the user input
-                potential_npc = None
-                
-                # First check for exact NPC matches
-                for npc in current_npcs:
-                    if npc.lower() in lower_input:
-                        potential_npc = npc
-                        logger.info(f"[INTERPRET] Found exact NPC match: '{npc}'")
-                        break
-                
-                # If no exact match, try to find partial matches or references
-                if not potential_npc:
-                    logger.info(f"[INTERPRET] No exact NPC match found, trying partial matches")
-                    # Check for common terms like "scout", "guard", etc.
-                    for npc in current_npcs:
-                        # Extract key terms from NPC id
-                        npc_terms = npc.lower().split('_')
-                        logger.info(f"[INTERPRET] Checking NPC terms for '{npc}': {npc_terms}")
-                        for term in npc_terms:
-                            if term in lower_input and len(term) > 3:  # Only match significant terms
-                                potential_npc = npc
-                                logger.info(f"[INTERPRET] Found partial match: term '{term}' in NPC '{npc}'")
-                                break
-                        if potential_npc:
-                            break
-                
-                # If we found a potential NPC, return the talk command
-                if potential_npc:
-                    logger.info(f"[INTERPRET] Detected talk intent with NPC: {potential_npc}")
-                    return f"talk {potential_npc}"
-                else:
-                    # If we still couldn't find an NPC but the intent is to talk,
-                    # and there's only one NPC present, assume that's the target
-                    if len(current_npcs) == 1:
-                        npc = current_npcs[0]
-                        logger.info(f"[INTERPRET] Assuming talk intent with the only NPC present: {npc}")
-                        return f"talk {npc}"
-                    else:
-                        logger.info(f"[INTERPRET] Could not identify an NPC target for talk command")
-            
-            # For simple, unambiguous commands, use pattern matching for efficiency
-            
-            # Check for direct direction commands
-            directions = {"north": ["north", "n"], "south": ["south", "s"], 
-                         "east": ["east", "e"], "west": ["west", "w"]}
-            
-            for direction, patterns in directions.items():
-                for pattern in patterns:
-                    if pattern == lower_input or f"go {pattern}" in lower_input or f"move {pattern}" in lower_input:
-                        logger.info(f"[INTERPRET] Detected direction command: '{direction}'")
-                        return direction
-            
-            # Check for inventory command
-            if lower_input in ["inventory", "i", "check inventory", "check my inventory", "what am i carrying"]:
-                logger.info(f"[INTERPRET] Detected inventory command")
-                return "inventory"
-            
-            # For more complex commands, use the LLM with comprehensive context
-            logger.info(f"[INTERPRET] Using LLM for complex command interpretation")
-            context = f"""
-            User input: {user_input}
-            
-            Current game state:
-            """
-            
-            if tile_description:
-                context += f"Current location description: {tile_description}\n"
-            
-            if terrain_type:
-                context += f"Terrain type: {terrain_type}\n"
-            
-            if current_items:
-                # Ensure all items are strings
-                item_names = []
-                for item in current_items:
-                    if isinstance(item, str):
-                        item_names.append(item)
-                    elif hasattr(item, 'name'):
-                        item_names.append(item.name)
-                    elif isinstance(item, dict) and 'name' in item:
-                        item_names.append(item['name'])
-                    else:
-                        # Skip any items that can't be converted to strings
-                        continue
-                
-                if item_names:
-                    context += f"Items visible: {', '.join(item_names)}\n"
-            
-            if current_enemies:
-                # Ensure all enemies are strings
-                enemy_names = []
-                for enemy in current_enemies:
-                    if isinstance(enemy, str):
-                        enemy_names.append(enemy)
-                    elif hasattr(enemy, 'name'):
-                        enemy_names.append(enemy.name)
-                    elif isinstance(enemy, dict) and 'name' in enemy:
-                        enemy_names.append(enemy['name'])
-                    else:
-                        # Skip any enemies that can't be converted to strings
-                        continue
-                
-                if enemy_names:
-                    context += f"Enemies present: {', '.join(enemy_names)}\n"
-            
-            if current_npcs:
-                context += f"NPCs present: {', '.join(current_npcs)}\n"
-            
-            if current_exits:
-                context += f"Available exits: {', '.join(current_exits)}\n"
-            
-            if weather:
-                context += f"Current weather: {weather}\n"
-            
-            if time_of_day:
-                context += f"Time of day: {time_of_day}\n"
-            
-            if player_inventory:
-                # Convert Item objects to strings if needed
-                inventory_items = []
-                for item in player_inventory:
-                    if isinstance(item, str):
-                        inventory_items.append(item)
-                    elif hasattr(item, 'name'):
-                        inventory_items.append(item.name)
-                    elif isinstance(item, dict) and 'name' in item:
-                        inventory_items.append(item['name'])
-                    else:
-                        # Log the unexpected item type
-                        logger.warning(f"Unexpected item type in inventory: {type(item)}, {item}")
-                        continue
-                
-                context += f"Items in inventory: {', '.join(inventory_items)}\n"
-            else:
-                context += "Inventory is empty.\n"
-            
-            # Use OpenAI for command interpretation with comprehensive context
-            logger.info(f"[INTERPRET] Sending command to LLM for interpretation")
+            # Call the API
+            print(f"LLM-DEBUG: Calling LLM API")
             response = await self.openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": self.command_system_prompt},
-                    {"role": "user", "content": context + f"\nWhat is the appropriate game command for: '{user_input}'?"}
+                    {"role": "user", "content": prompt}
                 ],
                 temperature=0.2,
-                max_tokens=50
+                max_tokens=400
             )
             
-            interpreted_command = response.choices[0].message.content.strip()
-            logger.info(f"[INTERPRET] LLM interpreted command: '{interpreted_command}'")
-            return interpreted_command
+            # Extract the result
+            result = response.choices[0].message.content
+            print(f"LLM-DEBUG: LLM API response: {result}")
+            
+            # Basic parsing - extract and log any detected command
+            if "DETECTED_COMMAND:" in result:
+                detected_line = [line for line in result.split('\n') if "DETECTED_COMMAND:" in line][0]
+                detected_command = detected_line.split("DETECTED_COMMAND:")[1].strip()
+                print(f"LLM-DEBUG: Detected command: {detected_command}")
+                return detected_command
+            
+            print(f"LLM-DEBUG: No detected command found in response, returning original command: {command}")
+            return command  # If no command detected, return original
             
         except Exception as e:
-            logger.error(f"Error interpreting command: {e}")
-            # Fall back to passing the input directly as a command
-            return user_input
+            print(f"LLM-DEBUG: Error interpreting command: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return command  # Return original on error
     
     async def _send_command_to_game(self, command: str, game_id: str, access_token: str) -> str:
         """
@@ -721,9 +530,21 @@ class LLMInterface:
             
             # Determine the command type for better response formatting
             command_type = "location_description"  # Default
+            movement_direction = None
+            
+            # Identify movement commands and extract the direction
+            direction_keywords = ["north", "south", "east", "west", "n", "s", "e", "w"]
             
             # For movement commands or general look
-            if game_command.startswith("move") or game_command == "look":
+            if any(dir_word == game_command.lower() for dir_word in direction_keywords):
+                command_type = "location_description"
+                movement_direction = game_command.lower()
+            elif game_command.startswith("move") and len(game_command.split()) > 1:
+                direction_part = game_command.split()[1].lower()
+                if direction_part in direction_keywords:
+                    command_type = "location_description"
+                    movement_direction = direction_part
+            elif game_command == "look":
                 command_type = "location_description"
             # For examining specific objects (not general look around)
             elif ("examine" in game_command or "look at" in game_command or "inspect" in game_command) and game_command != "look":
@@ -740,8 +561,18 @@ class LLMInterface:
             Response Type: {command_type}
             User input: {user_input}
             Game command: {game_command}
-            Original game response: {game_response}
             """
+            
+            # Add explicit direction information for movement commands
+            if movement_direction:
+                direction_map = {"n": "north", "s": "south", "e": "east", "w": "west"}
+                full_direction = direction_map.get(movement_direction, movement_direction)
+                context += f"Movement direction: {full_direction}\n"
+                # Modify the first sentence of the response to clearly state the direction
+                if not game_response.lower().startswith(f"you move {full_direction}"):
+                    game_response = f"You move {full_direction}. " + game_response
+            
+            context += f"Original game response: {game_response}"
             
             logger.info(f"[ENHANCE] Sending response to LLM for enhancement with type: {command_type}")
             # Use OpenAI for response enhancement
@@ -872,4 +703,61 @@ class LLMInterface:
             
         except Exception as e:
             logger.error(f"Error adding environmental item to inventory: {e}")
-            return f"You gather some {item_name} from the surroundings, but something prevents you from keeping them." 
+            return f"You gather some {item_name} from the surroundings, but something prevents you from keeping them."
+    
+    def _build_interpret_prompt(self, command: str, game_state: dict, additional_context: str = ""):
+        """Build a prompt for command interpretation with game state context."""
+        # Extract relevant information from game state
+        context = f"""
+        I need you to interpret my command: "{command}" into a game command.
+        
+        Current game state information:
+        """
+        
+        # Add current location information
+        if game_state and "current_tile" in game_state:
+            current_tile = game_state["current_tile"]
+            
+            # Add description
+            if "description" in current_tile:
+                context += f"\nCurrent location: {current_tile['description']}\n"
+            
+            # Add items
+            if "items" in current_tile and current_tile["items"]:
+                items_str = ", ".join(str(item) for item in current_tile["items"])
+                context += f"Items here: {items_str}\n"
+            
+            # Add NPCs
+            if "npcs" in current_tile and current_tile["npcs"]:
+                npcs_str = ", ".join(str(npc) for npc in current_tile["npcs"])
+                context += f"NPCs here: {npcs_str}\n"
+            
+            # Add exits
+            if "exits" in current_tile and current_tile["exits"]:
+                exits_str = ", ".join(current_tile["exits"])
+                context += f"Available exits: {exits_str}\n"
+        
+        # Add inventory
+        if game_state and "inventory" in game_state and game_state["inventory"]:
+            inventory_str = ", ".join(str(item) for item in game_state["inventory"])
+            context += f"\nInventory: {inventory_str}\n"
+        
+        # Add additional context if provided
+        if additional_context:
+            context += f"\nAdditional information: {additional_context}\n"
+        
+        # Add instruction
+        context += """
+        Please analyze my command and convert it to a valid game command.
+        
+        Example conversions:
+        - "go north" -> "north"
+        - "pick up the sword" -> "take sword"
+        - "talk to the merchant" -> "talk merchant"
+        - "look around" -> "look"
+        - "check my stuff" -> "inventory"
+        
+        Respond with one line starting with "DETECTED_COMMAND:" followed by the exact game command.
+        """
+        
+        return context 

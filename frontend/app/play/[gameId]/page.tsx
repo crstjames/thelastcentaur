@@ -74,6 +74,27 @@ export default function PlayPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Add this effect to update visitedTiles when position changes
+  useEffect(() => {
+    if (playerStats && playerStats.location) {
+      const newVisitedTiles = new Set(visitedTiles);
+      newVisitedTiles.add(playerStats.location);
+
+      // Also add nearby tiles (1 tile radius)
+      const [x, y] = parseCoordinates(playerStats.location);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const nearbyPos = `${x + dx},${y + dy}`;
+          if (x + dx >= 0 && y + dy >= 0) {
+            newVisitedTiles.add(nearbyPos);
+          }
+        }
+      }
+
+      setVisitedTiles(newVisitedTiles);
+    }
+  }, [playerStats.location]);
+
   // Function to parse coordinates from location string
   const parseCoordinates = (locationStr: string): [number, number] => {
     // Try to extract x,y format
@@ -98,17 +119,48 @@ export default function PlayPage() {
       try {
         gameData = await gameAPI.getGame(token, gameId);
         setGame(gameData);
-      } catch (gameErr) {
+      } catch (gameErr: Error | unknown) {
         console.error("Error loading game data:", gameErr);
-        // Set fallback game data
-        setGame({
-          id: gameId,
-          name: "Adventure One",
-          description: "Your adventure in the world of The Last Centaur",
-          status: "active",
-          created_at: new Date().toISOString(),
-          user_id: user?.id || "unknown",
-        });
+
+        // If game not found (404), create a new game
+        if (gameErr instanceof Error && gameErr.message && gameErr.message.includes("404")) {
+          console.log("Game not found, creating a new game...");
+          try {
+            // Create a new game
+            const newGame = await gameAPI.createGame(
+              token,
+              "Adventure One",
+              "Your adventure in the world of The Last Centaur"
+            );
+
+            console.log("Created new game:", newGame);
+
+            // Redirect to the new game
+            router.replace(`/play/${newGame.id}`);
+
+            // Set the new game data
+            gameData = newGame;
+            setGame(newGame);
+          } catch (createErr) {
+            console.error("Failed to create a new game:", createErr);
+            setError("Failed to create a new game. Please try again.");
+            setLoading(false);
+            return;
+          }
+        } else {
+          // Set fallback game data for other errors
+          setGame({
+            id: gameId,
+            name: "Adventure One",
+            description: "Your adventure in the world of The Last Centaur",
+            status: "active",
+            created_at: new Date().toISOString(),
+            user_id: user?.id || "unknown",
+          });
+
+          // Display error message
+          setError("Error loading game. Some features may not work properly.");
+        }
       }
 
       // Initialize messages array with default welcome messages
@@ -209,39 +261,79 @@ export default function PlayPage() {
         interface ExtendedGameState {
           visited_tiles?: string[];
           current_position?: { x: number; y: number };
+          player?: {
+            health?: number;
+            max_health?: number;
+            stamina?: number;
+            max_stamina?: number;
+            level?: number;
+            experience?: number;
+            next_level_exp?: number;
+            gold?: number;
+            inventory?: string[];
+            location?: string;
+          };
+          location?: string;
         }
         const gameStateExtended = gameState as ExtendedGameState;
 
+        // Initialize a Set to hold our visited tiles
+        const newVisitedTiles = new Set<string>();
+
+        // First add any already visited tiles from the game state
         if (gameStateExtended.visited_tiles && Array.isArray(gameStateExtended.visited_tiles)) {
-          // Store visited tiles in our Set
-          setVisitedTiles(new Set(gameStateExtended.visited_tiles));
-        } else if (gameStateExtended.current_position) {
-          // If we don't have visited_tiles but have position, at least mark current position as visited
-          const pos = `${gameStateExtended.current_position.x},${gameStateExtended.current_position.y}`;
-          setVisitedTiles((prev) => {
-            const newSet = new Set(prev);
-            newSet.add(pos);
-            return newSet;
-          });
+          gameStateExtended.visited_tiles.forEach((tile) => newVisitedTiles.add(tile));
         }
+
+        // Get the current position to ensure it's always marked as visited
+        let currentPos = "";
+        if (gameStateExtended.current_position) {
+          currentPos = `${gameStateExtended.current_position.x},${gameStateExtended.current_position.y}`;
+        } else if (gameStateExtended.player?.location) {
+          currentPos = gameStateExtended.player.location;
+        } else if (gameStateExtended.location) {
+          currentPos = gameStateExtended.location;
+        }
+
+        // If we have a valid position, add it and surrounding tiles
+        if (currentPos && /\d+,\d+/.test(currentPos)) {
+          newVisitedTiles.add(currentPos);
+
+          // Parse coordinates
+          const [x, y] = parseCoordinates(currentPos);
+
+          // Add nearby tiles (1 tile radius)
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              const nearbyPos = `${x + dx},${y + dy}`;
+              if (x + dx >= 0 && y + dy >= 0) {
+                newVisitedTiles.add(nearbyPos);
+              }
+            }
+          }
+        }
+
+        // Update the visitedTiles state with our new Set
+        setVisitedTiles(newVisitedTiles);
 
         // Check both formats - the new nested player object and the old flat structure
         if (gameState.player) {
           // New format with nested player object
-          const playerData = gameState.player;
+          const playerData = gameStateExtended.player;
 
           // Update player stats with the latest data
           setPlayerStats((prev) => ({
             ...prev,
-            health: playerData.health ?? prev.health,
-            maxHealth: playerData.max_health ?? prev.maxHealth,
-            stamina: playerData.stamina ?? prev.stamina,
-            maxStamina: playerData.max_stamina ?? prev.maxStamina,
-            level: playerData.level ?? prev.level,
-            experience: playerData.experience ?? prev.experience,
-            gold: playerData.gold ?? prev.gold,
-            location: gameState.current_tile?.terrain_type || prev.location,
-            inventory: Array.isArray(playerData.inventory) ? playerData.inventory : prev.inventory,
+            health: playerData?.health ?? prev.health,
+            maxHealth: playerData?.max_health ?? prev.maxHealth,
+            stamina: playerData?.stamina ?? prev.stamina,
+            maxStamina: playerData?.max_stamina ?? prev.maxStamina,
+            level: playerData?.level ?? prev.level,
+            experience: playerData?.experience ?? prev.experience,
+            nextLevelExp: playerData?.next_level_exp ?? prev.nextLevelExp,
+            gold: playerData?.gold ?? prev.gold,
+            location: playerData?.location ?? prev.location,
+            inventory: playerData?.inventory ?? prev.inventory,
           }));
         } else {
           // Old format with flat structure
@@ -831,19 +923,14 @@ export default function PlayPage() {
 
         .map-inventory-container {
           display: flex;
-          flex-direction: row;
-          gap: 1rem;
+          flex-direction: column;
+          gap: 1.5rem;
           width: 100%;
         }
 
-        .map-column {
-          width: 50%;
-          display: flex;
-          flex-direction: column;
-        }
-
+        .map-column,
         .inventory-column {
-          width: 50%;
+          width: 100%;
           display: flex;
           flex-direction: column;
         }
@@ -946,101 +1033,184 @@ export default function PlayPage() {
         .inventory-section {
           padding-top: 0;
           margin-top: 0;
-        }
-
-        .inventory-list {
+          position: relative;
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
+          align-items: center;
+          width: 100%;
+        }
+
+        .inventory-container {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          margin-top: 1rem;
+          border: 2px solid #996633;
+          background-color: rgba(12, 12, 12, 0.9);
+          padding: 0.5rem;
+        }
+
+        .inventory-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 0.75rem;
+          width: 100%;
+        }
+
+        .inventory-slot {
+          height: 45px;
+          border: 1px solid #555;
+          background-color: rgba(34, 34, 34, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.35rem;
+          color: #d97706;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.6rem;
+          position: relative;
+        }
+
+        .inventory-slot-empty {
+          color: #666;
+          border: 1px dashed #555;
         }
 
         .inventory-item {
-          color: #f5f5f5;
-          font-size: 0.7rem;
-          background-color: #333;
-          border: 1px solid #4a3520;
-          padding: 0.5rem 0.75rem;
-          border-radius: 0.25rem;
+          width: 100%;
+          height: 100%;
           display: flex;
-          justify-content: space-between;
           align-items: center;
+          justify-content: flex-start;
+          padding-left: 0.5rem;
+          color: #d97706;
+          background-color: rgba(40, 26, 13, 0.7);
           font-family: "Press Start 2P", monospace;
+          font-size: 0.6rem;
+          border: 1px solid #996633;
+          box-shadow: inset 0 0 5px rgba(255, 215, 0, 0.3);
+          text-shadow: 1px 1px 0px #000;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .inventory-empty {
-          text-align: center;
-          color: #d97706;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #996633;
+          font-family: "Press Start 2P", monospace;
           font-size: 0.7rem;
+          margin-top: 1rem;
+          text-shadow: 1px 1px 0px #000;
         }
 
-        /* Map styles adjustment to align with inventory */
+        .item-count {
+          position: absolute;
+          bottom: 2px;
+          right: 4px;
+          font-size: 0.5rem;
+          color: #ffd700;
+        }
+
+        /* Improved map styles */
         .map-section {
           padding-top: 0;
           margin-top: 0;
-        }
-
-        .game-map {
+          position: relative;
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          margin-top: 0.5rem;
-          border: 2px solid #4a3520;
-          padding: 6px;
-          background-color: #222;
+          align-items: center;
         }
 
-        .map-row {
+        .map-container {
+          position: relative;
           display: flex;
-          gap: 4px;
-          height: 20px;
-        }
-
-        .map-tile {
-          width: 20px;
-          height: 20px;
-          flex-shrink: 0;
-          border: 2px solid #111;
-          box-sizing: border-box;
-        }
-
-        .player-position {
-          border-color: #ffd700;
-        }
-
-        .map-legend {
-          font-family: "Press Start 2P", monospace;
-          color: #d97706;
-          margin-top: 0.5rem;
-          font-size: 0.55rem;
+          flex-direction: column;
+          align-items: center;
+          margin: 1.5rem 0;
+          width: 100%;
         }
 
         .direction-markers {
           display: flex;
           justify-content: center;
-          margin-bottom: 0.25rem;
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.8rem;
           color: #ffd700;
-          font-size: 0.6rem;
+          padding: 0.25rem 0;
         }
 
         .compass-container {
           display: flex;
           justify-content: space-between;
           width: 100%;
-          font-size: 0.55rem;
-          margin-top: 0.25rem;
+          padding: 0.25rem 0;
         }
 
-        .game-footer {
-          margin-top: 0.5rem;
-          text-align: center;
-          color: #d97706;
-          font-size: 0.6rem;
-          padding: 0.5rem;
-          background-color: #222;
-          border-top: 1px solid #4a3520;
-          border-bottom-left-radius: 0.375rem;
-          border-bottom-right-radius: 0.375rem;
+        .game-map {
+          display: flex;
+          flex-direction: column;
+          border: 2px solid #996633;
+          background-color: rgba(12, 12, 12, 0.9);
+          padding: 0.4rem;
+          margin: 0 auto;
+          width: 100%;
+          max-width: 500px;
+        }
+
+        .map-row {
+          display: flex;
+          flex-direction: row;
+        }
+
+        .map-tile {
+          width: 30px;
+          height: 30px;
+          margin: 1px;
+        }
+
+        .compass-direction {
+          color: #ffd700;
           font-family: "Press Start 2P", monospace;
+          font-size: 0.8rem;
+          padding: 0 0.25rem;
+        }
+
+        .map-legend {
+          margin-top: 0.5rem;
+          font-size: 0.6rem;
+          width: 100%;
+        }
+
+        .map-position {
+          font-family: "Press Start 2P", monospace;
+          font-size: 0.6rem;
+          color: #ffd700;
+          text-align: center;
+          margin-top: 0.5rem;
+        }
+
+        .legend-items {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+          margin-top: 0.5rem;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .legend-color {
+          width: 12px;
+          height: 12px;
+          border: 1px solid #555;
         }
 
         @keyframes spin {
@@ -1049,6 +1219,58 @@ export default function PlayPage() {
           }
           to {
             transform: rotate(360deg);
+          }
+        }
+
+        /* Add responsive layout styles */
+        @media (max-width: 768px) {
+          .game-content {
+            flex-direction: column !important;
+          }
+
+          .game-panel {
+            width: 100% !important;
+            margin-bottom: 1rem;
+          }
+
+          .stats-panel {
+            width: 100% !important;
+          }
+
+          .map-inventory-container {
+            flex-direction: column !important;
+          }
+
+          .map-column,
+          .inventory-column {
+            width: 100% !important;
+            margin-bottom: 1rem;
+          }
+
+          .game-map {
+            max-width: 100%;
+            height: auto;
+          }
+
+          .map-tile {
+            width: 25px;
+            height: 25px;
+          }
+
+          .inventory-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        /* Add media query for larger screens */
+        @media (min-width: 1200px) {
+          .map-inventory-container {
+            flex-direction: row;
+          }
+
+          .map-column,
+          .inventory-column {
+            width: 50%;
           }
         }
       `}</style>
@@ -1232,116 +1454,165 @@ export default function PlayPage() {
                   <div className="map-inventory-container">
                     {/* Left column - Map */}
                     <div className="map-column">
-                      {/* Map section - adjusting to align with inventory */}
-                      <div className="map-section">
-                        <h3 className="section-title">MAP</h3>
+                      {/* Only show map if player has old_map in inventory */}
+                      {playerStats.inventory.includes("old_map") && (
+                        <div className="map-section">
+                          <h3 className="section-title">MAP</h3>
 
-                        {/* Add north marker */}
-                        <div className="direction-markers">N</div>
+                          <div className="map-container">
+                            {/* North marker */}
+                            <div className="direction-markers">
+                              <span className="compass-direction">N</span>
+                            </div>
 
-                        <div className="game-map">
-                          {/* Map is rendered with north at the top (decreasing Y values) */}
-                          {Array.from({ length: 10 }, (_, rowIndex) => {
-                            // Invert the row index to flip the map vertically
-                            // This makes north (decreasing Y) go up on the screen
-                            const row = 9 - rowIndex; // Flip the Y-axis (0 at bottom, 9 at top)
+                            {/* West-East row with map */}
+                            <div className="compass-container">
+                              <span className="compass-direction">W</span>
 
-                            return (
-                              <div key={rowIndex} className="map-row">
-                                {Array.from({ length: 10 }, (_, colIndex) => {
-                                  // X-coordinate stays the same (east to right)
-                                  const col = colIndex;
-
-                                  // Get the current player position
-                                  const [playerX, playerY] = parseCoordinates(playerStats.location);
-
-                                  // Check if this is the player's position
-                                  const isPlayerPosition = playerX === col && playerY === row;
-
-                                  // Check if this tile has been visited
-                                  const tileKey = `${col},${row}`;
-                                  const hasBeenVisited =
-                                    visitedTiles.has(tileKey) ||
-                                    (Math.abs(col - playerX) <= 1 && Math.abs(row - playerY) <= 1);
-
-                                  // Determine the tile color based on terrain
-                                  let tileColor = "#333"; // Default gray for unexplored
-                                  if (hasBeenVisited) {
-                                    // Terrain types now properly aligned with the map orientation
-                                    if (row < 3) tileColor = "#4682B4"; // Water - blue (south/bottom)
-                                    else if (row < 5) tileColor = "#696969"; // Mountain - dark gray (south-central)
-                                    else if (row < 8) tileColor = "#8B4513"; // Plains - brown (central)
-                                    else tileColor = "#228B22"; // Forest - green (north/top)
-                                  }
+                              <div className="game-map">
+                                {/* Map grid */}
+                                {Array.from({ length: 10 }, (_, rowIndex) => {
+                                  // Invert the row index to flip the map vertically
+                                  // This makes north (decreasing Y) go up on the screen
+                                  const row = 9 - rowIndex; // Y-axis from 0 (bottom) to 9 (top)
 
                                   return (
-                                    <div
-                                      key={col}
-                                      className={`map-tile ${isPlayerPosition ? "player-position" : ""}`}
-                                      style={{
-                                        backgroundColor: tileColor,
-                                        position: "relative",
-                                      }}
-                                    >
-                                      {isPlayerPosition && (
-                                        <div
-                                          style={{
-                                            position: "absolute",
-                                            top: "50%",
-                                            left: "50%",
-                                            transform: "translate(-50%, -50%)",
-                                            width: "10px",
-                                            height: "10px",
-                                            borderRadius: "50%",
-                                            backgroundColor: "#FFD700",
-                                          }}
-                                        />
-                                      )}
+                                    <div key={rowIndex} className="map-row">
+                                      {Array.from({ length: 10 }, (_, colIndex) => {
+                                        // X-coordinate stays the same (west to east)
+                                        const col = colIndex;
+
+                                        // Get the current player position
+                                        const [playerX, playerY] = parseCoordinates(playerStats.location);
+
+                                        // Check if this is the player's position
+                                        const isPlayerPosition = playerX === col && playerY === row;
+
+                                        // Check if this tile has been visited
+                                        const tileKey = `${col},${row}`;
+                                        const hasBeenVisited =
+                                          visitedTiles.has(tileKey) ||
+                                          (Math.abs(col - playerX) <= 1 && Math.abs(row - playerY) <= 1);
+
+                                        // Determine tile color based on terrain
+                                        let tileColor = "#333"; // Default gray for unexplored
+                                        if (hasBeenVisited) {
+                                          // Terrain types aligned with map orientation
+                                          if (row < 3) tileColor = "#4682B4"; // Water - blue (south/bottom)
+                                          else if (row < 5)
+                                            tileColor = "#696969"; // Mountain - dark gray (south-central)
+                                          else if (row < 8) tileColor = "#8B4513"; // Plains - brown (central)
+                                          else tileColor = "#228B22"; // Forest - green (north/top)
+                                        }
+
+                                        return (
+                                          <div
+                                            key={col}
+                                            className={`map-tile ${isPlayerPosition ? "player-position" : ""}`}
+                                            style={{
+                                              backgroundColor: tileColor,
+                                              position: "relative",
+                                            }}
+                                          >
+                                            {isPlayerPosition && (
+                                              <div
+                                                style={{
+                                                  position: "absolute",
+                                                  top: "50%",
+                                                  left: "50%",
+                                                  transform: "translate(-50%, -50%)",
+                                                  width: "10px",
+                                                  height: "10px",
+                                                  borderRadius: "50%",
+                                                  backgroundColor: "#FFD700",
+                                                }}
+                                              />
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   );
                                 })}
                               </div>
-                            );
-                          })}
-                        </div>
 
-                        {/* Add East/West markers */}
-                        <div className="compass-container">
-                          <span>W</span>
-                          <span>E</span>
-                        </div>
+                              <span className="compass-direction">E</span>
+                            </div>
 
-                        {/* Add South marker */}
-                        <div className="direction-markers">S</div>
+                            {/* South marker */}
+                            <div className="direction-markers">
+                              <span className="compass-direction">S</span>
+                            </div>
+                          </div>
 
-                        <div className="map-legend">
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span>Current: ({playerStats.location})</span>
-                            <span>
-                              {/* Map key using unicode markers */}
-                              <span style={{ color: "#228B22" }}>■</span> Forest{" "}
-                              <span style={{ color: "#8B4513" }}>■</span> Plains{" "}
-                              <span style={{ color: "#696969" }}>■</span> Mountain{" "}
-                              <span style={{ color: "#4682B4" }}>■</span> Water
-                            </span>
+                          {/* Current position indicator */}
+                          <div className="map-position">Current position: ({playerStats.location})</div>
+
+                          {/* Legend */}
+                          <div className="map-legend">
+                            <div className="legend-items">
+                              <div className="legend-item">
+                                <div className="legend-color" style={{ backgroundColor: "#228B22" }}></div>
+                                <span>Forest</span>
+                              </div>
+                              <div className="legend-item">
+                                <div className="legend-color" style={{ backgroundColor: "#8B4513" }}></div>
+                                <span>Plains</span>
+                              </div>
+                              <div className="legend-item">
+                                <div className="legend-color" style={{ backgroundColor: "#696969" }}></div>
+                                <span>Mountain</span>
+                              </div>
+                              <div className="legend-item">
+                                <div className="legend-color" style={{ backgroundColor: "#4682B4" }}></div>
+                                <span>Water</span>
+                              </div>
+                              <div className="legend-item">
+                                <div className="legend-color" style={{ backgroundColor: "#333" }}></div>
+                                <span>Unexplored</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* Right column - Inventory */}
                     <div className="inventory-column">
                       <div className="inventory-section">
                         <h3 className="section-title">INVENTORY</h3>
-                        <div className="inventory-list">
-                          {playerStats.inventory
-                            .filter((item) => item !== "old_map")
-                            .map((item, index) => (
-                              <div key={index} className="inventory-item">
-                                {item.replace(/_/g, " ")}
+
+                        <div className="inventory-container">
+                          {playerStats.inventory.length > 0 ? (
+                            <div className="inventory-grid">
+                              {/* Display actual inventory items */}
+                              {playerStats.inventory.map((item, index) => (
+                                <div key={index} className="inventory-slot">
+                                  <div className="inventory-item">{item.replace(/_/g, " ")}</div>
+                                  <span className="item-count">×1</span>
+                                </div>
+                              ))}
+
+                              {/* Fill remaining slots with empty placeholders */}
+                              {playerStats.inventory.length < 8 &&
+                                Array.from({ length: 8 - playerStats.inventory.length }).map((_, i) => (
+                                  <div key={`empty-${i}`} className="inventory-slot inventory-slot-empty">
+                                    [empty]
+                                  </div>
+                                ))}
+                            </div>
+                          ) : (
+                            <>
+                              <div className="inventory-empty">No items</div>
+                              <div className="inventory-grid" style={{ marginTop: "1rem" }}>
+                                {Array.from({ length: 8 }).map((_, i) => (
+                                  <div key={`empty-${i}`} className="inventory-slot inventory-slot-empty">
+                                    [empty]
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          {playerStats.inventory.length === 0 && <div className="inventory-empty">No items</div>}
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

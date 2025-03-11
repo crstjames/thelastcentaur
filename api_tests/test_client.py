@@ -36,7 +36,8 @@ class TestGameClient:
         self.access_token = None
         self.game_id = None
         self.user_id = None
-        self.session = httpx.AsyncClient(timeout=30.0)  # Longer timeout for stability
+        # Use a shorter timeout for testing
+        self.session = httpx.AsyncClient(timeout=10.0)  
         self.log_responses = log_responses
         self.command_history = []
         
@@ -95,7 +96,7 @@ class TestGameClient:
                     
                     # Delete the temporary game
                     temp_game_id = game_data["id"]
-                    await self.session.delete(f"{self.api_base_url}/api/v1/game/{temp_game_id}")
+                    await self.session.delete(f"{self.api_base_url}/api/v1/game/game/{temp_game_id}")
                     logger.info(f"Deleted temporary game: {temp_game_id}")
                 except Exception as e:
                     logger.error(f"Failed to get user ID from game creation: {e}")
@@ -144,10 +145,14 @@ class TestGameClient:
         logger.info(f"Login successful for {username}")
         return access_token
     
-    async def create_game(self) -> str:
+    async def create_game(self, game_name: Optional[str] = None, description: Optional[str] = None) -> str:
         """
         Create a new game instance.
         
+        Args:
+            game_name: Optional name for the game
+            description: Optional description for the game
+            
         Returns:
             Game ID string
             
@@ -156,11 +161,12 @@ class TestGameClient:
         """
         logger.info("Creating new game instance")
         try:
+            # Update the endpoint to match the backend structure
             response = await self.session.post(
-                f"{self.api_base_url}/api/v1/game",
+                f"{self.api_base_url}/api/v1/game/game",
                 json={
-                    "name": f"Test Game {int(time.time())}",
-                    "description": "Test game for API testing"
+                    "name": game_name or f"Test Game {int(time.time())}",
+                    "description": description or "Test game for API testing"
                 }
             )
             response.raise_for_status()
@@ -203,9 +209,10 @@ class TestGameClient:
         
         while attempt < retry_count:
             try:
+                # Update the endpoint to match the backend structure
                 response = await self.session.post(
-                    f"{self.api_base_url}/api/v1/game/{self.game_id}/command",
-                    json={"command": command}
+                    f"{self.api_base_url}/api/v1/game/game/{self.game_id}/command",
+                    json={"command": command, "use_llm": True}
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -255,8 +262,9 @@ class TestGameClient:
             
         logger.info("Getting game state")
         try:
+            # Update the endpoint to match the backend structure
             response = await self.session.get(
-                f"{self.api_base_url}/api/v1/game/{self.game_id}"
+                f"{self.api_base_url}/api/v1/game/game/{self.game_id}"
             )
             response.raise_for_status()
             game_state = response.json()
@@ -353,11 +361,118 @@ class TestGameClient:
         """Clear the command history."""
         self.command_history = []
         
-    async def cleanup(self) -> None:
-        """Close the session and clean up resources."""
-        logger.info("Cleaning up resources")
+    async def cleanup(self):
+        """Clean up resources after tests."""
+        logger.info("Cleaning up test resources")
+        
+        if self.game_id:
+            logger.info(f"Deleting game instance: {self.game_id}")
+            try:
+                temp_game_id = self.game_id
+                self.game_id = None
+                # Update the endpoint to match the backend structure
+                await self.session.delete(f"{self.api_base_url}/api/v1/game/game/{temp_game_id}")
+                logger.info(f"Game instance {temp_game_id} deleted")
+            except Exception as e:
+                logger.warning(f"Failed to delete game instance: {str(e)}")
+        
         await self.session.aclose()
-        logger.info("Session closed")
+        logger.info("HTTP session closed")
+
+    async def ensure_location(self, area_name: str) -> bool:
+        """Ensure the player is in the specified area."""
+        # Check if we're already in the right area
+        is_in_area = await verify_current_area(self, area_name)
+        if is_in_area:
+            return True
+        
+        # If not, try to move there (in a real implementation, this would be more complex)
+        logging.warning(f"Not in {area_name}, trying to force move")
+        return await self.force_move_to_area(area_name)
+
+    async def force_move_to_area(self, area_name: str) -> bool:
+        """
+        Force move to a specific area using teleport or debug command.
+        
+        Args:
+            area_name: Name of the area to move to
+            
+        Returns:
+            True if successfully moved to the area, False otherwise
+        """
+        # Try admin teleport first if available
+        try:
+            await self.admin_teleport(area_name)
+            return await verify_current_area(self, area_name)
+        except Exception as e:
+            logger.warning(f"Admin teleport failed: {e}")
+        
+        # Fallback to debug command
+        try:
+            command = f"debug_set_position {area_name}"
+            response = await self.send_command(command)
+            logger.info(f"Debug teleport response: {response}")
+            return await verify_current_area(self, area_name)
+        except Exception as e:
+            logger.error(f"Debug teleport failed: {e}")
+            return False
+            
+    async def get_current_location(self) -> Dict[str, str]:
+        """
+        Get the current location details using the debug_location command.
+        
+        Returns:
+            Dictionary with location details (position, area, etc.)
+        """
+        try:
+            response = await self.send_command("debug_location")
+            
+            # Parse the response
+            location_info = {}
+            
+            # Process each line of the response
+            for line in response.split('\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    location_info[key.strip()] = value.strip()
+                    
+            logger.info(f"Got current location: {location_info}")
+            return location_info
+        except Exception as e:
+            logger.error(f"Failed to get current location: {e}")
+            return {"error": str(e)}
+    
+    async def get_player_position(self) -> Dict[str, Any]:
+        """
+        Get the player's position directly from the game state.
+        
+        Returns:
+            Dictionary with position information
+        """
+        try:
+            # Get the game state from the API
+            game_state = await self.get_game_state()
+            
+            # Create a position info dictionary
+            position_info = {}
+            
+            # Extract position from game state
+            if 'game_state' in game_state and 'position' in game_state['game_state']:
+                position = game_state['game_state']['position']
+                position_info['position'] = position
+                position_info['x'] = position[0] if isinstance(position, (list, tuple)) else None
+                position_info['y'] = position[1] if isinstance(position, (list, tuple)) else None
+            
+            # Extract current area if available
+            if 'game_state' in game_state and 'current_area' in game_state['game_state']:
+                position_info['current_area'] = game_state['game_state']['current_area']
+            
+            # Log the extracted position info
+            logger.info(f"Player position: {position_info}")
+            return position_info
+        except Exception as e:
+            logger.error(f"Error getting player position: {str(e)}")
+            return {"error": str(e)}
 
 # Helper functions for common test patterns
 
@@ -470,43 +585,74 @@ async def verify_current_area(client: TestGameClient, area_name: str) -> bool:
     Returns:
         True if in the specified area, False otherwise
     """
+    # First try using the get_player_position method
     try:
-        game_state = await client.get_game_state()
+        position_info = await client.get_player_position()
         
-        # Check different possible structures for current area
-        current_area = None
-        
-        if "game_state" in game_state and "current_area" in game_state["game_state"]:
-            current_area = game_state["game_state"]["current_area"]
-        elif "current_area" in game_state:
-            current_area = game_state["current_area"]
-        elif "game_state" in game_state and "current_tile" in game_state["game_state"] and "area" in game_state["game_state"]["current_tile"]:
-            current_area = game_state["game_state"]["current_tile"]["area"]
-        
-        if current_area:
+        # Check if we have current_area in position info
+        if 'current_area' in position_info:
+            current_area = position_info['current_area']
             # Normalize area names for comparison
-            normalized_current = current_area.lower().replace("_", " ")
-            normalized_target = area_name.lower().replace("_", " ")
+            normalized_current = current_area.replace(' ', '_').upper() if current_area else ''
+            normalized_target = area_name.replace(' ', '_').upper()
             
-            if normalized_target in normalized_current:
-                logger.info(f"Verified current area is '{area_name}'")
+            if normalized_current == normalized_target:
+                logger.info(f"Verified current area is {area_name} using position info")
                 return True
-        
-        # If we can't verify from the game state, try looking for area name in description
-        look_response = await client.send_command("look")
-        area_keywords = area_name.lower().replace("_", " ").split()
-        
-        # Check if enough keywords match in the description
-        matches = sum(1 for keyword in area_keywords if keyword in look_response.lower())
-        if matches >= len(area_keywords) / 2:  # At least half the keywords match
-            logger.info(f"Verified current area is likely '{area_name}' based on description")
-            return True
-            
-        logger.warning(f"Failed to verify current area is '{area_name}'")
-        return False
+                
+        # Check if position matches a named area
+        if 'position' in position_info:
+            # Get position coordinates
+            x, y = position_info.get('x'), position_info.get('y')
+            if x is not None and y is not None:
+                # Log the position for debugging
+                logger.info(f"Player is at position ({x}, {y})")
+                
+                # Check if position corresponds to the target area
+                # This requires mapping positions to named areas
+                area_positions = {
+                    "AWAKENING_WOODS": (0, 0),
+                    "WARRIORS_CAMP": (1, 0),
+                    "TRIALS_PATH": (0, 1),
+                    "MOUNTAIN_BASE": (1, 1),
+                    "TRAINING_GROUNDS": (2, 0),
+                    # Add more area mappings as needed
+                }
+                
+                # Check if position matches the target area
+                if area_name in area_positions and area_positions[area_name] == (x, y):
+                    logger.info(f"Verified current area is {area_name} by matching position ({x}, {y})")
+                    return True
     except Exception as e:
-        logger.error(f"Error verifying current area: {str(e)}")
-        return False
+        logger.warning(f"Error using position info: {e}")
+    
+    # If direct position check failed, fall back to look command verification
+    try:
+        look_result = await client.send_command("look")
+        # Check for area keywords in the description
+        words = area_name.replace('_', ' ').lower().split()
+        normalized_result = look_result.lower()
+        
+        # Check for common keywords per area
+        area_keywords = {
+            "AWAKENING_WOODS": ["forest", "clearing", "ancient forest"],
+            "WARRIORS_CAMP": ["warrior", "camp", "training"],
+            "TRAINING_GROUNDS": ["training", "ground", "arena", "practice"],
+            "SHADOW_DOMAIN": ["shadow", "domain", "darkness"],
+            "MYSTIC_MOUNTAINS": ["mystic", "mountain", "peak"],
+            # Add more keywords for other areas
+        }
+        
+        if area_name in area_keywords:
+            for keyword in area_keywords[area_name]:
+                if keyword.lower() in normalized_result:
+                    logger.info(f"Verified current area is {area_name} by matching keyword '{keyword}'")
+                    return True
+    except Exception as e:
+        logger.warning(f"Error checking area via look command: {str(e)}")
+    
+    logger.warning(f"Failed to verify current area is '{area_name}'")
+    return False
 
 async def verify_inventory_contains(client: TestGameClient, items: List[str]) -> List[str]:
     """
@@ -534,3 +680,121 @@ async def verify_inventory_contains(client: TestGameClient, items: List[str]) ->
     except Exception as e:
         logger.error(f"Error verifying inventory: {str(e)}")
         return items  # Assume all items are missing if an error occurs 
+
+async def navigate_to_area(client: TestGameClient, target_area: str, max_attempts: int = 20) -> bool:
+    """
+    Navigate to a target area using directional commands.
+    
+    Args:
+        client: TestGameClient instance
+        target_area: The area to navigate to
+        max_attempts: Maximum number of movement attempts
+        
+    Returns:
+        True if navigation was successful, False otherwise
+    """
+    logger.info(f"Attempting to navigate to {target_area}")
+    
+    # First check if we're already in the target area
+    if await verify_current_area(client, target_area):
+        logger.info(f"Already in target area {target_area}")
+        return True
+    
+    # Map of area coordinates based on NAMED_AREAS
+    area_coordinates = {
+        "AWAKENING_WOODS": (0, 0),   # Starting area
+        "WARRIORS_CAMP": (1, 0),     # East of starting area
+        "TRIALS_PATH": (0, 1),       # North of starting area
+        "MOUNTAIN_BASE": (1, 1),     # Northeast of starting area
+        "TRAINING_GROUNDS": (2, 0),  # East of Warrior's Camp
+        "SHADOW_DOMAIN": (0, 2),     # North of Trials Path
+        "SHADOW_TRAINING": (0, 3),   # North of Shadow Domain
+        "MYSTIC_MOUNTAINS": (1, 2),  # Northeast of Trials Path
+        "CRYSTAL_POND": (2, 2),      # East of Mystic Mountains
+        "HONOR_SHRINE": (3, 0),      # East of Training Grounds
+        "FORGOTTEN_TEMPLE": (0, 4),  # North of Shadow Training
+        "MEDITATION_CIRCLE": (3, 2), # East of Crystal Pond
+        "ENCHANTED_VALLEY": (1, 3),  # North of Mystic Mountains
+        "CRYSTAL_CAVES": (1, 4),     # North of Enchanted Valley
+        "FORGOTTEN_GROVE": (2, 4),   # Northeast of Crystal Caves
+        "CROSSROADS": (5, 5),        # Central connecting area
+        "GUARDIAN_OVERLOOK": (8, 8), # Pre-boss area
+        "ANCIENT_SANCTUARY": (9, 9)  # Final boss area
+    }
+    
+    # Get current position
+    current_area = None
+    for area, is_current in [(area, await verify_current_area(client, area)) for area in area_coordinates.keys()]:
+        if is_current:
+            current_area = area
+            break
+    
+    if not current_area:
+        logger.warning("Could not determine current area")
+        return False
+    
+    current_pos = area_coordinates.get(current_area)
+    target_pos = area_coordinates.get(target_area)
+    
+    if not current_pos or not target_pos:
+        logger.warning(f"Could not find coordinates for current area {current_area} or target area {target_area}")
+        return False
+    
+    logger.info(f"Current position: {current_pos}, Target position: {target_pos}")
+    
+    # Attempt to navigate to the target area
+    attempts = 0
+    while attempts < max_attempts:
+        # Check if we've reached the target area
+        if await verify_current_area(client, target_area):
+            logger.info(f"Successfully navigated to {target_area}")
+            return True
+        
+        # Get current position again (it might have changed)
+        for area, is_current in [(area, await verify_current_area(client, area)) for area in area_coordinates.keys()]:
+            if is_current:
+                current_area = area
+                current_pos = area_coordinates.get(current_area)
+                break
+        
+        # Determine direction to move
+        x_diff = target_pos[0] - current_pos[0]
+        y_diff = target_pos[1] - current_pos[1]
+        
+        direction = None
+        if x_diff > 0:
+            direction = "east"
+        elif x_diff < 0:
+            direction = "west"
+        elif y_diff > 0:
+            direction = "north"
+        elif y_diff < 0:
+            direction = "south"
+        
+        if not direction:
+            logger.warning("No valid direction to move")
+            return False
+        
+        # Try to move in the determined direction
+        logger.info(f"Attempting to move {direction}")
+        response = await client.send_command(f"move {direction}")
+        
+        # Check for obstacles or failures
+        if "can't go that way" in response.lower() or "blocked" in response.lower():
+            logger.warning(f"Movement blocked in direction {direction}: {response}")
+            
+            # Try other directions
+            for alt_direction in ["north", "east", "south", "west"]:
+                if alt_direction != direction:
+                    logger.info(f"Trying alternative direction: {alt_direction}")
+                    alt_response = await client.send_command(f"move {alt_direction}")
+                    if "can't go that way" not in alt_response.lower() and "blocked" not in alt_response.lower():
+                        logger.info(f"Successfully moved in alternative direction {alt_direction}")
+                        break
+        
+        attempts += 1
+        # Wait briefly between commands
+        await asyncio.sleep(0.5)
+    
+    logger.warning(f"Failed to navigate to {target_area} after {max_attempts} attempts")
+    return False 

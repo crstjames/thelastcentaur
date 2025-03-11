@@ -18,7 +18,7 @@ from src.auth.deps import get_current_user
 from src.db.session import get_db
 from src.db.models import GameInstance, User
 from src.game.llm_interface import LLMInterface
-from src.engine.core.map_system import GAME_MAP
+from src.engine.core.map_system import MapManager
 from src.engine.core.enemies import ENEMIES
 
 # Configure logging
@@ -28,35 +28,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["admin"], prefix="/admin")
 
 # Use the same OAuth2 scheme as the main API
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
 
-# Only allow admin routes in development or test
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev").lower()
-ADMIN_ENABLED = ENVIRONMENT in ("dev", "test")
+# Initialize MapManager
+map_manager = MapManager()
 
-# Check if caller is allowed to use admin routes
+# Admin user verification
 async def verify_admin_access(token: str = Depends(oauth2_scheme)):
-    """
-    Verify that the caller is allowed to use admin routes.
-    
-    Admin routes are only available in development or test environments.
-    """
-    if not ADMIN_ENABLED:
-        logger.warning(f"Admin routes accessed in {ENVIRONMENT} environment")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin routes are disabled in this environment"
-        )
-    
-    # Get current user from token
-    user = await get_current_user(token)
-    if not user:
+    """Verify that the user has admin access."""
+    # Get current user
+    try:
+        current_user = await get_current_user(token)
+    except:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
-    return user
+    # Check if the user is an admin (this is a simple check; in production you'd use more robust permissions)
+    if not current_user.username.endswith("_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action",
+        )
+    
+    # Return the user data
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+    }
 
 @router.post("/game/{game_id}/inventory/add", response_model=Dict[str, Any])
 async def add_item_to_inventory(
@@ -447,16 +449,19 @@ async def debug_game_state(
     
     # Create response
     response = {
+        "success": True,
         "game_id": game_id,
         "position": position,
-        "tile_exists_in_map": position_str in GAME_MAP,
+        "tile_exists_in_map": False,
         "enemies_in_tile": []
     }
     
-    if position_str in GAME_MAP:
-        tile = GAME_MAP[position_str]
-        response["enemies_in_tile"] = tile.enemies
-        response["tile_description"] = tile.get_description()
+    # Get the area node for this position
+    area_node = map_manager.get_area_by_position(position)
+    if area_node:
+        response["tile_exists_in_map"] = True
+        response["enemies_in_tile"] = area_node.enemies
+        response["tile_description"] = area_node.base_description
         
         # Check if phantom_assassin is in ENEMIES
         response["phantom_in_enemies"] = "phantom_assassin" in ENEMIES

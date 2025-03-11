@@ -1,16 +1,16 @@
 """
 Map system for The Last Centaur.
 
-This module handles the game's map layout, area connections,
-and transition logic between different areas.
+This module handles the game's map layout and transition logic
+using a coordinate-based movement system on a 10x10 grid.
 """
 
 from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
+import random
 
 from .models import Direction, TerrainType, StoryArea, TileState, Enemy
-from .world_design import AREA_REQUIREMENTS, WORLD_ENEMIES
 
 @dataclass
 class EnvironmentalHazard:
@@ -21,24 +21,12 @@ class EnvironmentalHazard:
     requirements: List[str]  # Items needed to safely pass
     active_times: Optional[List[str]] = None  # Time-based hazards
 
-@dataclass
-class AreaConnection:
-    """Represents a connection between two areas."""
-    from_area: StoryArea
-    to_area: StoryArea
-    direction: Direction
-    requirements: List[str]
-    description: str
-    is_locked: bool = True
-    hazards: List[EnvironmentalHazard] = None
-    shortcut: bool = False  # Indicates if this is a hidden shortcut
-
+# Simplified AreaNode without connection dependencies
 @dataclass
 class AreaNode:
     """Represents an area node in the game map."""
-    area: StoryArea
+    area: Optional[StoryArea]  # Can be None for generic areas
     position: Tuple[int, int]
-    connections: List[AreaConnection]
     terrain_type: TerrainType
     base_description: str
     requirements: List[str]
@@ -48,741 +36,573 @@ class AreaNode:
     weather_effects: List[str] = None
     is_minor_area: bool = False
     npcs: List[str] = None
+    is_passable: bool = True  # Whether the player can move to this area
 
-# Environmental Hazards
-HAZARD_TYPES = {
-    "magic_barrier": EnvironmentalHazard(
-        type="magic_barrier",
-        description="A shimmering wall of ancient magic blocks the path.",
-        damage=50,
-        requirements=["crystal_focus", "ancient_sword"]
-    ),
-    "shadow_veil": EnvironmentalHazard(
-        type="shadow_veil",
-        description="Impenetrable shadows swirl across the path.",
-        damage=30,
-        requirements=["stealth_cloak"]
-    ),
-    "crystal_storm": EnvironmentalHazard(
-        type="crystal_storm",
-        description="Sharp crystal shards swirl through the air.",
-        damage=25,
-        requirements=["crystal_shield"],
-        active_times=["night"]
-    ),
-    "spectral_winds": EnvironmentalHazard(
-        type="spectral_winds",
-        description="Howling winds carry the voices of the fallen.",
-        damage=20,
-        requirements=["war_horn"],
-        active_times=["dusk", "dawn"]
-    )
+# Define the named areas on the map
+NAMED_AREAS = {
+    # Each tuple is (position, area_enum)
+    (0, 0): StoryArea.AWAKENING_WOODS,  # Starting area with pouch and rusty sword
+    (1, 0): StoryArea.WARRIORS_CAMP,
+    (0, 1): StoryArea.TRIALS_PATH,
+    (1, 1): StoryArea.MOUNTAIN_BASE,
+    (2, 0): StoryArea.TRAINING_GROUNDS,
+    (0, 2): StoryArea.SHADOW_DOMAIN,
+    (0, 3): StoryArea.SHADOW_TRAINING,
+    (1, 2): StoryArea.MYSTIC_MOUNTAINS,
+    (2, 2): StoryArea.CRYSTAL_POND,
+    (3, 0): StoryArea.HONOR_SHRINE,
+    (0, 4): StoryArea.FORGOTTEN_TEMPLE,
+    (3, 2): StoryArea.MEDITATION_CIRCLE,
+    (1, 3): StoryArea.ENCHANTED_VALLEY,
+    (1, 4): StoryArea.CRYSTAL_CAVES,
+    (2, 4): StoryArea.FORGOTTEN_GROVE,
+    (9, 9): StoryArea.ANCIENT_SANCTUARY,  # Final boss area in the opposite corner
+    (8, 8): StoryArea.GUARDIAN_OVERLOOK,  # Pre-boss area
+    (5, 5): StoryArea.CROSSROADS,         # Central area connecting different paths
 }
 
-# Weather Effects
-WEATHER_EFFECTS = {
-    "magical_storm": "Reality warps and bends under magical energies.",
-    "shadow_mist": "Thick mists obscure vision and muffle sound.",
-    "crystal_rain": "Crystalline droplets fall from the sky, resonating with magical frequencies.",
-    "spirit_winds": "Ethereal winds carry whispers of the past."
+# Data for named areas
+AREA_DATA = {
+    StoryArea.AWAKENING_WOODS: {
+        "terrain": TerrainType.FOREST,
+        "desc": "You stand in an ancient forest clearing. The air is thick with magic and mystery. A leather pouch lies on the ground, and a rusty sword is embedded in a nearby stump.",
+        "enemies": ["forest_guardian"],
+        "items": ["rusty_sword", "leather_pouch"],
+        "reqs": [],
+    },
+    StoryArea.WARRIORS_CAMP: {
+        "terrain": TerrainType.CLEARING,
+        "desc": "A small encampment with training equipment and weapon racks. Warriors hone their skills here.",
+        "enemies": ["training_dummy"],
+        "items": ["basic_shield"],
+        "reqs": [],
+    },
+    StoryArea.TRIALS_PATH: {
+        "terrain": TerrainType.FOREST,
+        "desc": "Ancient stone markers line this path, each inscribed with forgotten runes. This is the beginning of the hero's trials.",
+        "enemies": ["forest_wolf"],
+        "items": ["healing_herb", "trial_map"],
+        "reqs": [],
+    },
+    StoryArea.MOUNTAIN_BASE: {
+        "terrain": TerrainType.MOUNTAIN,
+        "desc": "The terrain becomes rocky as you approach the mountain base. A cool breeze flows down from the peaks.",
+        "enemies": ["mountain_goat"],
+        "items": ["climbing_rope"],
+        "reqs": [],
+    },
+    StoryArea.TRAINING_GROUNDS: {
+        "terrain": TerrainType.CLEARING,
+        "desc": "An open area with practice dummies and weapon racks. Warriors train here for combat.",
+        "enemies": ["practice_target"],
+        "items": ["training_sword"],
+        "reqs": [],
+    },
+    StoryArea.SHADOW_DOMAIN: {
+        "terrain": TerrainType.RUINS,
+        "desc": "Ancient ruins shrouded in perpetual shadow. The air feels heavy with dark magic.",
+        "enemies": ["shadow_creature"],
+        "items": ["shadow_essence"],
+        "reqs": [],
+    },
+    StoryArea.MYSTIC_MOUNTAINS: {
+        "terrain": TerrainType.MOUNTAIN,
+        "desc": "Towering peaks shrouded in mist. Strange lights sometimes flicker between the crags.",
+        "enemies": ["mountain_spirit"],
+        "items": ["mystic_crystal"],
+        "reqs": [],
+    },
+    StoryArea.SHADOW_TRAINING: {
+        "terrain": TerrainType.RUINS,
+        "desc": "A dark arena where shadow warriors practice their deadly arts. The training equipment seems ancient but well-maintained.",
+        "enemies": ["phantom_assassin"],
+        "items": ["shadow_blade"],
+        "reqs": ["shadow_essence"],
+    },
+    StoryArea.CRYSTAL_POND: {
+        "terrain": TerrainType.WATER,
+        "desc": "A serene pond where crystals grow from the water's surface. The water glows with a faint blue light.",
+        "enemies": ["water_sprite"],
+        "items": ["luminous_crystal"],
+        "reqs": [],
+    },
+    StoryArea.HONOR_SHRINE: {
+        "terrain": TerrainType.TEMPLE,
+        "desc": "A small shrine dedicated to the ancient heroes. The air feels peaceful here.",
+        "enemies": [],
+        "items": ["honor_medal"],
+        "reqs": [],
+    },
+    StoryArea.FORGOTTEN_TEMPLE: {
+        "terrain": TerrainType.TEMPLE,
+        "desc": "A crumbling temple, its original purpose long forgotten. Shadows dance across the walls without clear source.",
+        "enemies": ["temple_guardian"],
+        "items": ["ancient_scroll"],
+        "reqs": ["shadow_blade"],
+    },
+    StoryArea.MEDITATION_CIRCLE: {
+        "terrain": TerrainType.CLEARING,
+        "desc": "A circle of smooth stones arranged for meditation. The area has a calming effect on all who enter.",
+        "enemies": [],
+        "items": ["meditation_stone"],
+        "reqs": [],
+    },
+    StoryArea.ENCHANTED_VALLEY: {
+        "terrain": TerrainType.FOREST,
+        "desc": "A lush valley filled with strange, glowing plants. Magic seems to infuse the very air.",
+        "enemies": ["magic_wisp"],
+        "items": ["enchanted_seed"],
+        "reqs": ["mystic_crystal"],
+    },
+    StoryArea.CRYSTAL_CAVES: {
+        "terrain": TerrainType.CAVE,
+        "desc": "A network of caves with walls lined with luminous crystals. The light they emit shifts through a rainbow of colors.",
+        "enemies": ["crystal_golem"],
+        "items": ["prismatic_shard"],
+        "reqs": ["luminous_crystal"],
+    },
+    StoryArea.FORGOTTEN_GROVE: {
+        "terrain": TerrainType.FOREST,
+        "desc": "An ancient grove of trees with silver bark and leaves that whisper secrets. The center forms a natural shrine.",
+        "enemies": ["grove_spirit"],
+        "items": ["silver_leaf"],
+        "reqs": ["enchanted_seed"],
+    },
+    # New areas for game progression
+    StoryArea.CROSSROADS: {
+        "terrain": TerrainType.CLEARING,
+        "desc": "A major crossroads where several paths meet. Stone markers indicate different possible journeys. A worn signpost points to the trials ahead.",
+        "enemies": [],
+        "items": ["traveler_map", "compass"],
+        "reqs": [],
+    },
+    StoryArea.GUARDIAN_OVERLOOK: {
+        "terrain": TerrainType.MOUNTAIN,
+        "desc": "A high vantage point overlooking a sacred valley. In the distance, you can see the entrance to the Ancient Sanctuary. A powerful energy emanates from beyond.",
+        "enemies": ["guardian_scout"],
+        "items": ["ancient_key"],
+        "reqs": ["honor_medal", "shadow_blade", "prismatic_shard"],
+    },
+    StoryArea.ANCIENT_SANCTUARY: {
+        "terrain": TerrainType.TEMPLE,
+        "desc": "The legendary sanctuary where the last centaur is said to reside. The air vibrates with ancient magic. A massive centaur stands guard, watching your approach with ancient eyes.",
+        "enemies": ["centaur_guardian"],
+        "items": ["centaur_wisdom"],
+        "reqs": ["ancient_key"],
+    },
 }
 
-# Map Layout Definition
-GAME_MAP = {
-    # Starting Area - Now at (0,0) for bottom-left starting position
-    StoryArea.AWAKENING_WOODS: AreaNode(
-        area=StoryArea.AWAKENING_WOODS,
-        position=(0, 0),  # Changed from (5, 0) to (0, 0)
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.AWAKENING_WOODS,
-                to_area=StoryArea.TRIALS_PATH,
-                direction=Direction.NORTH,
-                requirements=[],
-                description="A well-worn path leads northward, marked by ancient stone markers."
-            ),
-            AreaConnection(
-                from_area=StoryArea.AWAKENING_WOODS,
-                to_area="warriors_camp",
-                direction=Direction.EAST,
-                requirements=[],
-                description="A small path leads to a warrior's camp."
-            ),
-            # Removed south and west connections as this is now the bottom-left starting position
-        ],
-        terrain_type=TerrainType.FOREST,
-        base_description="You stand in a ancient forest clearing. The air is thick with magic and mystery.",
-        requirements=[],
-        enemies=["forest_guardian"],
-        items=["rusty_sword", "leather_pouch"]
-    ),
-
-    # Warrior Path area to the east at (1, 0)
-    "warriors_camp": AreaNode(
-        area="warriors_camp",
-        position=(1, 0),
-        connections=[
-            AreaConnection(
-                from_area="warriors_camp",
-                to_area=StoryArea.AWAKENING_WOODS,
-                direction=Direction.WEST,
-                requirements=[],
-                description="The path leads back to the forest clearing."
-            ),
-            AreaConnection(
-                from_area="warriors_camp",
-                to_area="mountain_base",
-                direction=Direction.NORTH,
-                requirements=[],
-                description="A steep trail winds up into the mountains."
-            ),
-            AreaConnection(
-                from_area="warriors_camp",
-                to_area="training_grounds",
-                direction=Direction.EAST,
-                requirements=[],
-                description="You see combat training dummies in the distance."
-            ),
-        ],
-        terrain_type=TerrainType.CLEARING,
-        base_description="A small encampment with training equipment and weapon racks. Warriors hone their skills here.",
-        requirements=[],
-        enemies=["training_dummy"],
-        items=["basic_shield"]
-    ),
-
-    # Trials path to the north at (0, 1)
-    StoryArea.TRIALS_PATH: AreaNode(
-        area=StoryArea.TRIALS_PATH,
-        position=(0, 1),  # Updated from original position
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.TRIALS_PATH,
-                to_area=StoryArea.AWAKENING_WOODS,
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The path leads back to the forest clearing."
-            ),
-            AreaConnection(
-                from_area=StoryArea.TRIALS_PATH,
-                to_area="mountain_base",
-                direction=Direction.EAST,
-                requirements=[],
-                description="A path winds toward the base of the mountains."
-            ),
-            AreaConnection(
-                from_area=StoryArea.TRIALS_PATH,
-                to_area=StoryArea.SHADOW_DOMAIN,
-                direction=Direction.NORTH,
-                requirements=["shadow_key"],
-                description="A shimmering portal leads to a shadowy realm."
-            ),
-        ],
-        terrain_type=TerrainType.FOREST,
-        base_description="Ancient stone markers line this path, each inscribed with forgotten runes.",
-        requirements=[],
-        enemies=["forest_wolf"],
-        items=["healing_herb"]
-    ),
-
-    # Mountain Base area at (1, 1) - connecting warrior and mystic paths
-    "mountain_base": AreaNode(
-        area="mountain_base",
-        position=(1, 1),
-        connections=[
-            AreaConnection(
-                from_area="mountain_base",
-                to_area="warriors_camp",
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The path leads down to the warrior camp."
-            ),
-            AreaConnection(
-                from_area="mountain_base",
-                to_area=StoryArea.TRIALS_PATH,
-                direction=Direction.WEST,
-                requirements=[],
-                description="A path leads toward ancient stone markers."
-            ),
-            AreaConnection(
-                from_area="mountain_base",
-                to_area="training_grounds",
-                direction=Direction.EAST,
-                requirements=[],
-                description="The path continues eastward to training grounds."
-            ),
-            AreaConnection(
-                from_area="mountain_base",
-                to_area=StoryArea.MYSTIC_MOUNTAINS,
-                direction=Direction.NORTH,
-                requirements=[],
-                description="A steep trail winds higher into the mountains."
-            ),
-        ],
-        terrain_type=TerrainType.MOUNTAIN,
-        base_description="The terrain becomes rocky as you approach the mountain base. A cool breeze flows down from the peaks.",
-        requirements=[],
-        enemies=["mountain_goat"],
-        items=["climbing_rope"]
-    ),
-
-    # Training grounds at (2, 0) - deeper into warrior path
-    "training_grounds": AreaNode(
-        area="training_grounds",
-        position=(2, 0),
-        connections=[
-            AreaConnection(
-                from_area="training_grounds",
-                to_area="warriors_camp",
-                direction=Direction.WEST,
-                requirements=[],
-                description="The path leads back to the warrior camp."
-            ),
-            AreaConnection(
-                from_area="training_grounds",
-                to_area="mountain_base",
-                direction=Direction.NORTH,
-                requirements=[],
-                description="A path leads to the mountain base."
-            ),
-            AreaConnection(
-                from_area="training_grounds",
-                to_area="honor_shrine",
-                direction=Direction.EAST,
-                requirements=["warrior_token"],
-                description="A path to a sacred shrine is visible eastward."
-            ),
-        ],
-        terrain_type=TerrainType.CLEARING,
-        base_description="Advanced training equipment and weapon racks. The ground is packed from countless sparring matches.",
-        requirements=[],
-        enemies=["veteran_warrior"],
-        items=["steel_sword"]
-    ),
-
-    # Stealth Path - Shadow Domain at (0, 2)
-    StoryArea.SHADOW_DOMAIN: AreaNode(
-        area=StoryArea.SHADOW_DOMAIN,
-        position=(0, 2),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.SHADOW_DOMAIN,
-                to_area=StoryArea.TRIALS_PATH,
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The shimmering portal leads back to the trials path."
-            ),
-            AreaConnection(
-                from_area=StoryArea.SHADOW_DOMAIN,
-                to_area="shadow_training",
-                direction=Direction.EAST,
-                requirements=[],
-                description="A path of shadows extends eastward."
-            ),
-            AreaConnection(
-                from_area=StoryArea.SHADOW_DOMAIN,
-                to_area="forgotten_temple",
-                direction=Direction.NORTH,
-                requirements=["shadow_cloak"],
-                description="A nearly invisible path leads to a forgotten temple."
-            ),
-        ],
-        terrain_type=TerrainType.RUINS,
-        base_description="Shadows move with a life of their own here. Light seems to be absorbed rather than reflected.",
-        requirements=["shadow_key"],
-        enemies=["shadow_stalker"],
-        items=["phantom_dagger"]
-    ),
-
-    # Mystic Mountains at (1, 2) - start of mystic path
-    StoryArea.MYSTIC_MOUNTAINS: AreaNode(
-        area=StoryArea.MYSTIC_MOUNTAINS,
-        position=(1, 2),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.MYSTIC_MOUNTAINS,
-                to_area="mountain_base",
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The path leads back down the mountain."
-            ),
-            AreaConnection(
-                from_area=StoryArea.MYSTIC_MOUNTAINS,
-                to_area="shadow_training",
-                direction=Direction.WEST,
-                requirements=["shadow_key"],
-                description="A nearly invisible path leads westward."
-            ),
-            AreaConnection(
-                from_area=StoryArea.MYSTIC_MOUNTAINS,
-                to_area="crystal_pond",
-                direction=Direction.EAST,
-                requirements=[],
-                description="A trail leads toward a shimmering glow."
-            ),
-            AreaConnection(
-                from_area=StoryArea.MYSTIC_MOUNTAINS,
-                to_area=StoryArea.ENCHANTED_VALLEY,
-                direction=Direction.NORTH,
-                requirements=[],
-                description="The path continues upward, entering a hidden valley."
-            ),
-        ],
-        terrain_type=TerrainType.MOUNTAIN,
-        base_description="The air thins as you climb. Strange energies dance at the edge of perception.",
-        requirements=[],
-        enemies=["mountain_spirit"],
-        items=["crystal_focus"]
-    ),
-
-    # Shadow training at (0, 3) - deeper into stealth path
-    "shadow_training": AreaNode(
-        area="shadow_training",
-        position=(0, 3),
-        connections=[
-            AreaConnection(
-                from_area="shadow_training",
-                to_area=StoryArea.SHADOW_DOMAIN,
-                direction=Direction.WEST,
-                requirements=[],
-                description="The shadow path leads back to the domain entrance."
-            ),
-            AreaConnection(
-                from_area="shadow_training",
-                to_area=StoryArea.MYSTIC_MOUNTAINS,
-                direction=Direction.EAST,
-                requirements=[],
-                description="A faint trail leads toward the mountain."
-            ),
-            AreaConnection(
-                from_area="shadow_training",
-                to_area="forgotten_temple",
-                direction=Direction.NORTH,
-                requirements=["stealth_token"],
-                description="A concealed passage leads to an ancient temple."
-            ),
-        ],
-        terrain_type=TerrainType.RUINS,
-        base_description="Training dummies made of shadow stand motionless, waiting for practice.",
-        requirements=[],
-        enemies=["shadow_initiate"],
-        items=["smoke_bomb", "stealth_cloak"]
-    ),
-
-    # Crystal pond at (2, 2) - deeper into mystic path
-    "crystal_pond": AreaNode(
-        area="crystal_pond",
-        position=(2, 2),
-        connections=[
-            AreaConnection(
-                from_area="crystal_pond",
-                to_area=StoryArea.MYSTIC_MOUNTAINS,
-                direction=Direction.WEST,
-                requirements=[],
-                description="The path leads back to the mountains."
-            ),
-            AreaConnection(
-                from_area="crystal_pond",
-                to_area=StoryArea.ENCHANTED_VALLEY,
-                direction=Direction.NORTH,
-                requirements=[],
-                description="A serene path leads upward into a valley."
-            ),
-            AreaConnection(
-                from_area="crystal_pond",
-                to_area="meditation_circle",
-                direction=Direction.EAST,
-                requirements=["mystic_token"],
-                description="A path of glowing stones leads to a meditation circle."
-            ),
-        ],
-        terrain_type=TerrainType.VALLEY,
-        base_description="A small pond whose waters glow with inner light. Crystals grow from the surrounding rocks.",
-        requirements=[],
-        enemies=["crystal_elemental"],
-        items=["mana_crystal", "mystic_herbs"]
-    ),
-
-    # Adding the rest of the important areas to complete the paths
-
-    # Honor Shrine (3, 0) - warrior path culmination
-    "honor_shrine": AreaNode(
-        area="honor_shrine",
-        position=(3, 0),
-        connections=[
-            AreaConnection(
-                from_area="honor_shrine",
-                to_area="training_grounds",
-                direction=Direction.WEST,
-                requirements=[],
-                description="The path leads back to the training grounds."
-            ),
-        ],
-        terrain_type=TerrainType.RUINS,
-        base_description="An ancient shrine dedicated to honor and courage. Weapons of legendary warriors decorate the walls.",
-        requirements=["warrior_token"],
-        enemies=["honor_guardian"],
-        items=["warrior_talisman", "ancient_sword"]
-    ),
-
-    # Forgotten Temple (0, 4) - stealth path culmination
-    "forgotten_temple": AreaNode(
-        area="forgotten_temple",
-        position=(0, 4),
-        connections=[
-            AreaConnection(
-                from_area="forgotten_temple",
-                to_area="shadow_training",
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The concealed passage leads back to the training area."
-            ),
-            AreaConnection(
-                from_area="forgotten_temple",
-                to_area=StoryArea.SHADOW_DOMAIN,
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="A nearly invisible path leads back to the shadow domain."
-            ),
-        ],
-        terrain_type=TerrainType.RUINS,
-        base_description="A temple forgotten by all but the shadows. Ancient assassins once trained here.",
-        requirements=["stealth_token", "shadow_cloak"],
-        enemies=["shadow_master"],
-        items=["shadow_blade", "stealth_talisman"]
-    ),
-
-    # Meditation Circle (3, 2) - mystic path culmination
-    "meditation_circle": AreaNode(
-        area="meditation_circle",
-        position=(3, 2),
-        connections=[
-            AreaConnection(
-                from_area="meditation_circle",
-                to_area="crystal_pond",
-                direction=Direction.WEST,
-                requirements=[],
-                description="The path of glowing stones leads back to the crystal pond."
-            ),
-        ],
-        terrain_type=TerrainType.VALLEY,
-        base_description="A perfect circle of ancient stones, humming with magical energy. The air itself seems to enhance focus.",
-        requirements=["mystic_token"],
-        enemies=["spirit_guide"],
-        items=["mystic_talisman", "spell_focus"]
-    ),
-
-    # Enchanted Valley (1, 3) - high-level mystic area
-    StoryArea.ENCHANTED_VALLEY: AreaNode(
-        area=StoryArea.ENCHANTED_VALLEY,
-        position=(1, 3),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.ENCHANTED_VALLEY,
-                to_area=StoryArea.MYSTIC_MOUNTAINS,
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The path leads back down the mountain."
-            ),
-            AreaConnection(
-                from_area=StoryArea.ENCHANTED_VALLEY,
-                to_area="crystal_pond",
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="A path leads down to a glowing pond."
-            ),
-            AreaConnection(
-                from_area=StoryArea.ENCHANTED_VALLEY,
-                to_area=StoryArea.CRYSTAL_CAVES,
-                direction=Direction.NORTH,
-                requirements=["crystal_key"],
-                description="A hidden entrance to mysterious caves is visible."
-            ),
-        ],
-        terrain_type=TerrainType.VALLEY,
-        base_description="A valley hidden from the world, where magic flows freely and strange plants grow.",
-        requirements=[],
-        enemies=["fae_guardian"],
-        items=["mystic_token", "crystal_key"]
-    ),
-
-    # Crystal Caves (1, 4) - end game area
-    StoryArea.CRYSTAL_CAVES: AreaNode(
-        area=StoryArea.CRYSTAL_CAVES,
-        position=(1, 4),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.CRYSTAL_CAVES,
-                to_area=StoryArea.ENCHANTED_VALLEY,
-                direction=Direction.SOUTH,
-                requirements=[],
-                description="The cave exit leads back to the enchanted valley."
-            ),
-            AreaConnection(
-                from_area=StoryArea.CRYSTAL_CAVES,
-                to_area=StoryArea.FORGOTTEN_GROVE,
-                direction=Direction.EAST,
-                requirements=["all_talismans"],
-                description="A crystal arch forms a portal to a mysterious grove."
-            ),
-        ],
-        terrain_type=TerrainType.CAVE,
-        base_description="Massive crystals grow from floor to ceiling, humming with ancient power.",
-        requirements=["crystal_key"],
-        enemies=["crystal_guardian"],
-        items=["power_crystal"]
-    ),
-
-    # Forgotten Grove (2, 4) - final area
-    StoryArea.FORGOTTEN_GROVE: AreaNode(
-        area=StoryArea.FORGOTTEN_GROVE,
-        position=(2, 4),
-        connections=[
-            AreaConnection(
-                from_area=StoryArea.FORGOTTEN_GROVE,
-                to_area=StoryArea.CRYSTAL_CAVES,
-                direction=Direction.WEST,
-                requirements=[],
-                description="The crystal portal leads back to the caves."
-            ),
-        ],
-        terrain_type=TerrainType.FOREST,
-        base_description="The legendary grove where the last centaurs made their final stand.",
-        requirements=["all_talismans"],
-        enemies=["ancient_guardian"],
-        items=["centaur_relic"]
-    ),
+# Generic descriptions for undefined areas based on terrain type
+GENERIC_DESCRIPTIONS = {
+    TerrainType.FOREST: [
+        "A dense forest with towering trees. Sunlight filters through the canopy above.",
+        "The forest is alive with the sounds of birds and small creatures.",
+        "Thick undergrowth makes it difficult to see far in any direction.",
+        "Moss-covered trees surround you, their branches creating natural arches overhead.",
+    ],
+    TerrainType.MOUNTAIN: [
+        "Rocky terrain rises steeply here. The air is crisp and clear.",
+        "A mountain path winds its way through large boulders.",
+        "Sharp rocks and steep drops make this area treacherous to navigate.",
+        "The mountain terrain provides a clear view of the surrounding landscape.",
+    ],
+    TerrainType.CLEARING: [
+        "A small clearing offers a break from the dense surroundings.",
+        "Tall grass sways gently in the open space.",
+        "Wildflowers dot this open area, adding splashes of color.",
+        "The clearing provides good visibility in all directions.",
+    ],
+    TerrainType.WATER: [
+        "A small stream flows through this area, the water crystal clear.",
+        "The water here is still and reflective like a mirror.",
+        "Reeds and water plants grow along the edges of this watery area.",
+        "The gentle sound of flowing water fills this peaceful spot.",
+    ],
+    TerrainType.CAVE: [
+        "The rocky walls of this cave are cool to the touch.",
+        "Stalactites hang from the ceiling, created over countless years.",
+        "The cave offers shelter from the elements but is shrouded in darkness.",
+        "Mysterious echoes bounce off the cave walls as you move.",
+    ],
+    TerrainType.TEMPLE: [
+        "Ancient pillars mark what was once a sacred space.",
+        "Faded carvings on stone blocks hint at forgotten rituals.",
+        "The remains of a temple structure create an atmosphere of reverence.",
+        "Though ruined, this temple still maintains an aura of importance.",
+    ],
+    TerrainType.RUINS: [
+        "Crumbling stone structures hint at a civilization long gone.",
+        "Broken walls and collapsed roofs tell of a once-great building.",
+        "These ruins have been reclaimed by nature over many years.",
+        "The silent ruins stand as a testament to a forgotten time.",
+    ],
+    TerrainType.VALLEY: [
+        "The valley floor is rich with vegetation and wildlife.",
+        "Sheltered by hills on either side, this valley feels protected.",
+        "The valley stretches ahead, its end obscured by distance.",
+        "A gentle slope leads deeper into this peaceful valley.",
+    ],
 }
 
-class MapSystem:
-    """Handles map-related operations and transitions."""
+# Common enemies by terrain type for generic areas
+GENERIC_ENEMIES = {
+    TerrainType.FOREST: ["forest_sprite", "wild_fox", "forest_beetle"],
+    TerrainType.MOUNTAIN: ["rock_crawler", "mountain_hawk", "cliff_jumper"],
+    TerrainType.CLEARING: ["field_mouse", "grass_snake", "meadow_rabbit"],
+    TerrainType.WATER: ["small_fish", "water_beetle", "tiny_frog"],
+    TerrainType.CAVE: ["cave_bat", "blind_worm", "crystal_beetle"],
+    TerrainType.TEMPLE: ["temple_sprite", "guardian_wisp", "stone_sentinel"],
+    TerrainType.RUINS: ["dust_spirit", "memory_fragment", "ancient_construct"],
+    TerrainType.VALLEY: ["valley_deer", "wild_boar", "field_vole"],
+}
+
+# Common items by terrain type for generic areas
+GENERIC_ITEMS = {
+    TerrainType.FOREST: ["forest_berries", "fallen_branch", "strange_mushroom"],
+    TerrainType.MOUNTAIN: ["sharp_stone", "alpine_flower", "eagle_feather"],
+    TerrainType.CLEARING: ["wildflowers", "tall_grass", "smooth_pebble"],
+    TerrainType.WATER: ["water_lily", "smooth_stone", "reed_bundle"],
+    TerrainType.CAVE: ["glowing_fungus", "cave_crystal", "bat_guano"],
+    TerrainType.TEMPLE: ["prayer_bead", "broken_statue", "ceremonial_coin"],
+    TerrainType.RUINS: ["ancient_coin", "mossy_brick", "tarnished_emblem"],
+    TerrainType.VALLEY: ["valley_herb", "colorful_flower", "bird_nest"],
+}
+
+class MapManager:
+    """Manages the game map and player movement."""
     
     def __init__(self):
-        self.current_area = StoryArea.AWAKENING_WOODS
-        self.discovered_areas: Set[StoryArea] = {StoryArea.AWAKENING_WOODS}
-        self.unlocked_connections: Set[Tuple[StoryArea, StoryArea]] = set()
-        self.current_time = "day"  # Track time of day for hazards
+        """Initialize the map manager with a 10x10 grid."""
+        # Create the full grid of areas
+        self.areas = {}
+        self.position_to_area = {}
         
-        # Initialize starting area with proper Enemy objects
-        starting_node = GAME_MAP[StoryArea.AWAKENING_WOODS]
-        starting_node.enemies = self._create_enemies(["forest_guardian"])
+        # Generate the whole 10x10 grid
+        self._generate_world_grid(10, 10)
+        
+        # Initialize named areas with their special properties
+        self._initialize_named_areas()
         
         # Fix the Phantom Assassin location
         self._fix_phantom_assassin_location()
         
-        self.areas = GAME_MAP
-        self.position_to_area = {}
+    def _generate_world_grid(self, width, height):
+        """Generate a grid of areas with appropriate terrain."""
+        terrain_distribution = {
+            TerrainType.FOREST: 0.3,
+            TerrainType.CLEARING: 0.2,
+            TerrainType.MOUNTAIN: 0.15,
+            TerrainType.RUINS: 0.1,
+            TerrainType.WATER: 0.1,
+            TerrainType.TEMPLE: 0.05,
+            TerrainType.CAVE: 0.05,
+            TerrainType.VALLEY: 0.05,
+        }
         
-        # Build a position-to-area lookup
-        for area_id, area_node in self.areas.items():
-            self.position_to_area[area_node.position] = area_node
+        terrain_types = list(terrain_distribution.keys())
+        weights = list(terrain_distribution.values())
+        
+        # Ensure path to the final boss
+        path_positions = set()
+        current_x, current_y = 0, 0
+        target_x, target_y = 9, 9
+        
+        # Create a zigzag path to the boss
+        while current_x < target_x:
+            current_x += 1
+            path_positions.add((current_x, current_y))
+        
+        while current_y < target_y:
+            current_y += 1
+            path_positions.add((current_x, current_y))
+        
+        # Add central crossroads area
+        path_positions.add((5, 5))
+        
+        # Add diagonal path from crossroads to boss path
+        x, y = 5, 5
+        while x < 9 and y < 9:
+            x += 1
+            y += 1
+            path_positions.add((x, y))
+        
+        # Generate a node for each position in the grid
+        for x in range(width):
+            for y in range(height):
+                position = (x, y)
+                
+                # If this is a named area, skip it for now (will be added later)
+                if position in NAMED_AREAS:
+                    continue
+                
+                # Generate a generic area
+                if position in path_positions:
+                    # Path areas are always passable and mostly clearings
+                    terrain = random.choices(
+                        [TerrainType.CLEARING, TerrainType.FOREST, TerrainType.VALLEY],
+                        weights=[0.6, 0.3, 0.1],
+                        k=1
+                    )[0]
+                    requirements = []
+                    is_passable = True
+                else:
+                    # Off-path areas can be any terrain
+                    terrain = random.choices(terrain_types, weights=weights, k=1)[0]
+                    
+                    # Some areas have requirements or are impassable
+                    is_passable = random.random() < 0.8  # 80% chance of being passable
+                    
+                    # Only add requirements to passable areas
+                    requirements = []
+                    if is_passable and random.random() < 0.2:  # 20% chance of requirements
+                        possible_reqs = ["rusty_sword", "shadow_essence", "mystic_crystal", 
+                                        "climbing_rope", "shadow_blade"]
+                        requirements = [random.choice(possible_reqs)]
+                
+                desc = random.choice(GENERIC_DESCRIPTIONS[terrain])
+                
+                # 50% chance of enemies if area is passable
+                enemies = []
+                if is_passable and random.random() < 0.5:
+                    enemies = [random.choice(GENERIC_ENEMIES[terrain])]
+                
+                # 30% chance of items if area is passable
+                items = []
+                if is_passable and random.random() < 0.3:
+                    items = [random.choice(GENERIC_ITEMS[terrain])]
+                
+                # Create the area node
+                node = AreaNode(
+                    area=None,  # No specific named area
+                    position=position,
+                    terrain_type=terrain,
+                    base_description=desc,
+                    requirements=requirements,
+                    enemies=enemies,
+                    items=items,
+                    is_passable=is_passable
+                )
+                
+                # Add to our maps
+                self.position_to_area[position] = node
+    
+    def _initialize_named_areas(self):
+        """Initialize named areas with their special properties."""
+        for position, area_enum in NAMED_AREAS.items():
+            area_data = AREA_DATA[area_enum]
+            
+            node = AreaNode(
+                area=area_enum,
+                position=position,
+                terrain_type=area_data["terrain"],
+                base_description=area_data["desc"],
+                requirements=area_data["reqs"],
+                enemies=area_data["enemies"],
+                items=area_data["items"],
+            )
+            
+            # Add to our maps
+            self.position_to_area[position] = node
+            self.areas[area_enum] = node
+        
+        # After initializing all areas, call the diagnostic function
+        self._print_map_diagnostics()
+
+    def _print_map_diagnostics(self):
+        """Print diagnostic information about the map initialization."""
+        print("\n==== MAP INITIALIZATION DIAGNOSTICS ====")
+        
+        # Check NAMED_AREAS dictionary
+        print(f"NAMED_AREAS contains {len(NAMED_AREAS)} entries:")
+        for position, area_enum in NAMED_AREAS.items():
+            print(f"  Position {position} -> {area_enum.name} ({area_enum.value})")
+        
+        # Check position_to_area dictionary
+        print(f"\nposition_to_area contains {len(self.position_to_area)} entries")
+        print("Named areas in position_to_area:")
+        for position, node in self.position_to_area.items():
+            if node.area and isinstance(node.area, StoryArea):
+                print(f"  Position {position} -> {node.area.name} ({node.area.value})")
+        
+        # Check areas dictionary
+        print(f"\nareas dictionary contains {len(self.areas)} entries:")
+        for area_enum, node in self.areas.items():
+            print(f"  {area_enum.name} -> Position {node.position}")
+        
+        # Check specifically for Warriors Camp
+        warriors_camp_pos = (1, 0)
+        if warriors_camp_pos in self.position_to_area:
+            node = self.position_to_area[warriors_camp_pos]
+            print(f"\nWarriors Camp at (1, 0): {node.area.name if node.area else 'Not found'}")
+            print(f"  Is passable: {getattr(node, 'is_passable', True)}")
+            print(f"  Requirements: {getattr(node, 'requirements', [])}")
+        else:
+            print("\nWarriors Camp not found at position (1, 0)")
+        
+        # Check for StoryArea.WARRIORS_CAMP in areas dictionary
+        if StoryArea.WARRIORS_CAMP in self.areas:
+            node = self.areas[StoryArea.WARRIORS_CAMP]
+            print(f"\nWarriors Camp in areas dictionary: {node.position}")
+        else:
+            print("\nWarriors Camp not found in areas dictionary")
+        
+        print("==== END MAP DIAGNOSTICS ====\n")
     
     def _fix_phantom_assassin_location(self):
         """Fix the phantom assassin location to ensure it's at the shadow training area."""
         # Find the shadow training area
         shadow_training = self.get_area_node("shadow_training")
-        if shadow_training:
-            # Add phantom assassin to shadow training area
-            if "phantom_assassin" not in shadow_training.enemies:
+        if shadow_training and "phantom_assassin" not in shadow_training.enemies:
                 shadow_training.enemies.append("phantom_assassin")
-                print("Added phantom_assassin to shadow_training area")
-        else:
-            print("Warning: shadow_training area not found")
     
-    def _create_enemies(self, enemy_ids: List[str]) -> List[Enemy]:
-        """Convert enemy IDs to Enemy objects based on current time."""
-        enemies = []
-        for enemy_id in enemy_ids:
-            enemy_data = next((e for e in WORLD_ENEMIES if e["id"] == enemy_id), None)
-            if enemy_data:
-                is_night_only = enemy_data.get("night_only", False)
-                if not is_night_only or (is_night_only and self.current_time == "night"):
-                    enemies.append(Enemy(
-                        name=enemy_data["name"],
-                        description=enemy_data["description"],
-                        health=enemy_data["health"],
-                        damage=enemy_data["damage"],
-                        drops=enemy_data.get("drops", []),
-                        requirements=enemy_data.get("requirements", [])
-                    ))
-        return enemies
+    def _create_enemies(self, enemy_names: List[str]) -> List[str]:
+        """Create enemies for an area."""
+        return enemy_names
     
-    def get_area_node(self, area: StoryArea) -> AreaNode:
-        """Get the area node for a given area."""
-        return GAME_MAP[area]
-    
-    def get_available_connections(self, area: StoryArea, inventory: List[str]) -> List[AreaConnection]:
-        """Get available connections from the current area based on inventory."""
-        node = self.get_area_node(area)
-        available = []
-        
-        for conn in node.connections:
-            # Check if player has required items
-            has_requirements = all(req in inventory for req in conn.requirements)
-            # Check hazard requirements
-            can_pass_hazards = True
-            if conn.hazards:
-                for hazard in conn.hazards:
-                    if hazard.active_times and self.current_time not in hazard.active_times:
-                        continue
-                    if not all(req in inventory for req in hazard.requirements):
-                        can_pass_hazards = False
-                        break
+    def get_area_node(self, area) -> Optional[AreaNode]:
+        """Get an area node by name or enum."""
+        if isinstance(area, str):
+            # Convert string to enum
+            area = getattr(StoryArea, area.upper(), None)
+            if area:
+                return self.areas.get(area)
             
-            if has_requirements and can_pass_hazards:
-                available.append(conn)
-        
-        return available
+            # Check if it's a position string like "0,0"
+            try:
+                if "," in area:
+                    x, y = map(int, area.split(","))
+                    return self.position_to_area.get((x, y))
+            except:
+                pass
+                
+            return None
+            
+        if isinstance(area, StoryArea):
+            return self.areas.get(area)
+            
+        return None
     
-    def get_active_hazards(self, area: StoryArea) -> List[EnvironmentalHazard]:
-        """Get currently active hazards in an area."""
-        node = self.get_area_node(area)
-        if not node.hazards:
+    def get_adjacent_areas(self, current_area: StoryArea, inventory: List[str]) -> List[Tuple[StoryArea, Direction]]:
+        """Get available adjacent areas from the current area based on position and inventory."""
+        if isinstance(current_area, StoryArea):
+            node = self.areas.get(current_area)
+        else:
+            # Try to get by position if it's not a StoryArea
+            node = self.position_to_area.get(current_area)
+            
+        if not node:
             return []
             
-        return [
-            hazard for hazard in node.hazards
-            if not hazard.active_times or self.current_time in hazard.active_times
+        x, y = node.position
+        adjacent_positions = [
+            ((x, y + 1), Direction.NORTH),
+            ((x, y - 1), Direction.SOUTH),
+            ((x + 1, y), Direction.EAST),
+            ((x - 1, y), Direction.WEST)
         ]
+        
+        adjacent_areas = []
+        for pos, direction in adjacent_positions:
+            # Check if position is in bounds (10x10 grid)
+            if 0 <= pos[0] < 10 and 0 <= pos[1] < 10:
+                # Check if area exists at this position
+                area_node = self.position_to_area.get(pos)
+                if area_node and area_node.is_passable:
+                    # Check if player has required items
+                    if all(req in inventory for req in area_node.requirements):
+                        # If it's a named area, return the StoryArea enum
+                        if area_node.area:
+                            adjacent_areas.append((area_node.area, direction))
+                        else:
+                            # For generic areas, return the position as a string
+                            area_name = f"Area ({pos[0]},{pos[1]})"
+                            adjacent_areas.append((area_name, direction))
+        
+        return adjacent_areas
     
-    def get_weather_description(self, area: StoryArea) -> str:
-        """Get the current weather effects for an area."""
-        node = self.get_area_node(area)
-        if not node.weather_effects:
+    def move_player(self, current_area, direction: Direction, inventory: List[str]) -> Optional[str]:
+        """Move the player in the specified direction if possible."""
+        # Get the current position
+        if isinstance(current_area, StoryArea):
+            node = self.areas.get(current_area)
+        else:
+            # Handle cases where current_area is a position tuple or string
+            if isinstance(current_area, str) and not hasattr(StoryArea, current_area.upper()):
+                # It's a generic area name like "Area (1,2)"
+                try:
+                    import re
+                    match = re.search(r'\((\d+),(\d+)\)', current_area)
+                    if match:
+                        x, y = int(match.group(1)), int(match.group(2))
+                        node = self.position_to_area.get((x, y))
+                    else:
+                        return None
+                except:
+                    return None
+            else:
+                node = self.position_to_area.get(current_area)
+            
+        if not node:
+            return None
+        
+        # Calculate the new position
+        x, y = node.position
+        if direction == Direction.NORTH:
+            new_position = (x, y + 1)
+        elif direction == Direction.SOUTH:
+            new_position = (x, y - 1)
+        elif direction == Direction.EAST:
+            new_position = (x + 1, y)
+        elif direction == Direction.WEST:
+            new_position = (x - 1, y)
+        else:
+            return None  # Invalid direction
+        
+        # Check if new position is in bounds (10x10 grid)
+        if not (0 <= new_position[0] < 10 and 0 <= new_position[1] < 10):
+            return None
+        
+        # Check if there's an area at the new position
+        new_area_node = self.position_to_area.get(new_position)
+        if not new_area_node:
+            return None  # No area at this position
+        
+        # Check requirements
+        if not all(req in inventory for req in new_area_node.requirements):
+            return None  # Requirements not met
+        
+        # Return the area identifier (StoryArea enum if named, or position string if generic)
+        if new_area_node.area:
+            return new_area_node.area
+        else:
+            return f"Area ({new_position[0]},{new_position[1]})"
+    
+    def get_area_by_position(self, position) -> Optional[AreaNode]:
+        """Get an area node by position."""
+        return self.position_to_area.get(position)
+    
+    def get_active_hazards(self, area) -> List[EnvironmentalHazard]:
+        """Get currently active hazards in an area."""
+        node = None
+        if isinstance(area, StoryArea):
+            node = self.areas.get(area)
+        elif isinstance(area, tuple) and len(area) == 2:
+            node = self.position_to_area.get(area)
+        
+        if not node or not node.hazards:
+            return []
+            
+        return node.hazards
+    
+    def get_weather_description(self, area) -> str:
+        """Get weather description for an area."""
+        node = None
+        if isinstance(area, StoryArea):
+            node = self.areas.get(area)
+        elif isinstance(area, tuple) and len(area) == 2:
+            node = self.position_to_area.get(area)
+            
+        if not node or not node.weather_effects:
             return "The weather is calm."
             
-        effects = [WEATHER_EFFECTS[effect] for effect in node.weather_effects]
-        return " ".join(effects)
-    
-    def can_transition(self, from_area: StoryArea, to_area: StoryArea, 
-                      direction: Direction, inventory: List[str]) -> Tuple[bool, str]:
-        """Check if transition between areas is possible."""
-        # Get the connection if it exists
-        node = self.get_area_node(from_area)
-        connection = next((c for c in node.connections 
-                         if c.to_area == to_area and c.direction == direction), None)
-        
-        if not connection:
-            # Try to find any connection in the requested direction
-            connection = next((c for c in node.connections if c.direction == direction), None)
-            if connection:
-                to_area = connection.to_area
-            else:
-                return False, "No path exists in that direction."
-            
-        # Check requirements
-        missing_items = [req for req in connection.requirements if req not in inventory]
-        if missing_items:
-            return False, f"Missing required items: {', '.join(missing_items)}"
-            
-        # Check if destination area is accessible
-        dest_node = self.get_area_node(to_area)
-        missing_area_items = [req for req in dest_node.requirements if req not in inventory]
-        if missing_area_items:
-            return False, f"Cannot enter area. Missing: {', '.join(missing_area_items)}"
-            
-        return True, connection.description
-    
-    def transition_area(self, from_area: StoryArea, to_area: StoryArea, 
-                       direction: Direction, inventory: List[str]) -> Tuple[bool, str, Optional[TileState]]:
-        """Attempt to transition between areas."""
-        can_move, message = self.can_transition(from_area, to_area, direction, inventory)
-        
-        if not can_move:
-            return False, message, None
-            
-        # Create the new area's tile state
-        dest_node = self.get_area_node(to_area)
-        
-        # Convert enemy dictionaries to Enemy objects
-        enemies = self._create_enemies(dest_node.enemies)
-        
-        # Initialize NPCs list from area node
-        npcs = dest_node.npcs if dest_node.npcs else []
-        
-        new_tile = TileState(
-            position=dest_node.position,
-            terrain_type=dest_node.terrain_type,
-            area=to_area,
-            description=dest_node.base_description,
-            items=dest_node.items.copy(),
-            enemies=enemies,
-            npcs=npcs,
-            is_visited=to_area in self.discovered_areas
-        )
-        
-        # Update discovered areas
-        self.discovered_areas.add(to_area)
-        self.unlocked_connections.add((from_area, to_area))
-        
-        return True, message, new_tile
-    
-    def get_area_description(self, area: StoryArea, is_first_visit: bool) -> str:
-        """Get the description for an area, including any special first-visit text."""
-        node = self.get_area_node(area)
-        description = node.base_description
-        
-        # Add weather effects
-        description += f"\n\n{self.get_weather_description(area)}"
-        
-        # Add active hazards
-        active_hazards = self.get_active_hazards(area)
-        if active_hazards:
-            description += "\n\nHazards:"
-            for hazard in active_hazards:
-                description += f"\n- {hazard.description}"
-        
-        if is_first_visit:
-            description += "\n\nYou have discovered a new area!"
-            
-        # Add connection descriptions
-        for conn in node.connections:
-            if (area, conn.to_area) in self.unlocked_connections:
-                description += f"\n\n{conn.description}"
-                if conn.shortcut:
-                    description += " (Shortcut)"
-                
-        return description
-    
-    def update_time(self, time_of_day: str) -> None:
-        """Update the current time and handle time-based changes."""
-        self.current_time = time_of_day.lower()
-        
-        # Update enemies based on time
-        for area in self.discovered_areas:
-            node = self.get_area_node(area)
-            if isinstance(node.enemies, list):
-                # Convert enemy IDs to Enemy objects if needed
-                if node.enemies and isinstance(node.enemies[0], str):
-                    node.enemies = self._create_enemies(node.enemies)
-                # Update enemies based on time of day
-                tile = TileState(
-                    position=node.position,
-                    terrain_type=node.terrain_type,
-                    area=area,
-                    description=node.base_description,
-                    items=node.items.copy(),
-                    enemies=node.enemies,
-                    is_visited=True
-                )
-                tile.update_enemies(time_of_day)
-                node.enemies = tile.enemies
-                
-                # Update description based on time of day
-                if time_of_day.lower() == "night":
-                    if "The land lies under a blanket of stars" not in node.base_description:
-                        node.base_description += " The land lies under a blanket of stars."
-    
-    def get_position_for_area(self, area: StoryArea) -> Tuple[int, int]:
-        """Get the position coordinates for an area."""
-        node = self.get_area_node(area)
-        if node:
-            return node.position
-        return (0, 0)  # Default to starting position
-                
-    def get_tile_at_position(self, position: Tuple[int, int]) -> Optional[AreaNode]:
-        """Get the area node at a specific position."""
-        for area, node in GAME_MAP.items():
-            if node.position == position:
-                return node
-        return None 
+        return random.choice(node.weather_effects) 

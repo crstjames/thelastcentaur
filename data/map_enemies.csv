@@ -1,0 +1,50 @@
+X,Y,Area Name,Enemy
+0,0,AWAKENING_WOODS,forest_guardian
+0,1,TRIALS_PATH,forest_wolf
+0,2,SHADOW_DOMAIN,shadow_creature
+0,3,SHADOW_TRAINING,phantom_assassin
+0,4,FORGOTTEN_TEMPLE,temple_guardian
+0,7,"Area (0, 7)",forest_sprite
+0,8,"Area (0, 8)",mountain_hawk
+1,0,WARRIORS_CAMP,training_dummy
+1,1,MOUNTAIN_BASE,mountain_goat
+1,2,MYSTIC_MOUNTAINS,mountain_spirit
+1,3,ENCHANTED_VALLEY,magic_wisp
+1,4,CRYSTAL_CAVES,crystal_golem
+1,5,"Area (1, 5)",meadow_rabbit
+1,7,"Area (1, 7)",field_mouse
+1,9,"Area (1, 9)",meadow_rabbit
+2,0,TRAINING_GROUNDS,practice_target
+2,2,CRYSTAL_POND,water_sprite
+2,4,FORGOTTEN_GROVE,grove_spirit
+2,5,"Area (2, 5)",ancient_construct
+2,6,"Area (2, 6)",forest_sprite
+2,8,"Area (2, 8)",grass_snake
+2,9,"Area (2, 9)",wild_boar
+3,1,"Area (3, 1)",wild_fox
+3,4,"Area (3, 4)",meadow_rabbit
+3,9,"Area (3, 9)",dust_spirit
+4,0,"Area (4, 0)",grass_snake
+4,2,"Area (4, 2)",forest_beetle
+4,3,"Area (4, 3)",field_mouse
+4,8,"Area (4, 8)",grass_snake
+5,1,"Area (5, 1)",forest_sprite
+5,2,"Area (5, 2)",ancient_construct
+6,0,"Area (6, 0)",meadow_rabbit
+6,3,"Area (6, 3)",meadow_rabbit
+6,4,"Area (6, 4)",mountain_hawk
+6,8,"Area (6, 8)",grass_snake
+7,3,"Area (7, 3)",meadow_rabbit
+7,5,"Area (7, 5)",field_vole
+7,6,"Area (7, 6)",small_fish
+7,7,"Area (7, 7)",forest_sprite
+8,0,"Area (8, 0)",forest_beetle
+8,1,"Area (8, 1)",small_fish
+8,2,"Area (8, 2)",tiny_frog
+8,3,"Area (8, 3)",forest_beetle
+8,8,GUARDIAN_OVERLOOK,guardian_scout
+9,1,"Area (9, 1)",meadow_rabbit
+9,2,"Area (9, 2)",wild_fox
+9,4,"Area (9, 4)",meadow_rabbit
+9,7,"Area (9, 7)",grass_snake
+9,9,ANCIENT_SANCTUARY,centaur_guardian

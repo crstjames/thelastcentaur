@@ -6,26 +6,45 @@ All models use Pydantic for validation and serialization.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import Enum, auto
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Union, Any
 from pydantic import BaseModel, Field, validator, ConfigDict, model_serializer
 
 class Direction(str, Enum):
-    """Cardinal directions for movement."""
+    """Direction enum for movement."""
     NORTH = "north"
     SOUTH = "south"
     EAST = "east"
     WEST = "west"
+    UP = "up"
+    DOWN = "down"
+
+class CommandType(Enum):
+    """Command types for user input."""
+    MOVE = auto()
+    LOOK = auto()
+    INVENTORY = auto()
+    GET = auto()
+    DROP = auto()
+    EXAMINE = auto()
+    USE = auto()
+    HELP = auto()
+    QUIT = auto()
+    ATTACK = auto()
+    TALK = auto()
+    UNKNOWN = auto()
 
 class TerrainType(str, Enum):
-    """Types of terrain in the game."""
+    """Terrain types for area nodes."""
     FOREST = "forest"
     MOUNTAIN = "mountain"
-    RUINS = "ruins"
     CLEARING = "clearing"
-    VALLEY = "valley"
+    WATER = "water"
     CAVE = "cave"
+    TEMPLE = "temple"
+    RUINS = "ruins"
+    VALLEY = "valley"
 
 class PathType(str, Enum):
     """The three possible paths to victory."""
@@ -34,15 +53,25 @@ class PathType(str, Enum):
     STEALTH = "stealth" # Cunning and deception path
 
 class StoryArea(str, Enum):
-    """Story-specific areas of the map."""
+    """Enumeration of story areas in the game."""
     AWAKENING_WOODS = "awakening_woods"
+    WARRIORS_CAMP = "warriors_camp"
     TRIALS_PATH = "trials_path"
-    ANCIENT_RUINS = "ancient_ruins"
-    MYSTIC_MOUNTAINS = "mystic_mountains"
+    MOUNTAIN_BASE = "mountain_base"
+    TRAINING_GROUNDS = "training_grounds"
     SHADOW_DOMAIN = "shadow_domain"
+    SHADOW_TRAINING = "shadow_training"
+    MYSTIC_MOUNTAINS = "mystic_mountains"
+    CRYSTAL_POND = "crystal_pond"
+    HONOR_SHRINE = "honor_shrine"
+    FORGOTTEN_TEMPLE = "forgotten_temple"
+    MEDITATION_CIRCLE = "meditation_circle"
     ENCHANTED_VALLEY = "enchanted_valley"
-    FORGOTTEN_GROVE = "forgotten_grove"
     CRYSTAL_CAVES = "crystal_caves"
+    FORGOTTEN_GROVE = "forgotten_grove"
+    CROSSROADS = "crossroads"
+    GUARDIAN_OVERLOOK = "guardian_overlook"
+    ANCIENT_SANCTUARY = "ancient_sanctuary"
 
 class EventType(str, Enum):
     """Types of events that can occur in the game."""
@@ -113,86 +142,14 @@ class Enemy:
     description: str
     health: int
     damage: int
-    drops: List[str] = field(default_factory=list)
-    requirements: List[str] = field(default_factory=list)
+    drops: List[str] = None
+    requirements: List[str] = None  # Items needed to defeat this enemy
 
-@dataclass
-class TileState:
-    """Represents the current state of a tile."""
-    position: Tuple[int, int]
-    terrain_type: TerrainType
-    area: StoryArea
-    description: str
-    items: List[str]
-    enemies: List[Enemy]
-    npcs: List[str] = field(default_factory=list)
-    is_visited: bool = False
-    environmental_changes: List[Dict[str, Any]] = field(default_factory=list)
-    blocked_paths: List[Direction] = field(default_factory=list)
-    
-    def get_description(self) -> str:
-        """Get a full description of the tile's current state."""
-        desc = [self.description]
-        
-        # Add environmental changes if present
-        if self.environmental_changes:
-            permanent_changes = [change for change in self.environmental_changes if change.get("is_permanent", False)]
-            if permanent_changes:
-                desc.append("")  # Empty line
-                desc.append("You notice changes to the environment:")
-                for change in permanent_changes:
-                    desc.append(f"- {change['description']}")
-        
-        desc.append("")  # Empty line
-        
-        # Add movement options
-        desc.append("You can move: north, south, east, west")
-        desc.append("")  # Empty line
-        
-        # Add enemies if present
-        if self.enemies:
-            desc.append("Enemies present: " + ", ".join(enemy.name for enemy in self.enemies))
-            desc.append("")  # Empty line
-        
-        # Add NPCs if present
-        if self.npcs:
-            desc.append("NPCs present: " + ", ".join(self.npcs))
-            desc.append("")  # Empty line
-        
-        # Add items if present
-        if self.items:
-            desc.append("Items visible: " + ", ".join(self.items))
-            desc.append("")  # Empty line
-        
-        return "\n".join(desc)
-    
-    def update_enemies(self, time_of_day: str) -> None:
-        """Update enemies based on time of day."""
-        # Keep track of original enemy IDs
-        enemy_ids = [enemy.name.lower().replace(" ", "_") for enemy in self.enemies]
-        
-        # Add Shadow Stalker at night if in starting area
-        if time_of_day.lower() == "night" and self.area == StoryArea.AWAKENING_WOODS:
-            if "shadow_stalker" not in enemy_ids:
-                enemy_ids.append("shadow_stalker")
-        
-        # Convert IDs back to Enemy objects
-        from .world_design import WORLD_ENEMIES
-        new_enemies = []
-        for enemy_id in enemy_ids:
-            enemy_data = next((e for e in WORLD_ENEMIES if e["id"] == enemy_id), None)
-            if enemy_data:
-                is_night_only = enemy_data.get("night_only", False)
-                if not is_night_only or (is_night_only and time_of_day.lower() == "night"):
-                    new_enemies.append(Enemy(
-                        name=enemy_data["name"],
-                        description=enemy_data["description"],
-                        health=enemy_data["health"],
-                        damage=enemy_data["damage"],
-                        drops=enemy_data.get("drops", []),
-                        requirements=enemy_data.get("requirements", [])
-                    ))
-        self.enemies = new_enemies
+class TileState(Enum):
+    """State of a game tile."""
+    UNEXPLORED = auto()
+    VISIBLE = auto()
+    EXPLORED = auto()
 
 class GameState(BaseModel):
     """Represents the complete state of the game."""

@@ -61,6 +61,11 @@ class GameCommandRequest(BaseModel):
     command: str
     use_llm: bool = True
 
+class CommandData(BaseModel):
+    """Schema for command data."""
+    command: str
+    use_llm: bool = True
+
 class GameCommandResponse(BaseModel):
     """Schema for game command response."""
     command: str

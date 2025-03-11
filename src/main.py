@@ -5,6 +5,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncpg
+import os
 
 from src.core.config import settings
 from src.api.routes import api_router
@@ -67,12 +68,25 @@ app = FastAPI(
 )
 
 # Configure CORS
+origins = []
+# Add localhost origins by default
+for port in ["3000", "3001", "3002", "3003", "5173", "5174"]:
+    origins.extend([f"http://localhost:{port}", f"http://127.0.0.1:{port}"])
+
+# Add origins from settings.CORS_ORIGINS environment variable if it exists
+cors_origins_env = os.getenv("CORS_ORIGINS", "")
+if cors_origins_env:
+    origins.extend([origin.strip() for origin in cors_origins_env.split(",") if origin.strip()])
+
+print(f"CORS origins configured: {origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Modify in production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers

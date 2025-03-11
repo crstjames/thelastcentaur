@@ -1,0 +1,78 @@
+BODY.inter_59dee874-module__9CtR0q__className
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  NEXTJS-PORTAL
+
+  NEXT-ROUTE-ANNOUNCER
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  SCRIPT
+
+  DIV.jsx-1153100392.crt-container
+    DIV.jsx-1153100392.crt-frame
+
+    DIV.jsx-1153100392.crt-overlay
+
+    DIV.jsx-1153100392.crt-content
+      DIV.jsx-1153100392.logo-container
+        DIV.jsx-1153100392.logo-text-top
+
+        DIV.jsx-1153100392.logo-text-bottom
+
+      DIV.jsx-1153100392.form-container
+        DIV.jsx-1153100392.tab-container
+          DIV.jsx-1153100392.tab.active-tab
+
+          A
+            DIV.jsx-1153100392.tab.inactive-tab
+
+        FORM.jsx-1153100392
+          DIV.jsx-1153100392.mb-4
+            LABEL.jsx-1153100392.input-label
+
+            INPUT#username.jsx-1153100392.input-field
+
+          DIV.jsx-1153100392.mb-4
+            LABEL.jsx-1153100392.input-label
+
+            INPUT#password.jsx-1153100392.input-field
+
+          DIV.jsx-1153100392.mb-4
+            LABEL.jsx-1153100392.input-label
+
+            SELECT#server.jsx-1153100392.input-field
+              OPTION.jsx-1153100392
+
+              OPTION.jsx-1153100392
+
+          DIV.jsx-1153100392.flex.justify-between.mt-6
+            BUTTON.jsx-1153100392.form-button
+
+            BUTTON.jsx-1153100392.form-button
+
+      DIV.jsx-1153100392.back-section
+        A.back-button-container
+          DIV.jsx-1153100392.back-text
+
+      DIV.jsx-1153100392

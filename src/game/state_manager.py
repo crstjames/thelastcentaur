@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
 from datetime import datetime, timezone
+import uuid
 
 from src.db.models import GameInstance, Tile, TileHistory
 from src.core.models import GameState, TileState, Direction, TerrainType, StoryArea
@@ -34,8 +35,11 @@ class GameStateManager:
     
     async def load_game_instance(self, game_id: str, db_session: AsyncSession) -> Optional[GameInstance]:
         """Load a game instance by ID."""
+        print(f"Loading game instance: {game_id}")
+        
         # Check if already loaded
         if game_id in self._loaded_instances:
+            print(f"Game instance {game_id} already loaded")
             return self._loaded_instances[game_id]["game_instance"]
         
         stmt = select(GameInstance).where(GameInstance.id == game_id)
@@ -43,6 +47,7 @@ class GameStateManager:
         game_instance = result.scalar_one_or_none()
         
         if game_instance:
+            print(f"Game instance {game_id} found in database")
             # Initialize game engine components
             map_system = GameMapSystem()
             player = Player(
@@ -50,21 +55,21 @@ class GameStateManager:
                 game_instance.user_id,
                 f"Player_{game_instance.user_id[:8]}"
             )
-            command_parser = CommandParser(player)
-            command_service = CommandService(command_parser, db_session)
             
-            # Store in loaded instances
+            # Store in loaded instances, but don't create command_parser or command_service yet
             self._loaded_instances[game_id] = {
                 "game_instance": game_instance,
                 "map_system": map_system,
                 "player": player,
-                "command_parser": command_parser,
-                "command_service": command_service,
                 "db_session": db_session
             }
             
             # Load game state from database
+            print(f"Loading game state for {game_id}")
             await self._load_game_state(game_id)
+            print(f"Game state loaded for {game_id}")
+        else:
+            print(f"Game instance {game_id} not found in database")
         
         return game_instance
     
@@ -146,13 +151,24 @@ class GameStateManager:
                             
                     game_instance.game_state['inventory'] = normalized_inventory
     
-    async def execute_command(self, game_id: str, command_text: str) -> str:
-        """Execute a command and update game state."""
+    async def process_command(self, game_id: str, command_text: str, db: AsyncSession = None) -> str:
+        """Process a command for a specific game instance."""
+        print(f"Processing command for game ID {game_id}: {command_text}")
+        print(f"Loaded instances: {list(self._loaded_instances.keys())}")
+        
         if game_id not in self._loaded_instances:
+            print(f"Game not loaded. Game ID {game_id} not found in loaded instances.")
             return "Game not loaded. Please load a game instance first."
         
         instance_data = self._loaded_instances[game_id]
-        command_service = instance_data["command_service"]
+        player = instance_data["player"]
+        
+        # Create a new CommandParser and CommandService for this specific player
+        from src.engine.core.command_parser import CommandParser
+        from src.game.command_service import CommandService
+        
+        command_parser = CommandParser(player)
+        command_service = CommandService(command_parser, db or instance_data["db_session"])
         
         # Use the command service to process the command
         result = await command_service.process_command(command_text, game_id)
@@ -206,19 +222,12 @@ class GameStateManager:
         }
     
     async def get_game_state(self, game_id: str) -> Dict[str, Any]:
-        """
-        Get the current game state for a game instance.
-        
-        Args:
-            game_id: The game instance ID
+        """Get the current game state."""
+        # Load the game instance if not already loaded
+        instance_data = self._loaded_instances.get(game_id)
+        if not instance_data:
+            return {"error": "Game instance not loaded"}
             
-        Returns:
-            Dictionary containing the current game state
-        """
-        if game_id not in self._loaded_instances:
-            return {}
-        
-        instance_data = self._loaded_instances[game_id]
         player = instance_data["player"]
         map_system = instance_data["map_system"]
         
@@ -228,29 +237,63 @@ class GameStateManager:
         # Get current tile
         current_tile = map_system.get_tile(x, y)
         
+        # Get the area name based on position
+        current_area = "unknown"
+        area_position = (x, y)
+        
+        # Check if this position corresponds to a named area
+        from src.engine.core.map_system import NAMED_AREAS
+        if area_position in NAMED_AREAS:
+            area_enum = NAMED_AREAS[area_position]
+            current_area = area_enum.value
+            # Also update the player's current_area
+            player.state.current_area = area_enum
+        
         # Build game state
         game_state = {
-            "player": {
-                "position": {"x": x, "y": y},
-                "inventory": player.state.inventory,
-                "health": player.state.stats.health if hasattr(player.state, "stats") else 100,
-                "stamina": player.state.stats.stamina if hasattr(player.state, "stats") else 100,
-                "level": 1,  # Default level since it's not in the Player class
-                "experience": 0,  # Default experience since it's not in the Player class
-                "gold": 0  # Default gold since it's not in the Player class
-            },
-            "current_tile": {
-                "position": {"x": x, "y": y},
-                "description": current_tile.description if current_tile else "Unknown area",
-                "terrain_type": current_tile.terrain_type.value if current_tile and hasattr(current_tile, 'terrain_type') else "unknown",
-                "items": current_tile.items if current_tile else [],
-                "enemies": current_tile.enemies if current_tile else [],
-                "npcs": current_tile.npcs if current_tile and hasattr(current_tile, 'npcs') else [],
-                "exits": current_tile.exits if current_tile else []
-            }
+            "id": game_id,
+            "player_id": player.state.player_id,
+            "player_name": player.state.player_name,
+            "position": player.state.position,
+            "x": x,
+            "y": y,
+            "current_area": player.state.current_area.name if player.state.current_area else "unknown",
+            "visited_tiles": list(player.state.visited_tiles),
+            "inventory": player.state.inventory,
+            "health": player.state.stats.health,
+            "max_health": player.state.stats.max_health,
+            "stamina": player.state.stats.stamina,
+            "max_stamina": player.state.stats.max_stamina,
         }
         
-        return game_state
+        # Include current tile information
+        if current_tile:
+            tile_info = {
+                "type": current_tile.type,
+                "area": current_tile.area.name if hasattr(current_tile, "area") and current_tile.area else "unknown",
+                "description": current_tile.description if hasattr(current_tile, "description") else "",
+                "is_passable": current_tile.is_passable if hasattr(current_tile, "is_passable") else True,
+            }
+            game_state["current_tile"] = tile_info
+        
+        # Build response
+        response = {
+            "id": game_id,
+            "user_id": player.state.player_id,
+            "name": "The Last Centaur",
+            "status": "active",
+            "max_players": 1,
+            "current_players": 1,
+            "description": "A text-based adventure game",
+            "created_at": "2023-01-01T00:00:00Z",
+            "updated_at": "2023-01-01T00:00:00Z",
+            "game_state": game_state,
+            "current_area": player.state.current_area.name if player.state.current_area else "unknown",
+            "position": player.state.position,
+            "current_tile": game_state.get("current_tile", {}),
+        }
+        
+        return response
     
     async def _initialize_game_world(self, game_id: str, db_session: AsyncSession) -> None:
         """Initialize the game world for a new game instance."""
@@ -389,7 +432,10 @@ class GameStateManager:
     
     async def _load_game_state(self, game_id: str) -> None:
         """Load game state from database."""
+        print(f"_load_game_state called for game_id: {game_id}")
+        
         if game_id not in self._loaded_instances:
+            print(f"Game ID {game_id} not in loaded instances")
             return
         
         instance_data = self._loaded_instances[game_id]
@@ -404,30 +450,40 @@ class GameStateManager:
             x = pos.get("x", 0)
             y = pos.get("y", 0)
             player.state.position = (x, y)
+            print(f"Loaded player position: ({x}, {y})")
+        else:
+            print("No player position found in game instance")
         
         # Load game state
         game_state = game_instance.game_state
         if game_state:
+            print(f"Game state found: {game_state.keys() if game_state else 'None'}")
             # Load inventory
             if "inventory" in game_state:
                 player.state.inventory = game_state["inventory"]
+                print(f"Loaded inventory: {game_state['inventory']}")
             
             # Load visited tiles
             if "visited_tiles" in game_state:
                 for tile_pos in game_state["visited_tiles"]:
                     x, y = tile_pos
                     map_system.mark_tile_visited(x, y)
+                print(f"Loaded visited tiles: {game_state['visited_tiles']}")
             
             # Load other player stats
             if "player_stats" in game_state and hasattr(player.state, "stats"):
                 for key, value in game_state["player_stats"].items():
                     if hasattr(player.state.stats, key):
                         setattr(player.state.stats, key, value)
+                print(f"Loaded player stats: {game_state.get('player_stats', {})}")
+        else:
+            print("No game state found in game instance")
         
         # Load tiles from database
         stmt = select(Tile).where(Tile.game_instance_id == game_instance.id)
         result = await db_session.execute(stmt)
         tiles = result.scalars().all()
+        print(f"Loaded {len(tiles)} tiles from database")
         
         # Add tiles to map system
         for tile in tiles:
@@ -472,42 +528,90 @@ class GameStateManager:
         }
     
     async def _record_tile_history(self, game_id: str, command: str, result: str) -> None:
-        """Record relevant events in tile history."""
+        """Record a tile history entry for the current state."""
         if game_id not in self._loaded_instances:
             return
-        
+            
         instance_data = self._loaded_instances[game_id]
         player = instance_data["player"]
         db_session = instance_data["db_session"]
         
-        # Get player position
+        # Get current tile position
         x, y = player.state.position
         
-        # Only record certain types of commands
-        record_types = ["move", "take", "drop", "alter", "mark", "attack"]
-        should_record = any(cmd_type in command.lower() for cmd_type in record_types)
-        
-        if should_record:
-            # Get current tile
+        # Find the tile for this position
+        try:
+            # First, check if the tile exists
             stmt = select(Tile).where(
                 Tile.game_instance_id == game_id,
                 Tile.position_x == x,
                 Tile.position_y == y
             )
-            result_query = await db_session.execute(stmt)
-            tile = result_query.scalar_one_or_none()
+            tile_result = await db_session.execute(stmt)
+            tile = tile_result.scalar_one_or_none()
             
             if tile:
-                # Create history entry
-                history = TileHistory(
-                    tile_id=tile.id,
+                # Create a new tile history entry using the correct fields
+                tile_history = TileHistory(
+                    id=str(uuid.uuid4()),
                     game_instance_id=game_id,
-                    event_type="player_action",
+                    tile_id=tile.id,
+                    event_type="command",
                     event_data={
                         "command": command,
                         "result": result,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
-                db_session.add(history)
-                await db_session.commit() 
+                
+                db_session.add(tile_history)
+                await db_session.commit()
+            else:
+                print(f"Warning: No tile found at position ({x}, {y}) for game {game_id}")
+        except Exception as e:
+            print(f"Error recording tile history: {str(e)}")
+            # Don't rethrow - this is just history tracking and shouldn't break the game
+    
+    async def add_command_to_history(self, game_id: str, command: str, result: str, db: AsyncSession) -> None:
+        """
+        Add a command to the game's command history.
+        
+        Args:
+            game_id: The game instance ID
+            command: The command that was executed
+            result: The result of the command
+            db: Database session to use
+        """
+        try:
+            # Record the command in tile history
+            await self._record_tile_history(game_id, command, result)
+            
+            # We could also store a separate command history in the game state if needed
+            if game_id in self._loaded_instances:
+                game_instance = self._loaded_instances[game_id]["game_instance"]
+                
+                # Initialize command history if it doesn't exist
+                if not game_instance.game_state:
+                    game_instance.game_state = {}
+                    
+                if "command_history" not in game_instance.game_state:
+                    game_instance.game_state["command_history"] = []
+                    
+                # Add command to history (limit to last 50 commands)
+                history = game_instance.game_state["command_history"]
+                history.append({
+                    "command": command,
+                    "result": result[:100] + "..." if len(result) > 100 else result,  # Truncate long results
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+                
+                # Keep only the last 50 commands
+                if len(history) > 50:
+                    game_instance.game_state["command_history"] = history[-50:]
+                    
+                # Update the game instance in the database
+                await db.commit()
+                
+        except Exception as e:
+            print(f"Error adding command to history: {str(e)}")
+            # Don't rethrow - this is just history tracking and shouldn't break the game 

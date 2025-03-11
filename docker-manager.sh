@@ -29,62 +29,71 @@ echo -e "${RED}0. Exit${NC}"
 # Get user input
 read -p "Enter your choice [0-5]: " choice
 
+# Process choice
 case $choice in
   1)
+    # Start Docker containers
     echo -e "${GREEN}Starting Docker containers...${NC}"
-    bash ./run-docker.sh
+    ./scripts/run-docker.sh
     ;;
   2)
+    # Stop Docker containers
     echo -e "${RED}Stopping Docker containers...${NC}"
-    bash ./stop-docker.sh
+    ./scripts/stop-docker.sh
     ;;
   3)
+    # Restart Docker containers
     echo -e "${YELLOW}Restarting Docker containers...${NC}"
-    bash ./stop-docker.sh
-    echo -e "${YELLOW}Waiting for containers to stop completely...${NC}"
-    sleep 5
-    bash ./run-docker.sh
+    ./scripts/restart-services.sh
     ;;
   4)
+    # Check Docker container status
     echo -e "${BLUE}Checking Docker container status...${NC}"
-    bash ./check-docker.sh
+    echo
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    echo
     ;;
   5)
-    echo -e "${GREEN}Viewing Docker logs...${NC}"
-    echo -e "${YELLOW}Which container logs do you want to view?${NC}"
-    echo -e "1. All containers"
-    echo -e "2. Backend"
-    echo -e "3. Frontend"
-    echo -e "4. PostgreSQL"
-    read -p "Enter your choice [1-4]: " log_choice
+    # View Docker logs
+    echo -e "${GREEN}Which container's logs would you like to view?${NC}"
+    echo -e "${YELLOW}1. Backend${NC}"
+    echo -e "${YELLOW}2. Frontend${NC}"
+    echo -e "${YELLOW}3. Database${NC}"
+    echo -e "${RED}0. Back to main menu${NC}"
+    
+    read -p "Enter your choice [0-3]: " log_choice
     
     case $log_choice in
       1)
-        docker compose logs -f
-        ;;
-      2)
+        echo -e "${GREEN}Viewing backend logs (press Ctrl+C to exit)...${NC}"
         docker logs -f thelastcentaur-backend
         ;;
-      3)
+      2)
+        echo -e "${GREEN}Viewing frontend logs (press Ctrl+C to exit)...${NC}"
         docker logs -f thelastcentaur-frontend
         ;;
-      4)
+      3)
+        echo -e "${GREEN}Viewing database logs (press Ctrl+C to exit)...${NC}"
         docker logs -f thelastcentaur-postgres
         ;;
+      0)
+        echo -e "${RED}Returning to main menu...${NC}"
+        exec $0
+        ;;
       *)
-        echo -e "${RED}Invalid choice. Exiting.${NC}"
-        exit 1
+        echo -e "${RED}Invalid option. Returning to main menu...${NC}"
+        exec $0
         ;;
     esac
     ;;
   0)
-    echo -e "${BLUE}Exiting Docker Manager.${NC}"
+    # Exit
+    echo -e "${RED}Exiting...${NC}"
     exit 0
     ;;
   *)
-    echo -e "${RED}Invalid choice. Exiting.${NC}"
-    exit 1
+    # Invalid option
+    echo -e "${RED}Invalid option. Please try again.${NC}"
+    exec $0
     ;;
-esac
-
-echo -e "${GREEN}Operation completed!${NC}" 
+esac 

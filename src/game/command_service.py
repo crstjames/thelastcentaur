@@ -28,35 +28,52 @@ class CommandService:
             "map": self._handle_map_command,
         }
     
-    async def process_command(self, command_text: str, game_id: str) -> str:
+    async def process_command(self, command_text: str, game_id: str, db: AsyncSession = None) -> str:
         """Process a command with context awareness and special handling."""
-        # Debug print
-        print(f"Processing command: {command_text}")
+        print(f"Command Service process_command: {command_text}")
+        if not command_text:
+            return "Please enter a command."
         
-        # Check for special commands first
-        command_parts = command_text.strip().lower().split()
-        if command_parts and command_parts[0] in self.special_commands:
-            print(f"Special command detected: {command_parts[0]}")
-            return await self.special_commands[command_parts[0]](command_parts[1:], game_id)
+        # Normalize the command
+        command_text = command_text.strip().lower()
+        command_parts = command_text.split()
+        
+        # Handle special debug commands
+        if command_parts and command_parts[0].startswith("debug_"):
+            print(f"Processing debug command: {command_text}")
             
-        # Handle combat aliases explicitly
-        combat_aliases = ["fight", "battle", "strike"]
-        if command_parts and command_parts[0] in combat_aliases and len(command_parts) > 1:
-            # Convert to attack command
-            print(f"Combat alias detected: {command_parts[0]} -> attack")
-            command_text = "attack " + " ".join(command_parts[1:])
+            # Debug command to teleport to a specific area
+            if command_parts[0] == "debug_teleport" and len(command_parts) > 1:
+                return await self._handle_debug_teleport(command_parts[1:], game_id)
+            
+            # Debug command to set position directly
+            if command_parts[0] == "debug_set_position" and len(command_parts) > 1:
+                return await self._handle_debug_set_position(command_parts[1:], game_id)
+                
+            # Debug command to report current location
+            if command_parts[0] == "debug_location":
+                return await self._handle_debug_location(command_parts[1:], game_id)
         
-        # Handle direction shortcuts
+        # Handle direction shortcuts for movement
         direction_shortcuts = {
             "n": "north",
             "s": "south",
             "e": "east",
-            "w": "west",
+            "w": "west"
         }
-        if command_parts and command_parts[0] in direction_shortcuts:
-            # Convert to full direction command
-            print(f"Direction shortcut detected: {command_parts[0]} -> {direction_shortcuts[command_parts[0]]}")
-            command_text = direction_shortcuts[command_parts[0]]
+        
+        # Handle explicit movement commands
+        if command_parts and command_parts[0] == "move" and len(command_parts) > 1:
+            direction = command_parts[1]
+            # Check if it's a valid direction
+            valid_directions = ["north", "south", "east", "west", "n", "s", "e", "w"]
+            if direction in valid_directions:
+                # Convert shorthand directions to full names
+                if direction in direction_shortcuts:
+                    direction = direction_shortcuts[direction]
+                # Use just the direction as the command
+                print(f"Movement command detected: {command_parts[0]} {direction} -> {direction}")
+                command_text = direction
         
         # Use the command parser for regular commands
         print(f"Parsing command: {command_text}")
@@ -456,7 +473,10 @@ G - Grass
                 x, y = map(int, current_position.split(","))
                 
                 # Update position based on direction
-                direction = command.args.get("direction", "").lower()
+                direction = ""
+                if command.args and len(command.args) > 0:
+                    direction = str(command.args[0]).lower()
+                
                 new_x, new_y = x, y
                 
                 if direction == "north":
@@ -482,4 +502,191 @@ G - Grass
                 
         except Exception as e:
             print(f"Error updating player position: {e}")
-            await self.db_session.rollback() 
+            await self.db_session.rollback()
+    
+    async def _handle_debug_teleport(self, args: List[str], game_id: str) -> str:
+        """Handle the debug_teleport command."""
+        if not args:
+            return "Debug teleport command requires an area name"
+        
+        area_name = ' '.join(args).upper()  # Convert to uppercase for matching with StoryArea enums
+        
+        # Find the area in the map
+        try:
+            # Get the current game state
+            async with self.db_session.begin():
+                game_query = select(GameInstance).where(GameInstance.id == game_id)
+                game_result = await self.db_session.execute(game_query)
+                game = game_result.scalar_one_or_none()
+                
+                if not game:
+                    print(f"Game not found: {game_id}")
+                    return "Game not found"
+                
+                # Find the area position
+                from src.engine.core.models import StoryArea
+                from src.engine.core.map_system import NAMED_AREAS
+                
+                # Convert from string to enum value
+                try:
+                    area_enum = getattr(StoryArea, area_name)
+                except AttributeError:
+                    return f"Area {area_name} not found. Available areas: {', '.join([a.name for a in StoryArea])}"
+                
+                # Find the position for this area
+                area_position = None
+                for pos, area in NAMED_AREAS.items():
+                    if area == area_enum:
+                        area_position = pos
+                        break
+                
+                if not area_position:
+                    return f"Position for area {area_name} not found in map data"
+                
+                # Update the player's position
+                x, y = area_position
+                game.current_position = {"x": x, "y": y}
+                game.player_state["position"] = {"x": x, "y": y}
+                
+                if "game_state" not in game.player_state:
+                    game.player_state["game_state"] = {}
+                
+                if "current_area" not in game.player_state["game_state"]:
+                    game.player_state["game_state"]["current_area"] = {}
+                
+                game.player_state["game_state"]["current_area"] = area_enum.value
+                
+                # Update the game state
+                await self.db_session.commit()
+                print(f"DEBUG: Teleported player to {area_name} at position {area_position}")
+                
+                return f"Teleported to {area_name} at position {x},{y}"
+        except Exception as e:
+            print(f"Error in debug teleport: {str(e)}")
+            return f"Error in debug teleport: {str(e)}"
+    
+    async def _handle_debug_set_position(self, args: List[str], game_id: str) -> str:
+        """
+        Handle the debug_set_position command, which sets the player's position to a named area.
+        
+        Args:
+            args: List of command arguments (should contain the area name)
+            game_id: ID of the current game
+            
+        Returns:
+            Response message
+        """
+        if not args:
+            return "Invalid command. Usage: debug_set_position <area_name>"
+            
+        area_name = args[0].upper()
+        
+        try:
+            # Load game state
+            game_manager = await self._get_game_manager(game_id)
+            player = game_manager.get_player()
+            map_system = game_manager.get_map_system()
+            
+            try:
+                area_enum = getattr(StoryArea, area_name)
+            except AttributeError:
+                return f"Invalid command. Unknown area: {area_name.lower()}"
+            
+            # Find the position for this area
+            area_position = None
+            for pos, area in NAMED_AREAS.items():
+                if area == area_enum:
+                    area_position = pos
+                    break
+                    
+            if not area_position:
+                return f"Could not find coordinates for area {area_name}"
+                
+            # Set player position and mark as visited
+            player.state.position = area_position
+            player.state.current_area = area_enum
+            player.state.visited_tiles.add(area_position)
+            
+            # Update the current_tile if we have the method
+            if hasattr(player, 'update_current_tile') and callable(getattr(player, 'update_current_tile')):
+                player.update_current_tile()
+                print(f"DEBUG: Player tile updated via update_current_tile")
+            else:
+                # Try to get the tile from map system directly
+                area_node = map_system.get_area_by_position(area_position)
+                if area_node and hasattr(player.state, 'current_tile'):
+                    player.state.current_tile = area_node
+                    print(f"DEBUG: Player tile updated manually: {area_node.area}")
+            
+            # Save the game state
+            await game_manager.save_game_state()
+            
+            print(f"DEBUG: Set player position to {area_name} at position {area_position}")
+            
+            # Return a more detailed message
+            return f"Teleported to {area_name} at position {area_position[0]},{area_position[1]}. Current area updated to {area_enum.name}."
+        except Exception as e:
+            print(f"Error in debug set_position: {str(e)}")
+            return f"Error: {str(e)}"
+
+    async def _handle_debug_location(self, args: List[str], game_id: str) -> str:
+        """
+        Handle the debug_location command, which reports the player's current area name and coordinates.
+        
+        Args:
+            args: List of command arguments (not used)
+            game_id: ID of the current game
+            
+        Returns:
+            Response message with current location details
+        """
+        try:
+            # Load game state
+            game_manager = await self._get_game_manager(game_id)
+            player = game_manager.get_player()
+            map_system = game_manager.get_map_system()
+            
+            # Get current position and area
+            current_position = player.state.position
+            current_area = player.state.current_area
+            
+            # Get tile info
+            current_tile = None
+            x, y = current_position
+            try:
+                current_tile = map_system.get_tile(x, y)
+            except Exception as e:
+                print(f"Error getting tile: {e}")
+            
+            # Check if position is in NAMED_AREAS
+            from src.engine.core.map_system import NAMED_AREAS
+            area_name = "Unnamed Area"
+            if current_position in NAMED_AREAS:
+                area_name = NAMED_AREAS[current_position].name
+            
+            # Build the response with detailed information
+            response = [
+                f"DEBUG LOCATION INFO:",
+                f"Current position: {current_position[0]},{current_position[1]}",
+                f"Current area: {current_area.name if current_area else 'Unknown'}"
+            ]
+            
+            # Add named area info
+            response.append(f"Named area: {area_name}")
+            
+            # Add tile info if available
+            if current_tile:
+                tile_type = getattr(current_tile, 'type', 'Unknown')
+                tile_area = getattr(current_tile, 'area', None)
+                response.append(f"Tile type: {tile_type}")
+                if tile_area:
+                    response.append(f"Tile area: {tile_area.name}")
+            
+            # Add visited tiles count
+            visited_tiles_count = len(player.state.visited_tiles) if hasattr(player.state, 'visited_tiles') else 0
+            response.append(f"Visited tiles: {visited_tiles_count}")
+            
+            return "\n".join(response)
+        except Exception as e:
+            print(f"Error in debug_location: {str(e)}")
+            return f"Error in debug_location: {str(e)}" 

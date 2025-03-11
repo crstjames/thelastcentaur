@@ -1,4 +1,9 @@
-httpx
-asyncio
+# API Test Requirements
 pytest
-pytest-asyncio 
+pytest-asyncio
+httpx
+pydantic
+termcolor
+asyncio
+pytest-xdist  # For parallel test execution
+pytest-html   # For HTML test reports 
