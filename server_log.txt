@@ -1,0 +1,182 @@
+NAMED_AREAS contains 18 entries:
+Position (0, 0) -> awakening_woods (Requirements: None)
+Position (1, 0) -> warriors_camp (Requirements: None)
+Position (0, 1) -> trials_path (Requirements: None)
+Position (1, 1) -> mountain_base (Requirements: None)
+Position (2, 0) -> training_grounds (Requirements: None)
+Position (3, 3) -> crystal_pond (Requirements: None)
+Position (4, 4) -> meditation_circle (Requirements: None)
+Position (5, 5) -> crossroads (Requirements: None)
+Position (6, 5) -> honor_shrine (Requirements: None)
+Position (4, 6) -> enchanted_valley (Requirements: mystic_crystal)
+Position (6, 6) -> mystic_mountains (Requirements: climbing_rope)
+Position (7, 6) -> crystal_caves (Requirements: mystic_crystal)
+Position (7, 7) -> forgotten_grove (Requirements: enchanted_seed)
+Position (8, 7) -> forgotten_temple (Requirements: shadow_blade)
+Position (8, 8) -> guardian_overlook (Requirements: shadow_blade, power_crystal)
+Position (8, 9) -> shadow_training (Requirements: shadow_essence)
+Position (9, 8) -> ancient_sanctuary (Requirements: guardian_medallion)
+Position (9, 9) -> shadow_domain (Requirements: ancient_scroll, shadow_key)
+
+Map Progression Analysis:
+
+Beginner Region Areas:
+  • awakening_woods at (0, 0): Requirements: None, Enemies: forest_guardian
+  • warriors_camp at (1, 0): Requirements: None, Enemies: training_dummy
+  • trials_path at (0, 1): Requirements: None, Enemies: forest_wolf
+  • mountain_base at (1, 1): Requirements: None, Enemies: mountain_goat
+  • training_grounds at (2, 0): Requirements: None, Enemies: practice_target
+
+Intermediate Region Areas:
+  • crystal_pond at (3, 3): Requirements: None, Enemies: water_sprite
+  • meditation_circle at (4, 4): Requirements: None, Enemies: None
+  • crossroads at (5, 5): Requirements: None, Enemies: None
+  • honor_shrine at (6, 5): Requirements: None, Enemies: None
+  • enchanted_valley at (4, 6): Requirements: mystic_crystal, Enemies: magic_wisp
+
+Advanced Region Areas:
+  • mystic_mountains at (6, 6): Requirements: climbing_rope, Enemies: mountain_spirit
+  • crystal_caves at (7, 6): Requirements: mystic_crystal, Enemies: crystal_guardian
+  • forgotten_grove at (7, 7): Requirements: enchanted_seed, Enemies: grove_spirit
+  • forgotten_temple at (8, 7): Requirements: shadow_blade, Enemies: temple_guardian
+
+End-Game Region Areas:
+  • guardian_overlook at (8, 8): Requirements: shadow_blade, power_crystal, Enemies: stone_guardian
+  • shadow_training at (8, 9): Requirements: shadow_essence, Enemies: shadow_scout, shadow_trainee
+  • ancient_sanctuary at (9, 8): Requirements: guardian_medallion, Enemies: temple_guardian
+  • shadow_domain at (9, 9): Requirements: ancient_scroll, shadow_key, Enemies: shadow_centaur
+
+Shortest possible path from start to Shadow Domain: 18 moves
+
+Total requirements needed to reach Shadow Domain: guardian_medallion, mystic_crystal, shadow_key, ancient_scroll, power_crystal, shadow_essence, climbing_rope, shadow_blade
+CORS origins configured: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3002', 'http://127.0.0.1:3002', 'http://localhost:3003', 'http://127.0.0.1:3003', 'http://localhost:3005', 'http://127.0.0.1:3005', 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174']
+Port 8000 is in use. Using port 8002 instead.
+INFO:     Will watch for changes in these directories: ['/Users/crstjames/Code/thelastcentaur']
+INFO:     Uvicorn running on http://0.0.0.0:8002 (Press CTRL+C to quit)
+INFO:     Started reloader process [31570] using StatReload
+NAMED_AREAS contains 18 entries:
+Position (0, 0) -> awakening_woods (Requirements: None)
+Position (1, 0) -> warriors_camp (Requirements: None)
+Position (0, 1) -> trials_path (Requirements: None)
+Position (1, 1) -> mountain_base (Requirements: None)
+Position (2, 0) -> training_grounds (Requirements: None)
+Position (3, 3) -> crystal_pond (Requirements: None)
+Position (4, 4) -> meditation_circle (Requirements: None)
+Position (5, 5) -> crossroads (Requirements: None)
+Position (6, 5) -> honor_shrine (Requirements: None)
+Position (4, 6) -> enchanted_valley (Requirements: mystic_crystal)
+Position (6, 6) -> mystic_mountains (Requirements: climbing_rope)
+Position (7, 6) -> crystal_caves (Requirements: mystic_crystal)
+Position (7, 7) -> forgotten_grove (Requirements: enchanted_seed)
+Position (8, 7) -> forgotten_temple (Requirements: shadow_blade)
+Position (8, 8) -> guardian_overlook (Requirements: shadow_blade, power_crystal)
+Position (8, 9) -> shadow_training (Requirements: shadow_essence)
+Position (9, 8) -> ancient_sanctuary (Requirements: guardian_medallion)
+Position (9, 9) -> shadow_domain (Requirements: ancient_scroll, shadow_key)
+
+Map Progression Analysis:
+
+Beginner Region Areas:
+  • awakening_woods at (0, 0): Requirements: None, Enemies: forest_guardian
+  • warriors_camp at (1, 0): Requirements: None, Enemies: training_dummy
+  • trials_path at (0, 1): Requirements: None, Enemies: forest_wolf
+  • mountain_base at (1, 1): Requirements: None, Enemies: mountain_goat
+  • training_grounds at (2, 0): Requirements: None, Enemies: practice_target
+
+Intermediate Region Areas:
+  • crystal_pond at (3, 3): Requirements: None, Enemies: water_sprite
+  • meditation_circle at (4, 4): Requirements: None, Enemies: None
+  • crossroads at (5, 5): Requirements: None, Enemies: None
+  • honor_shrine at (6, 5): Requirements: None, Enemies: None
+  • enchanted_valley at (4, 6): Requirements: mystic_crystal, Enemies: magic_wisp
+
+Advanced Region Areas:
+  • mystic_mountains at (6, 6): Requirements: climbing_rope, Enemies: mountain_spirit
+  • crystal_caves at (7, 6): Requirements: mystic_crystal, Enemies: crystal_guardian
+  • forgotten_grove at (7, 7): Requirements: enchanted_seed, Enemies: grove_spirit
+  • forgotten_temple at (8, 7): Requirements: shadow_blade, Enemies: temple_guardian
+
+End-Game Region Areas:
+  • guardian_overlook at (8, 8): Requirements: shadow_blade, power_crystal, Enemies: stone_guardian
+  • shadow_training at (8, 9): Requirements: shadow_essence, Enemies: shadow_scout, shadow_trainee
+  • ancient_sanctuary at (9, 8): Requirements: guardian_medallion, Enemies: temple_guardian
+  • shadow_domain at (9, 9): Requirements: ancient_scroll, shadow_key, Enemies: shadow_centaur
+
+Shortest possible path from start to Shadow Domain: 18 moves
+
+Total requirements needed to reach Shadow Domain: shadow_essence, shadow_key, power_crystal, climbing_rope, shadow_blade, guardian_medallion, ancient_scroll, mystic_crystal
+CORS origins configured: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3002', 'http://127.0.0.1:3002', 'http://localhost:3003', 'http://127.0.0.1:3003', 'http://localhost:3005', 'http://127.0.0.1:3005', 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174']
+CORS origins configured: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3002', 'http://127.0.0.1:3002', 'http://localhost:3003', 'http://127.0.0.1:3003', 'http://localhost:3005', 'http://127.0.0.1:3005', 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174']
+INFO:     Started server process [31573]
+INFO:     Waiting for application startup.
+2025-03-13 10:13:09,047 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+INFO:sqlalchemy.engine.Engine:select pg_catalog.version()
+2025-03-13 10:13:09,047 INFO sqlalchemy.engine.Engine [raw sql] ()
+INFO:sqlalchemy.engine.Engine:[raw sql] ()
+2025-03-13 10:13:09,048 INFO sqlalchemy.engine.Engine select current_schema()
+INFO:sqlalchemy.engine.Engine:select current_schema()
+2025-03-13 10:13:09,048 INFO sqlalchemy.engine.Engine [raw sql] ()
+INFO:sqlalchemy.engine.Engine:[raw sql] ()
+2025-03-13 10:13:09,050 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+INFO:sqlalchemy.engine.Engine:show standard_conforming_strings
+2025-03-13 10:13:09,050 INFO sqlalchemy.engine.Engine [raw sql] ()
+INFO:sqlalchemy.engine.Engine:[raw sql] ()
+2025-03-13 10:13:09,051 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2025-03-13 10:13:09,053 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+2025-03-13 10:13:09,053 INFO sqlalchemy.engine.Engine [generated in 0.00016s] ('user', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+INFO:sqlalchemy.engine.Engine:[generated in 0.00016s] ('user', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+2025-03-13 10:13:09,056 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+2025-03-13 10:13:09,056 INFO sqlalchemy.engine.Engine [cached since 0.003376s ago] ('gameinstance', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+INFO:sqlalchemy.engine.Engine:[cached since 0.003376s ago] ('gameinstance', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+2025-03-13 10:13:09,057 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+2025-03-13 10:13:09,057 INFO sqlalchemy.engine.Engine [cached since 0.004133s ago] ('tile', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+INFO:sqlalchemy.engine.Engine:[cached since 0.004133s ago] ('tile', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+2025-03-13 10:13:09,057 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_class.relname 
+FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+2025-03-13 10:13:09,057 INFO sqlalchemy.engine.Engine [cached since 0.004719s ago] ('tilehistory', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+INFO:sqlalchemy.engine.Engine:[cached since 0.004719s ago] ('tilehistory', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+2025-03-13 10:13:09,059 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_type.typname 
+FROM pg_catalog.pg_type JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_type.typnamespace 
+WHERE pg_catalog.pg_type.typname = $1::VARCHAR AND pg_catalog.pg_type_is_visible(pg_catalog.pg_type.oid) AND pg_catalog.pg_namespace.nspname != $2::VARCHAR
+INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_type.typname 
+FROM pg_catalog.pg_type JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_type.typnamespace 
+WHERE pg_catalog.pg_type.typname = $1::VARCHAR AND pg_catalog.pg_type_is_visible(pg_catalog.pg_type.oid) AND pg_catalog.pg_namespace.nspname != $2::VARCHAR
+2025-03-13 10:13:09,059 INFO sqlalchemy.engine.Engine [generated in 0.00011s] ('gamestatus', 'pg_catalog')
+INFO:sqlalchemy.engine.Engine:[generated in 0.00011s] ('gamestatus', 'pg_catalog')
+2025-03-13 10:13:09,060 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_type.typname 
+FROM pg_catalog.pg_type JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_type.typnamespace 
+WHERE pg_catalog.pg_type.typname = $1::VARCHAR AND pg_catalog.pg_type_is_visible(pg_catalog.pg_type.oid) AND pg_catalog.pg_namespace.nspname != $2::VARCHAR
+INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_type.typname 
+FROM pg_catalog.pg_type JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_type.typnamespace 
+WHERE pg_catalog.pg_type.typname = $1::VARCHAR AND pg_catalog.pg_type_is_visible(pg_catalog.pg_type.oid) AND pg_catalog.pg_namespace.nspname != $2::VARCHAR
+2025-03-13 10:13:09,061 INFO sqlalchemy.engine.Engine [cached since 0.001753s ago] ('terraintype', 'pg_catalog')
+INFO:sqlalchemy.engine.Engine:[cached since 0.001753s ago] ('terraintype', 'pg_catalog')
+2025-03-13 10:13:09,061 INFO sqlalchemy.engine.Engine COMMIT
+INFO:sqlalchemy.engine.Engine:COMMIT
+Database tables created successfully.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [31573]
+INFO:     Stopping reloader process [31570]

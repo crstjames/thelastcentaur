@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "The Last Centaur"
     
     # Security
-    SECRET_KEY: str = get_or_create_secret_key()
+    SECRET_KEY: str = "testsecretkey"  # Default value, will be overridden in __init__
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     

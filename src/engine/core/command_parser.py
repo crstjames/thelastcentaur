@@ -401,17 +401,111 @@ class CommandParser:
                 if current_tile:
                     # Safely check if get_description method exists
                     if hasattr(current_tile, 'get_description') and callable(getattr(current_tile, 'get_description')):
-                        return current_tile.get_description()
+                        description = current_tile.get_description()
                     # Fallback to description field
-                    if hasattr(current_tile, 'description'):
-                        return current_tile.description
+                    elif hasattr(current_tile, 'description'):
+                        description = current_tile.description
+                    else:
+                        description = "You look around. Nothing unusual in this area."
+                    
+                    # Enhance the description for non-LLM mode with more helpful information
+                    area_info = ""
+                    if hasattr(self.player.state, 'current_area') and self.player.state.current_area:
+                        area_name = self.player.state.current_area.value if hasattr(self.player.state.current_area, 'value') else str(self.player.state.current_area)
+                        position = self.player.get_current_position()
+                        area_info = f"\nCurrent Area: {area_name}\nPosition: {position}"
+                    
+                    # Add information about items
+                    items_info = ""
+                    if hasattr(current_tile, 'items') and current_tile.items:
+                        # Convert Item objects to strings
+                        item_names = []
+                        for item in current_tile.items:
+                            if isinstance(item, str):
+                                item_names.append(item)
+                            elif hasattr(item, 'name'):
+                                item_names.append(item.name)
+                            elif isinstance(item, dict) and 'name' in item:
+                                item_names.append(item['name'])
+                            else:
+                                item_names.append(str(item))
+                        
+                        if item_names:
+                            items_info = f"\nItems in this area: {', '.join(item_names)}"
+                    
+                    # Add information about enemies
+                    enemies_info = ""
+                    if hasattr(current_tile, 'enemies') and current_tile.enemies:
+                        enemy_names = [enemy.get("name", "Unknown") if isinstance(enemy, dict) else str(enemy) for enemy in current_tile.enemies]
+                        if enemy_names:
+                            enemies_info = f"\nEnemies present: {', '.join(enemy_names)}"
+                    
+                    # Add information about exits
+                    exits_info = ""
+                    valid_exits = []
+                    directions = ["north", "south", "east", "west"]
+                    position = self.player.get_current_position()
+                    for direction_name in directions:
+                        direction = self.DIRECTION_MAP.get(direction_name)
+                        # Calculate adjacent position
+                        if direction == Direction.NORTH:
+                            adj_pos = (position[0], position[1] + 1)
+                        elif direction == Direction.SOUTH:
+                            adj_pos = (position[0], position[1] - 1)
+                        elif direction == Direction.EAST:
+                            adj_pos = (position[0] + 1, position[1])
+                        elif direction == Direction.WEST:
+                            adj_pos = (position[0] - 1, position[1])
+                        else:
+                            continue
+                        
+                        # Check if adjacent position is valid
+                        if self.player.map_system.get_area_by_position(adj_pos):
+                            valid_exits.append(direction_name)
+                    
+                    if valid_exits:
+                        exits_info = f"\nExits: {', '.join(valid_exits)}"
+                    
+                    # Combine all information
+                    enhanced_info = f"{description}{area_info}{items_info}{enemies_info}{exits_info}"
+                    return enhanced_info
                 return "You look around. Nothing unusual in this area."
             else:
                 # Look in a specific direction
                 direction = command.args[0]
-                # TODO: Implement looking in a direction
-                return f"You look {direction}. Nothing unusual in that direction."
                 
+                # Enhance direction look with information about what's in that direction
+                if direction in ["north", "south", "east", "west", "n", "s", "e", "w"]:
+                    # Normalize direction
+                    if direction in ["n", "s", "e", "w"]:
+                        direction_map = {"n": "north", "s": "south", "e": "east", "w": "west"}
+                        direction = direction_map[direction]
+                    
+                    # Get the corresponding Direction enum
+                    dir_enum = self.DIRECTION_MAP.get(direction)
+                    
+                    # Calculate position in that direction
+                    current_pos = self.player.get_current_position()
+                    new_pos = None
+                    if dir_enum == Direction.NORTH:
+                        new_pos = (current_pos[0], current_pos[1] + 1)
+                    elif dir_enum == Direction.SOUTH:
+                        new_pos = (current_pos[0], current_pos[1] - 1)
+                    elif dir_enum == Direction.EAST:
+                        new_pos = (current_pos[0] + 1, current_pos[1])
+                    elif dir_enum == Direction.WEST:
+                        new_pos = (current_pos[0] - 1, current_pos[1])
+                    
+                    # Check if there's an area in that direction
+                    if new_pos:
+                        area_node = self.player.map_system.get_area_by_position(new_pos)
+                        if area_node:
+                            area_name = area_node.area.value if hasattr(area_node.area, 'value') else str(area_node.area)
+                            return f"Looking {direction}, you see {area_name}."
+                
+                # Default response if no enhanced information
+                return f"You look {direction}. Nothing unusual in that direction."
+        
         # Handle inventory commands
         if command.type == CommandType.INVENTORY:
             return self.handle_inventory_command(command.args)
@@ -1338,7 +1432,32 @@ class CommandParser:
             blocked_paths = getattr(current_tile, 'blocked_paths', [])
             if direction in blocked_paths:
                 return f"The path to the {direction.value} is blocked."
+        
+        # Calculate the destination position
+        dest_x, dest_y = current_position
+        if direction == Direction.NORTH:
+            dest_y += 1
+        elif direction == Direction.SOUTH:
+            dest_y -= 1
+        elif direction == Direction.EAST:
+            dest_x += 1
+        elif direction == Direction.WEST:
+            dest_x -= 1
+        
+        dest_position = (dest_x, dest_y)
+        
+        # Check if the destination is a named area with requirements
+        from src.engine.core.map_system import NAMED_AREAS, AREA_DATA
+        if dest_position in NAMED_AREAS:
+            area_enum = NAMED_AREAS[dest_position]
+            area_data = AREA_DATA[area_enum]
             
+            # Check if player meets the requirements
+            if area_data["reqs"]:
+                for req in area_data["reqs"]:
+                    if req not in self.player.state.inventory:
+                        return f"You need {req} to enter {area_enum.value}. The way is blocked without it."
+        
         # Move the player
         try:
             success, message = self.player.move(direction)
@@ -1355,8 +1474,15 @@ class CommandParser:
                     # If get_description method exists, use it
                     if hasattr(new_tile, 'get_description') and callable(getattr(new_tile, 'get_description')):
                         description = new_tile.get_description()
-                    return f"Moved {direction.value}. {description}\n\n{time_message}"
-                return f"Moved {direction.value}. {time_message}"
+                    
+                    # Add area name information for non-LLM mode
+                    area_info = ""
+                    if hasattr(self.player.state, 'current_area') and self.player.state.current_area:
+                        area_name = self.player.state.current_area.value if hasattr(self.player.state.current_area, 'value') else str(self.player.state.current_area)
+                        area_info = f" (Area: {area_name}, Position: {self.player.get_current_position()})"
+                    
+                    return f"Moved {direction.value}.{area_info} {description}\n\n{time_message}"
+                return f"Moved {direction.value}. You arrive at a new location (Position: {self.player.get_current_position()}).\n\n{time_message}"
             else:
                 return message 
         except Exception as e:
@@ -1429,26 +1555,87 @@ class CommandParser:
         if not hasattr(self.player.state, 'inventory') or self.player.state.inventory is None:
             self.player.state.inventory = []
             
-        # Convert any Item objects to strings
+        # Convert any Item objects to strings and collect additional information
         string_inventory = []
+        item_details = {}
+        
+        # Function to categorize items
+        def categorize_item(item_name):
+            weapons = ["sword", "bow", "staff", "axe", "blade", "dagger", "spear"]
+            armor = ["shield", "armor", "helmet", "gauntlets", "boots"]
+            consumables = ["potion", "elixir", "food", "scroll", "herb"]
+            quest_items = ["crystal", "fragment", "key", "medallion", "amulet", "rune", "artifact"]
+            
+            for weapon in weapons:
+                if weapon in item_name.lower():
+                    return "Weapon"
+            for armor_piece in armor:
+                if armor_piece in item_name.lower():
+                    return "Armor"
+            for consumable in consumables:
+                if consumable in item_name.lower():
+                    return "Consumable"
+            for quest_item in quest_items:
+                if quest_item in item_name.lower():
+                    return "Quest Item"
+            return "Miscellaneous"
+        
         for item in self.player.state.inventory:
+            item_name = ""
+            item_description = ""
+            
             if isinstance(item, str):
-                string_inventory.append(item)
+                item_name = item
             elif hasattr(item, 'name'):
-                string_inventory.append(item.name)
-            elif isinstance(item, dict) and 'name' in item:
-                string_inventory.append(item['name'])
+                item_name = item.name
+                if hasattr(item, 'description'):
+                    item_description = item.description
+            elif isinstance(item, dict):
+                if 'name' in item:
+                    item_name = item['name']
+                if 'description' in item:
+                    item_description = item['description']
             else:
                 # Skip items that can't be converted
                 continue
+                
+            string_inventory.append(item_name)
+            
+            # Determine category and add details
+            category = categorize_item(item_name)
+            item_details[item_name] = {
+                'category': category,
+                'description': item_description
+            }
                 
         # Update the inventory with string items
         self.player.state.inventory = string_inventory
             
         if not self.player.state.inventory:
             return "Your inventory is empty."
-            
-        return f"You are carrying: {', '.join(self.player.state.inventory)}."
+        
+        # Organize items by category for display
+        categorized_items = {}
+        for item in string_inventory:
+            category = item_details[item]['category']
+            if category not in categorized_items:
+                categorized_items[category] = []
+            categorized_items[category].append(item)
+        
+        # Build detailed inventory display
+        detailed_inventory = "=== INVENTORY ===\n"
+        for category, items in categorized_items.items():
+            detailed_inventory += f"\n{category}:\n"
+            for item in items:
+                detailed_inventory += f"- {item}"
+                if item_details[item]['description']:
+                    detailed_inventory += f" ({item_details[item]['description']})"
+                detailed_inventory += "\n"
+        
+        # Include a simpler version as fallback
+        simple_inventory = f"You are carrying: {', '.join(self.player.state.inventory)}."
+        
+        return detailed_inventory
 
     def find_matching_item(self, item_name: str, available_items: List) -> Optional[Any]:
         """

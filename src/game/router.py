@@ -32,7 +32,7 @@ from src.engine.core.player import Player
 from src.engine.core.map_system import MapManager
 
 router = APIRouter(
-    prefix="/game",
+    prefix="",
     tags=["game"],
     responses={404: {"description": "Not found"}},
 )
@@ -410,3 +410,23 @@ async def process_command(
     )
     
     return {"result": result} 
+
+@router.get("/debug/routes")
+async def debug_routes():
+    """Debug endpoint to list all registered routes."""
+    from src.main import app
+    
+    routes = []
+    for route in app.routes:
+        route_info = {
+            "path": route.path,
+            "name": route.name,
+            "endpoint": str(route.endpoint)
+        }
+        # Check if the route has methods attribute (WebSocket routes don't have this)
+        if hasattr(route, 'methods'):
+            route_info["methods"] = route.methods
+        else:
+            route_info["type"] = "websocket" if "WebSocket" in str(route.__class__) else "unknown"
+        routes.append(route_info)
+    return routes 

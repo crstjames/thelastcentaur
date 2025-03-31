@@ -40,25 +40,31 @@ class AreaNode:
 
 # Define the named areas on the map
 NAMED_AREAS = {
-    # Each tuple is (position, area_enum)
+    # Starting Region (Beginner Zone) - Bottom Left
     (0, 0): StoryArea.AWAKENING_WOODS,  # Starting area with pouch and rusty sword
     (1, 0): StoryArea.WARRIORS_CAMP,
     (0, 1): StoryArea.TRIALS_PATH,
     (1, 1): StoryArea.MOUNTAIN_BASE,
     (2, 0): StoryArea.TRAINING_GROUNDS,
-    (0, 2): StoryArea.SHADOW_DOMAIN,
-    (0, 3): StoryArea.SHADOW_TRAINING,
-    (1, 2): StoryArea.MYSTIC_MOUNTAINS,
-    (2, 2): StoryArea.CRYSTAL_POND,
-    (3, 0): StoryArea.HONOR_SHRINE,
-    (0, 4): StoryArea.FORGOTTEN_TEMPLE,
-    (3, 2): StoryArea.MEDITATION_CIRCLE,
-    (1, 3): StoryArea.ENCHANTED_VALLEY,
-    (1, 4): StoryArea.CRYSTAL_CAVES,
-    (2, 4): StoryArea.FORGOTTEN_GROVE,
-    (9, 9): StoryArea.ANCIENT_SANCTUARY,  # Final boss area in the opposite corner
-    (8, 8): StoryArea.GUARDIAN_OVERLOOK,  # Pre-boss area
+    
+    # Mid-Game Areas (Intermediate Zone) - Central Region
+    (3, 3): StoryArea.CRYSTAL_POND,
+    (4, 4): StoryArea.MEDITATION_CIRCLE,
     (5, 5): StoryArea.CROSSROADS,         # Central area connecting different paths
+    (6, 5): StoryArea.HONOR_SHRINE,
+    (4, 6): StoryArea.ENCHANTED_VALLEY,
+    
+    # Advanced Areas - Upper Right Progression
+    (6, 6): StoryArea.MYSTIC_MOUNTAINS,
+    (7, 6): StoryArea.CRYSTAL_CAVES,
+    (7, 7): StoryArea.FORGOTTEN_GROVE,
+    (8, 7): StoryArea.FORGOTTEN_TEMPLE,
+    
+    # End-Game Areas - Top Right Corner
+    (8, 8): StoryArea.GUARDIAN_OVERLOOK,  # Pre-Shadow Domain area
+    (8, 9): StoryArea.SHADOW_TRAINING,    # Shadow Domain preparation
+    (9, 8): StoryArea.ANCIENT_SANCTUARY,  # Alternative path to final area
+    (9, 9): StoryArea.SHADOW_DOMAIN,      # Final boss area in the opposite corner
 }
 
 # Data for named areas
@@ -100,24 +106,24 @@ AREA_DATA = {
     },
     StoryArea.SHADOW_DOMAIN: {
         "terrain": TerrainType.RUINS,
-        "desc": "Ancient ruins shrouded in perpetual shadow. The air feels heavy with dark magic.",
-        "enemies": ["shadow_creature"],
-        "items": ["shadow_essence"],
-        "reqs": [],
+        "desc": "The heart of darkness. Ancient ruins shrouded in perpetual shadow. The air feels heavy with dark magic. This is where the final confrontation awaits.",
+        "enemies": ["shadow_centaur"],  # Final boss
+        "items": ["shadow_heart"],
+        "reqs": ["ancient_scroll", "shadow_key"],  # Require multiple key items
     },
     StoryArea.MYSTIC_MOUNTAINS: {
         "terrain": TerrainType.MOUNTAIN,
-        "desc": "Towering peaks shrouded in mist. Strange lights sometimes flicker between the crags.",
+        "desc": "Towering peaks shrouded in mist. Strange lights sometimes flicker between the crags. The path ahead looks challenging.",
         "enemies": ["mountain_spirit"],
         "items": ["mystic_crystal"],
-        "reqs": [],
+        "reqs": ["climbing_rope"],  # Require climbing gear to proceed
     },
     StoryArea.SHADOW_TRAINING: {
         "terrain": TerrainType.RUINS,
-        "desc": "A dark arena where shadow warriors practice their deadly arts. The training equipment seems ancient but well-maintained.",
-        "enemies": ["phantom_assassin"],
+        "desc": "A dark training ground where shadow creatures practice their arts. The air crackles with dark energy.",
+        "enemies": ["shadow_scout", "shadow_trainee"],
         "items": ["shadow_blade"],
-        "reqs": ["shadow_essence"],
+        "reqs": ["shadow_essence"],  # Require shadow essence to enter
     },
     StoryArea.CRYSTAL_POND: {
         "terrain": TerrainType.WATER,
@@ -156,10 +162,10 @@ AREA_DATA = {
     },
     StoryArea.CRYSTAL_CAVES: {
         "terrain": TerrainType.CAVE,
-        "desc": "A network of caves with walls lined with luminous crystals. The light they emit shifts through a rainbow of colors.",
-        "enemies": ["crystal_golem"],
-        "items": ["prismatic_shard"],
-        "reqs": ["luminous_crystal"],
+        "desc": "Massive crystals grow from floor to ceiling, humming with ancient power. The entire cave resonates with mystical energy.",
+        "enemies": ["crystal_guardian"],
+        "items": ["power_crystal"],
+        "reqs": ["mystic_crystal"],  # Require a mystic crystal to enter
     },
     StoryArea.FORGOTTEN_GROVE: {
         "terrain": TerrainType.FOREST,
@@ -178,17 +184,17 @@ AREA_DATA = {
     },
     StoryArea.GUARDIAN_OVERLOOK: {
         "terrain": TerrainType.MOUNTAIN,
-        "desc": "A high vantage point overlooking a sacred valley. In the distance, you can see the entrance to the Ancient Sanctuary. A powerful energy emanates from beyond.",
-        "enemies": ["guardian_scout"],
-        "items": ["ancient_key"],
-        "reqs": ["honor_medal", "shadow_blade", "prismatic_shard"],
+        "desc": "A high vantage point overlooking the Shadow Domain. Ancient statues stand guard, their eyes following your movement.",
+        "enemies": ["stone_guardian"],
+        "items": ["guardian_medallion"],
+        "reqs": ["shadow_blade", "power_crystal"],  # Require key items to proceed
     },
     StoryArea.ANCIENT_SANCTUARY: {
         "terrain": TerrainType.TEMPLE,
-        "desc": "The legendary sanctuary where the last centaur is said to reside. The air vibrates with ancient magic. A massive centaur stands guard, watching your approach with ancient eyes.",
-        "enemies": ["centaur_guardian"],
-        "items": ["centaur_wisdom"],
-        "reqs": ["ancient_key"],
+        "desc": "A sacred place of immense power. Statues of ancient centaurs line the walls, their eyes seeming to follow you.",
+        "enemies": ["temple_guardian"],
+        "items": ["ancient_scroll"],
+        "reqs": ["guardian_medallion"],  # Require the medallion to enter
     },
 }
 
@@ -409,44 +415,64 @@ class MapManager:
         self._print_map_diagnostics()
 
     def _print_map_diagnostics(self):
-        """Print diagnostic information about the map initialization."""
-        print("\n==== MAP INITIALIZATION DIAGNOSTICS ====")
-        
+        """Print diagnostic information about the map."""
         # Check NAMED_AREAS dictionary
         print(f"NAMED_AREAS contains {len(NAMED_AREAS)} entries:")
         for position, area_enum in NAMED_AREAS.items():
-            print(f"  Position {position} -> {area_enum.name} ({area_enum.value})")
+            area_data = AREA_DATA[area_enum]
+            reqs = ", ".join(area_data["reqs"]) if area_data["reqs"] else "None"
+            print(f"Position {position} -> {area_enum.value} (Requirements: {reqs})")
         
-        # Check position_to_area dictionary
-        print(f"\nposition_to_area contains {len(self.position_to_area)} entries")
-        print("Named areas in position_to_area:")
-        for position, node in self.position_to_area.items():
-            if node.area and isinstance(node.area, StoryArea):
-                print(f"  Position {position} -> {node.area.name} ({node.area.value})")
+        # Analyze progression paths
+        print("\nMap Progression Analysis:")
         
-        # Check areas dictionary
-        print(f"\nareas dictionary contains {len(self.areas)} entries:")
-        for area_enum, node in self.areas.items():
-            print(f"  {area_enum.name} -> Position {node.position}")
+        # Define region groups for analysis
+        regions = {
+            "Beginner": [(0,0), (1,0), (0,1), (1,1), (2,0)],
+            "Intermediate": [(3,3), (4,4), (5,5), (6,5), (4,6)],
+            "Advanced": [(6,6), (7,6), (7,7), (8,7)],
+            "End-Game": [(8,8), (8,9), (9,8), (9,9)]
+        }
         
-        # Check specifically for Warriors Camp
-        warriors_camp_pos = (1, 0)
-        if warriors_camp_pos in self.position_to_area:
-            node = self.position_to_area[warriors_camp_pos]
-            print(f"\nWarriors Camp at (1, 0): {node.area.name if node.area else 'Not found'}")
-            print(f"  Is passable: {getattr(node, 'is_passable', True)}")
-            print(f"  Requirements: {getattr(node, 'requirements', [])}")
-        else:
-            print("\nWarriors Camp not found at position (1, 0)")
+        for region_name, positions in regions.items():
+            print(f"\n{region_name} Region Areas:")
+            for pos in positions:
+                if pos in NAMED_AREAS:
+                    area = NAMED_AREAS[pos]
+                    area_data = AREA_DATA[area]
+                    reqs = ", ".join(area_data["reqs"]) if area_data["reqs"] else "None"
+                    enemies = ", ".join(area_data["enemies"]) if area_data["enemies"] else "None"
+                    print(f"  • {area.value} at {pos}: Requirements: {reqs}, Enemies: {enemies}")
         
-        # Check for StoryArea.WARRIORS_CAMP in areas dictionary
-        if StoryArea.WARRIORS_CAMP in self.areas:
-            node = self.areas[StoryArea.WARRIORS_CAMP]
-            print(f"\nWarriors Camp in areas dictionary: {node.position}")
-        else:
-            print("\nWarriors Camp not found in areas dictionary")
+        # Calculate the shortest path from start to shadow domain
+        start_pos = (0, 0)
+        shadow_pos = (9, 9)
+        distance = abs(shadow_pos[0] - start_pos[0]) + abs(shadow_pos[1] - start_pos[1])
+        print(f"\nShortest possible path from start to Shadow Domain: {distance} moves")
         
-        print("==== END MAP DIAGNOSTICS ====\n")
+        # Identify all requirements needed to reach the Shadow Domain
+        def get_all_requirements(area_enum, visited=None):
+            if visited is None:
+                visited = set()
+            
+            if area_enum in visited:
+                return set()
+            
+            visited.add(area_enum)
+            area_data = AREA_DATA[area_enum]
+            reqs = set(area_data["reqs"])
+            
+            for req in list(reqs):
+                # Find areas that provide this item
+                for check_area, check_data in AREA_DATA.items():
+                    if req in check_data["items"] and check_area != area_enum:
+                        # Add requirements for this area
+                        reqs.update(get_all_requirements(check_area, visited))
+            
+            return reqs
+        
+        shadow_reqs = get_all_requirements(StoryArea.SHADOW_DOMAIN)
+        print(f"\nTotal requirements needed to reach Shadow Domain: {', '.join(shadow_reqs) if shadow_reqs else 'None'}")
     
     def _fix_phantom_assassin_location(self):
         """Fix the phantom assassin location to ensure it's at the shadow training area."""

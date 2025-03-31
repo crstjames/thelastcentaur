@@ -4,11 +4,27 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import json
+from pathlib import Path
 
 from src.auth.schemas import TokenPayload
-from src.core.config import settings
+from src.core.config import settings, SECRET_KEY_FILE
 from src.db.session import get_db
 from src.db.models import User
+
+# Get the secret key from the file
+def get_secret_key_from_file():
+    if SECRET_KEY_FILE.exists():
+        try:
+            with open(SECRET_KEY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("secret_key", "")
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return "testsecretkey"  # Default fallback
+
+# Use the secret key from the file
+SECRET_KEY = get_secret_key_from_file()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
@@ -23,26 +39,49 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    print(f"DEBUG: Token received: {token[:20]}...")
+    print(f"DEBUG: SECRET_KEY from file: {SECRET_KEY}")
+    
+    # Print token parts for debugging
+    parts = token.split('.')
+    if len(parts) == 3:
+        try:
+            import base64
+            header = base64.b64decode(parts[0] + '==').decode('utf-8')
+            payload = base64.b64decode(parts[1] + '==').decode('utf-8')
+            print(f"DEBUG: Token header: {header}")
+            print(f"DEBUG: Token payload: {payload}")
+        except Exception as e:
+            print(f"DEBUG: Error decoding token parts: {e}")
+    
     try:
+        print(f"DEBUG: Decoding token with SECRET_KEY from file: {SECRET_KEY}")
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
+        print(f"DEBUG: Token payload: {payload}")
         user_id: str = payload.get("sub")
         if user_id is None:
+            print("DEBUG: No sub claim in token")
             raise credentials_exception
         token_data = TokenPayload(sub=user_id)
-    except JWTError:
+    except JWTError as e:
+        print(f"DEBUG: JWT Error: {e}")
         raise credentials_exception
     
+    print(f"DEBUG: Looking up user with ID: {token_data.sub}")
     stmt = select(User).where(User.id == token_data.sub)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     
     if user is None:
+        print(f"DEBUG: User not found with ID: {token_data.sub}")
         raise credentials_exception
     if not user.is_active:
+        print(f"DEBUG: User is inactive: {user.id}")
         raise HTTPException(status_code=400, detail="Inactive user")
     
+    print(f"DEBUG: User found: {user.id}")
     return user
 
 async def get_current_active_superuser(
@@ -71,7 +110,7 @@ async def get_current_user_ws(
         # Decode token
         try:
             payload = jwt.decode(
-                token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+                token, SECRET_KEY, algorithms=[settings.ALGORITHM]
             )
             user_id: str = payload.get("sub")
             if user_id is None:

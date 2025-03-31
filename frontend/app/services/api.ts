@@ -1,5 +1,11 @@
 /**
  * API service for communicating with the backend
+ *
+ * This file contains all the API client methods for interacting with the backend.
+ * Each method includes documentation about which endpoint it calls and error handling.
+ *
+ * IMPORTANT: All endpoints follow the pattern: ${API_BASE_URL}${API_V1_PREFIX}/[endpoint]
+ * Where API_V1_PREFIX is "/api/v1"
  */
 
 // Base API URL from environment variables
@@ -50,6 +56,14 @@ export interface MapResponse {
 export const authAPI = {
   /**
    * Login with username and password
+   *
+   * Endpoint: POST /api/v1/auth/login
+   * Auth required: No
+   *
+   * @param username - User's username
+   * @param password - User's password
+   * @returns Promise with access token and user info
+   * @throws Error if login fails
    */
   login: async (
     username: string,
@@ -106,6 +120,15 @@ export const authAPI = {
 
   /**
    * Register a new user
+   *
+   * Endpoint: POST /api/v1/auth/register
+   * Auth required: No
+   *
+   * @param username - User's username
+   * @param email - User's email
+   * @param password - User's password
+   * @returns Promise with access token and user info
+   * @throws Error if registration fails
    */
   register: async (
     username: string,
@@ -157,6 +180,12 @@ export const authAPI = {
 
   /**
    * Verify token
+   *
+   * Endpoint: GET /api/v1/game
+   * Auth required: Yes
+   *
+   * @param token - JWT token to verify
+   * @returns Promise with boolean indicating if token is valid
    */
   verifyToken: async (token: string): Promise<boolean> => {
     try {
@@ -236,14 +265,22 @@ export interface GameHistoryEntry {
 
 /**
  * Game API
+ * Contains methods for interacting with game-related endpoints
  */
 export const gameAPI = {
   /**
    * List all games for the current user
+   *
+   * Endpoint: GET /api/v1/game
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @returns Promise with array of Game objects
+   * @throws Error if request fails
    */
   listGames: async (token: string): Promise<Game[]> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -265,10 +302,18 @@ export const gameAPI = {
 
   /**
    * Get a specific game
+   *
+   * Endpoint: GET /api/v1/game/{game_id}
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @param gameId - ID of the game to retrieve
+   * @returns Promise with Game object
+   * @throws Error if request fails
    */
   getGame: async (token: string, gameId: string): Promise<Game> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -290,10 +335,19 @@ export const gameAPI = {
 
   /**
    * Create a new game
+   *
+   * Endpoint: POST /api/v1/game
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @param name - Name of the game
+   * @param description - Description of the game
+   * @returns Promise with created Game object
+   * @throws Error if request fails
    */
   createGame: async (token: string, name: string, description: string): Promise<Game> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -317,10 +371,17 @@ export const gameAPI = {
 
   /**
    * Delete a game
+   *
+   * Endpoint: DELETE /api/v1/game/{game_id}
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @param gameId - ID of the game to delete
+   * @throws Error if request fails
    */
   deleteGame: async (token: string, gameId: string): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -340,10 +401,19 @@ export const gameAPI = {
 
   /**
    * Update a game
+   *
+   * Endpoint: PUT /api/v1/game/{game_id}
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @param gameId - ID of the game to update
+   * @param data - Object containing fields to update
+   * @returns Promise with updated Game object
+   * @throws Error if request fails
    */
   updateGame: async (token: string, gameId: string, data: { name?: string; description?: string }): Promise<Game> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -366,6 +436,16 @@ export const gameAPI = {
 
   /**
    * Execute a command on a game
+   *
+   * Endpoint: POST /api/v1/game/{game_id}/command
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @param gameId - ID of the game
+   * @param command - Command to execute
+   * @param useLLM - Whether to use LLM processing
+   * @returns Promise with command response
+   * @throws Error if request fails
    */
   executeCommand: async (
     token: string,
@@ -374,7 +454,7 @@ export const gameAPI = {
     useLLM: boolean = true
   ): Promise<GameCommandResponse> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}/command`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/command`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -397,10 +477,18 @@ export const gameAPI = {
 
   /**
    * Get the game map
+   *
+   * Endpoint: GET /api/v1/game/{game_id}/map
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @param gameId - ID of the game
+   * @returns Promise with map data
+   * @throws Error if request fails
    */
   getMap: async (token: string, gameId: string): Promise<MapResponse> => {
     try {
-      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/game/${gameId}/map`, {
+      const response = await fetch(`${API_BASE_URL}${API_V1_PREFIX}/game/${gameId}/map`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -422,6 +510,14 @@ export const gameAPI = {
 
   /**
    * Get game history
+   *
+   * Endpoint: GET /api/v1/game/{game_id}/history
+   * Auth required: Yes
+   *
+   * @param token - JWT authentication token
+   * @param gameId - ID of the game
+   * @returns Promise with game history entries
+   * @throws Error if request fails
    */
   getGameHistory: async (token: string, gameId: string): Promise<GameHistoryEntry[]> => {
     try {
@@ -447,6 +543,13 @@ export const gameAPI = {
 
   /**
    * Send a command to the game (alias for executeCommand for backward compatibility)
+   *
+   * @param token - JWT authentication token
+   * @param gameId - ID of the game
+   * @param command - Command to execute
+   * @param useLLM - Whether to use LLM processing
+   * @returns Promise with command response
+   * @throws Error if request fails
    */
   sendCommand: async (
     token: string,

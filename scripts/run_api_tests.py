@@ -23,9 +23,9 @@ def main():
     parser = argparse.ArgumentParser(description="Run API tests")
     parser.add_argument(
         "--test", 
-        choices=["movement", "combat", "puzzle", "simple", "all"],
+        choices=["movement", "combat", "puzzle", "simple", "navigation", "paths", "db", "all"],
         default="simple",
-        help="Which API test to run: movement, combat, puzzle, simple (mocked), or all tests"
+        help="Which API test to run: movement, combat, puzzle, navigation, simple (mocked), paths, db (real database), or all tests"
     )
     
     args = parser.parse_args()
@@ -40,6 +40,9 @@ def main():
         pytest_cmd.append("tests/test_api_movement.py")
         pytest_cmd.append("tests/test_api_combat_system.py")
         pytest_cmd.append("tests/test_api_puzzle_system.py")
+        pytest_cmd.append("tests/test_api_navigation.py")
+        pytest_cmd.append("tests/test_api_path_progression.py")
+        pytest_cmd.append("tests/test_api_db_integration.py")
     elif args.test == "movement":
         # Run movement API tests
         pytest_cmd.append("tests/test_api_movement.py")
@@ -49,9 +52,18 @@ def main():
     elif args.test == "puzzle":
         # Run puzzle API tests
         pytest_cmd.append("tests/test_api_puzzle_system.py")
+    elif args.test == "navigation":
+        # Run enhanced navigation API tests
+        pytest_cmd.append("tests/test_api_navigation.py")
     elif args.test == "simple":
         # Run simplified API tests
         pytest_cmd.append("tests/test_api_simple.py")
+    elif args.test == "paths":
+        # Run path progression tests
+        pytest_cmd.append("tests/test_api_path_progression.py")
+    elif args.test == "db":
+        # Run database integration tests
+        pytest_cmd.append("tests/test_api_db_integration.py")
     
     logger.info(f"Running API tests with command: {' '.join(pytest_cmd)}")
     

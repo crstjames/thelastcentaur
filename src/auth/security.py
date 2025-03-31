@@ -2,10 +2,26 @@ from datetime import datetime, timedelta
 from typing import Any, Union, Optional
 from jose import jwt
 from passlib.context import CryptContext
-from src.core.config import settings
+import json
+from pathlib import Path
+from src.core.config import settings, SECRET_KEY_FILE
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
+
+# Get the secret key from the file
+def get_secret_key_from_file():
+    if SECRET_KEY_FILE.exists():
+        try:
+            with open(SECRET_KEY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("secret_key", "")
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return "testsecretkey"  # Default fallback
+
+# Use the secret key from the file
+SECRET_KEY = get_secret_key_from_file()
 
 def create_access_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """Create JWT access token."""
@@ -21,7 +37,7 @@ def create_access_token(subject: Union[str, Any], expires_delta: Optional[timede
     else:
         to_encode = {"exp": expire, "sub": str(subject)}
         
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

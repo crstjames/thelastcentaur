@@ -374,9 +374,9 @@ export default function PlayPage() {
 
     try {
       // Try to send command to the game engine API
-      // Always use LLM for player-initiated commands, especially inventory checks
-      // This ensures rich narrative responses for player-requested inventory checks
-      const shouldUseLLM = true; // Default to using LLM for all player commands
+      // Set shouldUseLLM to false to bypass LLM processing
+      // This allows direct execution of commands through the API
+      const shouldUseLLM = false; // Changed from true to false to bypass LLM processing
 
       let commandResponse;
       try {

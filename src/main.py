@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncpg
 import os
+import traceback
 
 from src.core.config import settings
 from src.api.routes import api_router
@@ -65,12 +66,13 @@ app = FastAPI(
     description="API for The Last Centaur game",
     version="0.1.0",
     lifespan=lifespan,
+    debug=True,  # Enable debug mode
 )
 
 # Configure CORS
 origins = []
 # Add localhost origins by default
-for port in ["3000", "3001", "3002", "3003", "5173", "5174"]:
+for port in ["3000", "3001", "3002", "3003", "3005", "5173", "5174"]:
     origins.extend([f"http://localhost:{port}", f"http://127.0.0.1:{port}"])
 
 # Add origins from settings.CORS_ORIGINS environment variable if it exists
@@ -88,6 +90,13 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Exception handler for debug output
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc):
+    print(f"ERROR in request {request.url.path}: {exc}")
+    print(traceback.format_exc())
+    return {"detail": str(exc), "traceback": traceback.format_exc()}
 
 # Include routers
 app.include_router(api_router, prefix=settings.API_V1_STR)

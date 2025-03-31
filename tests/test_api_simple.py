@@ -32,45 +32,55 @@ class TestAPISimple:
         mock_user.is_active = True
         mock_user.is_superuser = False
         
-        # Mock the auth dependency
-        with patch("src.auth.deps.get_current_user", return_value=mock_user):
-            # Mock game instance
-            mock_game_instance = MagicMock()
-            mock_game_instance.id = "test-game-id"
-            mock_game_instance.user_id = "test-user-id"
-            mock_game_instance.name = "Test Game"
-            mock_game_instance.status = "ACTIVE"
+        # Mock auth dependency
+        with patch("src.auth.deps.get_current_user") as mock_get_user:
+            mock_get_user.return_value = mock_user
             
-            # Mock database query result
-            mock_result = MagicMock()
-            mock_result.scalars().first.return_value = mock_game_instance
-            
-            # Mock database session
-            mock_session = AsyncMock()
-            mock_session.execute.return_value = mock_result
-            
-            # Mock the database dependency
-            with patch("src.db.session.get_db", return_value=mock_session):
-                # Mock the game state manager
-                with patch("src.game.router.game_state_manager") as mock_game_state:
-                    # Mock the state manager's methods
-                    mock_game_state.load_game_instance = AsyncMock(return_value={"id": "test-game-id", "player": MagicMock()})
-                    mock_game_state.get_game_state = AsyncMock(return_value={"current_tile": {"description": "A test area"}})
+            # Mock token verification
+            with patch("src.auth.deps.jwt.decode") as mock_decode:
+                mock_decode.return_value = {"sub": "test-user-id"}
+                
+                # Mock OAuth2 scheme
+                with patch("src.auth.deps.oauth2_scheme") as mock_oauth:
+                    mock_oauth.return_value = "test-token"
                     
-                    # Mock the command service
-                    with patch("src.game.router.CommandService") as mock_service_class:
-                        # Create mock service instance
-                        mock_service = MagicMock()
-                        mock_service.process_command = AsyncMock(return_value="Command executed successfully")
-                        mock_service_class.return_value = mock_service
-                        
-                        yield {
-                            "user": mock_user,
-                            "game_instance": mock_game_instance,
-                            "db_session": mock_session,
-                            "game_state": mock_game_state,
-                            "command_service": mock_service
-                        }
+                    # Mock game instance
+                    mock_game_instance = MagicMock()
+                    mock_game_instance.id = "test-game-id"
+                    mock_game_instance.user_id = "test-user-id"
+                    mock_game_instance.name = "Test Game"
+                    mock_game_instance.status = "ACTIVE"
+                    
+                    # Mock database query result
+                    mock_result = MagicMock()
+                    mock_result.scalars().first.return_value = mock_game_instance
+                    
+                    # Mock database session
+                    mock_session = AsyncMock()
+                    mock_session.execute.return_value = mock_result
+                    
+                    # Mock the database dependency
+                    with patch("src.db.session.get_db", return_value=mock_session):
+                        # Mock the game state manager
+                        with patch("src.game.router.game_state_manager") as mock_game_state:
+                            # Mock the state manager's methods
+                            mock_game_state.load_game_instance = AsyncMock(return_value={"id": "test-game-id", "player": MagicMock()})
+                            mock_game_state.get_game_state = AsyncMock(return_value={"current_tile": {"description": "A test area"}})
+                            
+                            # Mock the command service
+                            with patch("src.game.router.CommandService") as mock_service_class:
+                                # Create mock service instance
+                                mock_service = MagicMock()
+                                mock_service.process_command = AsyncMock(return_value="Command executed successfully")
+                                mock_service_class.return_value = mock_service
+                                
+                                yield {
+                                    "user": mock_user,
+                                    "game_instance": mock_game_instance,
+                                    "db_session": mock_session,
+                                    "game_state": mock_game_state,
+                                    "command_service": mock_service
+                                }
     
     def test_health_check(self):
         """Test the health check endpoint."""
@@ -98,8 +108,11 @@ class TestAPISimple:
             "use_llm": False  # Bypass LLM processing
         }
         
-        # Execute the command
-        response = client.post(f"/api/v1/game/{game_id}/command", json=command_data)
+        # Add authentication header - the mock is set up in the fixture
+        headers = {"Authorization": "Bearer test-token"}
+        
+        # Execute the command with the correct path (no duplicate 'game' prefix)
+        response = client.post(f"/api/v1/game/{game_id}/command", json=command_data, headers=headers)
         
         # Print response for debugging
         print(f"Response status: {response.status_code}")

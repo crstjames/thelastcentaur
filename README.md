@@ -110,6 +110,9 @@ After installation, you can play the game in several ways:
 For more detailed information about the project, check out these resources:
 
 - [Documentation Index](docs/index.md)
+- [API Reference](docs/api-reference.md) - Complete API endpoint documentation
+- [Contributing Guide](CONTRIBUTING.md) - Guidelines for contributing to the project
+- [Code Review Template](docs/code-review-template.md) - Template for code reviews
 - [Docker Setup](docs/DOCKER.md)
 - [Port Configuration](docs/PORT_CONFIGURATION.md)
 - [LLM Interface Setup](docs/LLM_INTERFACE_SETUP.md)

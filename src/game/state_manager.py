@@ -311,7 +311,7 @@ class GameStateManager:
                 else:
                     # Mix of terrain types for inner area
                     if (x + y) % 2 == 0:
-                        terrain = TerrainType.GRASS
+                        terrain = TerrainType.CLEARING  # Use CLEARING instead of GRASS
                     else:
                         terrain = TerrainType.FOREST
                 
@@ -332,7 +332,7 @@ class GameStateManager:
                 elif terrain == TerrainType.FOREST:
                     description = "Dense forest surrounds you. The trees seem to watch your every move."
                 else:
-                    description = "A grassy area with scattered trees. The wind rustles through the leaves."
+                    description = "A grassy clearing with scattered trees. The wind rustles through the leaves."
                 
                 # Create the tile
                 tile = Tile(
@@ -398,6 +398,7 @@ class GameStateManager:
                         "description": "A gray wolf with piercing yellow eyes. It growls as you approach.",
                         "health": 15,
                         "damage": 3,
+                        "type": "normal",
                         "drops": ["wolf_pelt"]
                     }
                 ]
@@ -412,7 +413,7 @@ class GameStateManager:
                         "id": "note_01",
                         "name": "Mysterious Note",
                         "description": "A weathered piece of parchment with strange symbols.",
-                        "type": "quest_item",
+                        "type": "quest",
                         "properties": {"text": "Beware the ancient ruins to the east. The last of the centaurs guards a powerful artifact."}
                     }
                 ]
@@ -487,14 +488,64 @@ class GameStateManager:
         
         # Add tiles to map system
         for tile in tiles:
+            # Convert item dictionaries to Item objects
+            items_list = []
+            for item_dict in tile.items.get("items", []):
+                if isinstance(item_dict, dict):
+                    # Create Item object from dictionary
+                    from src.engine.core.models import Item, ItemType, ElementType
+                    item_type = item_dict.get("type", "quest")  # Default to quest if not specified
+                    try:
+                        item = Item(
+                            id=item_dict.get("id", "unknown"),
+                            name=item_dict.get("name", "Unknown Item"),
+                            description=item_dict.get("description", ""),
+                            type=item_type,
+                            properties=item_dict.get("properties", {})
+                        )
+                        items_list.append(item)
+                    except Exception as e:
+                        print(f"Error creating Item object: {str(e)}")
+                        # Skip this item
+                        continue
+                else:
+                    # If it's already an Item object or something else, just add it
+                    items_list.append(item_dict)
+            
+            # Convert enemy dictionaries to Enemy objects
+            enemies_list = []
+            for enemy_dict in tile.enemies.get("enemies", []):
+                if isinstance(enemy_dict, dict):
+                    # Create Enemy object from dictionary
+                    from src.engine.core.models import Enemy, EnemyType
+                    enemy_type = enemy_dict.get("type", "normal")  # Default to normal if not specified
+                    try:
+                        enemy = Enemy(
+                            id=enemy_dict.get("id", "unknown"),
+                            name=enemy_dict.get("name", "Unknown Enemy"),
+                            description=enemy_dict.get("description", ""),
+                            type=enemy_type,
+                            health=enemy_dict.get("health", 10),
+                            damage=enemy_dict.get("damage", 2),
+                            drops=enemy_dict.get("drops", [])
+                        )
+                        enemies_list.append(enemy)
+                    except Exception as e:
+                        print(f"Error creating Enemy object: {str(e)}")
+                        # Skip this enemy
+                        continue
+                else:
+                    # If it's already an Enemy object or something else, just add it
+                    enemies_list.append(enemy_dict)
+            
             tile_state = TileState(
                 position=(tile.position_x, tile.position_y),
                 terrain_type=tile.terrain_type,
                 area=StoryArea.AWAKENING_WOODS,  # Default for now, should be stored in tile
                 description=tile.description,
                 is_visited=tile.is_visited,
-                items=tile.items.get("items", []),
-                enemies=tile.enemies.get("enemies", []),
+                items=items_list,
+                enemies=enemies_list,
                 environmental_changes=tile.environmental_changes.get("changes", []),
                 events=[],
                 requirements=tile.requirements,
