@@ -75,9 +75,24 @@
     transition: opacity 0.6s;
   }
   #title.hidden { opacity: 0; pointer-events: none; }
-  #title img { width: min(520px, 86vw); filter: drop-shadow(0 6px 18px rgba(0,0,0,0.8)); }
+  /* The title is text, in the CRT pixel font, so it can sit and scale anywhere. */
+  .wordmark {
+    margin: 0;
+    font-family: "Press Start 2P", monospace;
+    font-weight: normal;
+    line-height: 1.25;
+    color: var(--gold);
+    text-transform: uppercase;
+    text-shadow:
+      0 0 10px rgba(255, 215, 0, 0.45),
+      0 0 28px rgba(217, 119, 6, 0.35),
+      3px 3px 0 #7a3d0a;
+  }
+  .wordmark .small { display: block; font-size: 0.45em; letter-spacing: 0.3em; color: var(--amber); }
+  #title .wordmark { font-size: clamp(30px, 7vw, 72px); text-align: center; }
+  #title .wordmark .small { margin-bottom: 0.4em; }
   #title .buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
-  #title .hint { font-size: 20px; color: var(--dim); text-align: center; }
+  #title .hint { font-size: 22px; color: var(--parchment); text-align: center; text-shadow: 0 0 6px #000, 0 2px 4px #000, 0 0 14px #000; }
 
   /* ---------- layout ---------- */
   #app {
@@ -93,8 +108,8 @@
   header {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
-  header .logo { height: 54px; overflow: hidden; }   /* the logo art has empty space below the lettering */
-  header .logo img { height: 86px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.9)); }
+  header .wordmark { font-size: 16px; text-shadow: 0 0 8px rgba(255, 215, 0, 0.4), 2px 2px 0 #7a3d0a; }
+  header .wordmark .small { display: inline; font-size: 1em; letter-spacing: normal; color: var(--gold); }
   header .controls { display: flex; gap: 8px; }
 
   main {
@@ -297,8 +312,7 @@
     header button { padding: 8px 10px; font-size: 9px; }
     .crt { height: 70vh; }
     aside { overflow: visible; }
-    header .logo { height: 40px; }
-    header .logo img { height: 64px; }
+    header .wordmark { font-size: 12px; }
     #log { padding: 16px 18px 0; }
     .crt-status { padding: 12px 18px 10px; }
     .block { font-size: 22px; }
@@ -310,7 +324,7 @@
 <body>
 
 <div id="title">
-  <img src="/assets/images/tlc_logo.png" alt="The Last Centaur" />
+  <h1 class="wordmark"><span class="small">The</span>Last Centaur</h1>
   <div class="buttons">
     <button id="continue" class="primary" hidden>Continue</button>
     <button id="begin" class="primary">Begin</button>
@@ -321,7 +335,7 @@
 
 <div id="app">
   <header>
-    <div class="logo"><img src="/assets/images/tlc_logo.png" alt="The Last Centaur" /></div>
+    <div class="wordmark"><span class="small">The </span>Last Centaur</div>
     <div class="controls">
       <button id="music" title="Music">♪ Off</button>
       <button id="new">New game</button>
