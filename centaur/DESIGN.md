@@ -6,8 +6,11 @@
 |---|---|
 | `content.py` | **Single source of truth** for landmarks, NPCs, items, enemies, biomes and what unlocks what. Says nothing about *where*. |
 | `worldgen.py` | Seeded 10×10 world: places landmarks, generates a unique tile for every other square, proves all three paths are winnable. |
+| `game.py` | The game loop. `Game.do("talk to the hermit")` returns text. All state is JSON-serializable. |
+| `play.py` | Terminal runner with autosave (`~/.thelastcentaur/save.json`). |
 
 ```
+venv/bin/python -m centaur.play                # play (add --new to start over)
 venv/bin/python -m centaur.worldgen --seed 7   # print a world
 venv/bin/python -m pytest centaur/tests        # content + generation tests
 ```
@@ -18,6 +21,15 @@ venv/bin/python -m pytest centaur/tests        # content + generation tests
 - Non-landmark tiles take the biome of the nearest landmark, so geography clusters naturally. Each one gets a unique name and description.
 - Every tile has its own `memory` list, a log of what has happened there. The engine fills it in as you play, and it is saved with the world.
 - Movement is 4-directional. Ordinary tiles are always open. A landmark can't be entered until you meet its `enter_requires`.
+
+## Rules of play
+
+- There's no class selection. You're on whichever path your gear says you're on, and you can mix paths.
+- Talking to a mentor the first time gives you their item. Some items can only be taken once you hold another one (`take_requires`).
+- **Combat is deliberately simple for now.** If you have an enemy's `defeat_requires`, you win and lose half its damage in health. If not, you lose its full damage and it stays. At 0 health you wake back in the Awakening Woods, and the place where you fell remembers it.
+- Tiles record first visits, items taken or dropped, victories, falls and anything you `carve`. `look` shows the latest few entries.
+- `rest` restores your health anywhere without enemies. The old map reveals the whole map on the `map` command.
+- There's no day/night cycle yet, so `night_only` enemies stay hidden.
 
 ## The three paths (canonical)
 
