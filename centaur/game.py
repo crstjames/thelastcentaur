@@ -1,65 +1,79 @@
 """
 The game loop for The Last Centaur.
 
-    game = Game.new(seed=7)
+    game = Game.new()
     print(game.do("look"))
-    print(game.do("talk to the hermit"))
+    print(game.do("examine the roots"))
 
 Game.do() takes one line of player input and returns the text response. All
-state lives on the Game object and round-trips through to_dict()/from_dict(),
-so saving is just writing JSON.
+state lives on the Game object and round-trips through to_dict()/from_dict().
 
-There is no class selection: your path is whatever your gear says it is. The
-Shadow Centaur can be beaten with any one of the three paths' item sets.
+The engine is generic: it evaluates content.Conditions and applies
+content.Effects. Nothing here knows about crystals or wolves.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Set
 
 from centaur import content
-from centaur.content import ENEMIES, ITEMS, LANDMARKS, NPCS, PATHS, is_met
-from centaur.worldgen import BIOME_GLYPHS, DIRECTIONS, Pos, Tile, World, generate
+from centaur.content import (
+    ECHOES, ENEMIES, FEATURES, HAZARDS, INTERACTIONS, ITEMS, LANDMARKS, NPCS, PHASES,
+    PHASE_TURNS, SEQUENCES, SIGNALS, Effects, Place, Pos, is_met,
+)
+from centaur.worldgen import BIOME_GLYPHS, DIRECTIONS, Tile, World, build_world
 
 MAX_HEALTH = 100
-MEMORY_SHOWN = 3
+MEMORY_SHOWN = 4
 
 DIRECTION_ALIASES = {"n": "north", "s": "south", "e": "east", "w": "west"}
 DIRECTION_ALIASES.update({d: d for d in DIRECTIONS})
 
-STOPWORDS = {"the", "a", "an", "to", "with", "at", "on", "up", "of", "my"}
+STOPWORDS = {"the", "a", "an", "to", "with", "at", "on", "up", "of", "my", "it", "in", "from", "around", "for"}
 
 VERBS = {
     "look": ("look", "l"),
+    "examine": ("examine", "x", "inspect", "search", "study", "check", "feel", "dig", "listen"),
+    "read": ("read",),
+    "take": ("take", "get", "grab", "pick", "pull", "loosen", "free"),
+    "use": ("use", "raise", "hold", "lift", "show", "point", "shine", "wave"),
+    "strike": ("strike", "hit", "tap", "ring", "knock", "kick"),
     "go": ("go", "move", "walk", "run", "head", "travel"),
-    "take": ("take", "get", "grab", "pick"),
     "drop": ("drop", "leave"),
     "talk": ("talk", "speak", "ask", "greet"),
-    "fight": ("fight", "attack", "kill", "strike"),
-    "examine": ("examine", "x", "read", "inspect", "study"),
+    "fight": ("fight", "attack", "kill"),
     "inventory": ("inventory", "inv", "i"),
     "status": ("status", "stats", "health"),
     "map": ("map", "m"),
     "carve": ("carve", "write", "mark", "scratch"),
-    "rest": ("rest", "sleep", "wait"),
+    "rest": ("rest", "sleep"),
+    "wait": ("wait", "z"),
     "help": ("help", "h", "?"),
 }
 VERB_LOOKUP = {alias: verb for verb, aliases in VERBS.items() for alias in aliases}
 
+# Actions that let time pass. Looking and examining are free.
+TIMED_VERBS = {"take", "use", "strike", "go", "drop", "talk", "fight", "carve"}
+
+PHASE_LINES = {
+    "dawn": "Pale light is creeping up from the east.",
+    "day": "",
+    "dusk": "The light is going long and amber.",
+    "night": "It is dark.",
+}
+PHASE_CHANGES = {
+    "dawn": "The sky greys, then pales. Dawn.",
+    "day": "The sun clears the horizon.",
+    "dusk": "The shadows stretch long. Dusk is coming.",
+    "night": "Night falls.",
+}
+
 HELP_TEXT = """\
-Commands:
-  look                    describe where you are
-  n / s / e / w           move (or: go north)
-  take <item>             pick something up
-  drop <item>             leave something here
-  examine <item>          look closely at something (also: read)
-  talk <someone>          speak with someone here
-  fight <enemy>           fight an enemy here
-  carve <words>           leave a message on this spot
-  rest                    recover your strength (only where it's safe)
-  inventory / status / map / help"""
+You can look, move (n / s / e / w), examine things, take them, use them,
+talk to whoever is there, wait, rest, and carve words for whoever comes next.
+Beyond that, try what seems sensible. The world is listening."""
 
 
 @dataclass
@@ -67,19 +81,19 @@ class Game:
     world: World
     position: Pos
     inventory: List[str] = field(default_factory=list)
+    flags: Set[str] = field(default_factory=set)
     health: int = MAX_HEALTH
-    turn: int = 0
-    met: Set[str] = field(default_factory=set)        # NPCs who've already given their gift
-    defeated: Set[str] = field(default_factory=set)   # unique (boss) enemies defeated
-    won_path: Optional[str] = None
+    turn: int = content.START_TURN
+    pride: int = 0
+    sequence_progress: Dict[str, int] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Construction and persistence
     # ------------------------------------------------------------------
 
     @classmethod
-    def new(cls, seed: int) -> "Game":
-        world = generate(seed)
+    def new(cls) -> "Game":
+        world = build_world()
         game = cls(world=world, position=world.start)
         game._arrive()
         return game
@@ -89,11 +103,11 @@ class Game:
             "world": self.world.to_dict(),
             "position": list(self.position),
             "inventory": list(self.inventory),
+            "flags": sorted(self.flags),
             "health": self.health,
             "turn": self.turn,
-            "met": sorted(self.met),
-            "defeated": sorted(self.defeated),
-            "won_path": self.won_path,
+            "pride": self.pride,
+            "sequence_progress": dict(self.sequence_progress),
         }
 
     @classmethod
@@ -102,55 +116,117 @@ class Game:
             world=World.from_dict(data["world"]),
             position=tuple(data["position"]),
             inventory=list(data["inventory"]),
+            flags=set(data["flags"]),
             health=data["health"],
             turn=data["turn"],
-            met=set(data["met"]),
-            defeated=set(data["defeated"]),
-            won_path=data["won_path"],
+            pride=data["pride"],
+            sequence_progress=dict(data["sequence_progress"]),
         )
 
     # ------------------------------------------------------------------
-    # Input
+    # State helpers
     # ------------------------------------------------------------------
 
     @property
-    def over(self) -> bool:
-        return self.won_path is not None
+    def phase(self) -> str:
+        return PHASES[(self.turn // PHASE_TURNS) % len(PHASES)]
 
     @property
     def tile(self) -> Tile:
         return self.world.tiles[self.position]
 
+    @property
+    def slice_complete(self) -> bool:
+        return content.SLICE_GOAL in self.flags
+
+    def is_here(self, place: Place) -> bool:
+        if isinstance(place, str):
+            return self.tile.landmark == place
+        return tuple(place) == self.position
+
+    def met(self, condition) -> bool:
+        return is_met(condition, self.inventory, self.flags, self.phase)
+
+    def can_enter(self, pos: Pos) -> bool:
+        landmark_id = self.world.tiles[pos].landmark
+        return landmark_id is None or self.met(LANDMARKS[landmark_id].enter_when)
+
+    def features_here(self) -> List[str]:
+        return [f.id for f in FEATURES.values() if self.is_here(f.at) and self.met(f.visible_when)]
+
+    def npcs_here(self) -> List[str]:
+        return [n.id for n in NPCS.values() if self.is_here(n.at) and self.met(n.present_when)]
+
+    # ------------------------------------------------------------------
+    # Input
+    # ------------------------------------------------------------------
+
     def do(self, text: str) -> str:
-        words = re.findall(r"[a-z0-9'?]+", text.lower())
+        words = re.findall(r"[a-z0-9']+", text.lower())
         if not words:
             return "Say something, or type 'help'."
-        if self.over:
-            return "Your story is told. Start a new game to play again."
-
         first, rest = words[0], words[1:]
+
         if first in DIRECTION_ALIASES:
-            return self._go(DIRECTION_ALIASES[first])
+            return self._timed("go", lambda: self._go(DIRECTION_ALIASES[first]))
+
         verb = VERB_LOOKUP.get(first)
+        if verb == "look" and rest:
+            # "look at X" examines; "look through X" uses it
+            verb = "use" if rest[0] == "through" else "examine"
+        if verb == "examine" and first == "listen" and not rest:
+            return self._listen()
         if verb is None:
-            return f"You don't know how to '{first}'. Type 'help' for commands."
+            return f"You're not sure how to '{first}'."
 
         if verb == "carve":
-            # keep the player's own words, minus the verb
             message = text.strip().split(None, 1)[1] if len(text.split()) > 1 else ""
-            return self._carve(message)
+            return self._timed(verb, lambda: self._carve(message))
 
         args = [w for w in rest if w not in STOPWORDS]
-        handler = getattr(self, f"_{verb}")
-        return handler(args) if verb != "go" else self._go_words(args)
+        handler = getattr(self, "_go_words" if verb == "go" else f"_{verb}")
+        if verb in TIMED_VERBS:
+            return self._timed(verb, lambda: handler(args))
+        return handler(args)
+
+    def _timed(self, verb: str, action) -> str:
+        """Run an action that takes a turn, then let the world respond."""
+        before = (self.position, self.turn)
+        response = action()
+        if verb == "go" and self.position == before[0]:
+            return response  # you didn't actually go anywhere
+        self.turn += 1
+        return response + self._after_turn(before[1])
+
+    def _after_turn(self, previous_turn: int) -> str:
+        notes = []
+        previous_phase = PHASES[(previous_turn // PHASE_TURNS) % len(PHASES)]
+        if self.phase != previous_phase:
+            notes.append(PHASE_CHANGES[self.phase])
+        for hazard in HAZARDS:
+            if self.is_here(hazard.at) and self.met(hazard.when):
+                self.health -= hazard.damage
+                notes.append(hazard.message)
+                if self.health <= 0:
+                    notes.append(self._fall(f"the {LANDMARKS[hazard.at].name}"))
+                    break
+        return "".join("\n\n" + note for note in notes)
 
     # ------------------------------------------------------------------
     # Commands
     # ------------------------------------------------------------------
 
     def _look(self, args: Sequence[str] = ()) -> str:
-        if args:
-            return self._examine(args)
+        return self.describe()
+
+    def _go(self, direction: str) -> str:
+        target = self.world.neighbors(self.position).get(direction)
+        if target is None:
+            return "The land ends there. You can't go that way."
+        if not self.can_enter(target):
+            return LANDMARKS[self.world.tiles[target].landmark].blocked_message
+        self.position = target
+        self._arrive()
         return self.describe()
 
     def _go_words(self, args: Sequence[str]) -> str:
@@ -158,136 +234,156 @@ class Game:
             return "Go where? North, south, east or west."
         return self._go(DIRECTION_ALIASES[args[0]])
 
-    def _go(self, direction: str) -> str:
-        target = self.world.neighbors(self.position).get(direction)
-        if target is None:
-            return "The land ends there. You can't go that way."
-        if not self.world.can_enter(target, self.inventory):
-            landmark = LANDMARKS[self.world.tiles[target].landmark]
-            return f"{landmark.name}: {landmark.blocked_message}"
-        self.position = target
-        self.turn += 1
-        self._arrive()
-        return self.describe()
+    def _examine(self, args: Sequence[str]) -> str:
+        if not args:
+            return self.describe()
+        handled = self._try_story("examine", args)
+        if handled is not None:
+            return handled
+        feature_id = self._pick(args, self.features_here(), lambda f: FEATURES[f].words)
+        if isinstance(feature_id, str) and feature_id.startswith("?"):
+            return feature_id[1:]
+        if feature_id:
+            feature = FEATURES[feature_id]
+            self._see(feature.clue)
+            return feature.description
+        item_id = self._match_item(args, self.inventory + self.tile.items)
+        if item_id:
+            item = ITEMS[item_id]
+            self._see(item.clue)
+            return f"{item.name}: {item.description}" + (f"\n\n{item.lore}" if item.lore else "")
+        npc_id = self._match_named(args, self.npcs_here(), NPCS)
+        if npc_id:
+            return f"{NPCS[npc_id].name}: {NPCS[npc_id].description}"
+        enemy_id = self._match_named(args, self.tile.enemies, ENEMIES)
+        if enemy_id:
+            return f"{ENEMIES[enemy_id].name}: {ENEMIES[enemy_id].description}"
+        return "You don't see that here."
+
+    def _read(self, args: Sequence[str]) -> str:
+        if not args:
+            return "Read what?"
+        handled = self._try_story("read", args)
+        return handled if handled is not None else self._examine(args)
 
     def _take(self, args: Sequence[str]) -> str:
         if not args:
             return "Take what?"
-        item_id = _match(args, self.tile.items, ITEMS)
-        if item_id is None:
-            return "You don't see that here."
-        item = ITEMS[item_id]
-        if not is_met(item.take_requires, self.inventory):
-            return item.hidden_message or "You can't reach it."
-        self.tile.items.remove(item_id)
-        self.inventory.append(item_id)
-        self.turn += 1
-        self._remember(f"You took the {item.name} from here.")
-        return f"You take the {item.name}. {item.description}"
+        handled = self._try_story("take", args)
+        if handled is not None:
+            return handled
+        item_id = self._match_item(args, self.tile.items)
+        if item_id:
+            self.tile.items.remove(item_id)
+            self.inventory.append(item_id)
+            name = ITEMS[item_id].name
+            self._remember(f"You took the {name} from here.")
+            return f"You take the {name}."
+        if self._pick(args, self.features_here(), lambda f: FEATURES[f].words):
+            return "It won't come away."
+        return "You don't see that here."
+
+    def _use(self, args: Sequence[str]) -> str:
+        if not args:
+            return "Use what?"
+        handled = self._try_story("use", args)
+        if handled is not None:
+            return handled
+        item_id = next((i for i in self.inventory if any(_word_forms(a) & _item_words(i) for a in args)), None)
+        if item_id:
+            return f"You raise the {ITEMS[item_id].name}. Nothing happens."
+        if self._pick(args, self.features_here(), lambda f: FEATURES[f].words):
+            return "Nothing happens."
+        return "You don't have that."
+
+    def _strike(self, args: Sequence[str]) -> str:
+        if not args:
+            return "Strike what?"
+        handled = self._try_story("strike", args)
+        if handled is not None:
+            return handled
+        feature_id = self._pick(args, self.features_here(), lambda f: FEATURES[f].words)
+        if isinstance(feature_id, str) and feature_id.startswith("?"):
+            return feature_id[1:]
+        if feature_id:
+            return f"You strike {FEATURES[feature_id].name}. Nothing happens."
+        return "You don't see that here."
 
     def _drop(self, args: Sequence[str]) -> str:
-        item_id = _match(args, self.inventory, ITEMS)
+        item_id = self._match_item(args, self.inventory)
         if item_id is None:
             return "You aren't carrying that."
         self.inventory.remove(item_id)
         self.tile.items.append(item_id)
-        self.turn += 1
         name = ITEMS[item_id].name
         self._remember(f"You left the {name} here.")
         return f"You set down the {name}."
 
-    def _examine(self, args: Sequence[str]) -> str:
-        if not args:
-            return self.describe()
-        item_id = _match(args, self.inventory + self.tile.items, ITEMS)
-        if item_id is not None:
-            item = ITEMS[item_id]
-            text = f"{item.name}: {item.description}"
-            return f"{text}\n\n{item.lore}" if item.lore else text
-        npc_id = _match(args, self.tile.npcs, NPCS)
-        if npc_id is not None:
-            npc = NPCS[npc_id]
-            return f"{npc.name}: {npc.description}"
-        enemy_id = _match(args, self._enemies_here(), ENEMIES)
-        if enemy_id is not None:
-            enemy = ENEMIES[enemy_id]
-            return " ".join(filter(None, [f"{enemy.name}: {enemy.description}", enemy.behavior]))
-        if self.tile.landmark and set(args) & {"area", "here", "around", "place"}:
-            landmark = LANDMARKS[self.tile.landmark]
-            return landmark.history or landmark.description
-        return "You don't see that here."
-
     def _talk(self, args: Sequence[str]) -> str:
-        if not self.tile.npcs:
+        present = self.npcs_here()
+        if not present:
             return "There's no one here to talk to."
-        npc_id = _match(args, self.tile.npcs, NPCS) if args else self.tile.npcs[0]
+        npc_id = self._match_named(args, present, NPCS) if args else None
         if npc_id is None:
-            return "They aren't here."
-        npc = NPCS[npc_id]
-        self.turn += 1
-        if npc_id not in self.met:
-            self.met.add(npc_id)
-            self.inventory.extend(i for i in npc.gives if i not in self.inventory)
-            self._remember(f"You spoke with {npc.name} here for the first time.")
-            gifts = ", ".join(ITEMS[i].name for i in npc.gives)
-            lines = [f'{npc.name}: "{npc.dialogue["greeting"]}"', f'"{npc.dialogue["gift"]}"']
-            if gifts:
-                lines.append(f"You receive: {gifts}.")
-            return "\n".join(lines)
-        if self._holds_domain_key():
-            return f'{npc.name}: "{npc.dialogue["pre_final"]}"'
-        return f'{npc.name}: "{npc.dialogue["after"]}"'
+            if len(present) > 1 and args:
+                return "Which of them?"
+            npc_id = present[0]  # with one person here, any way of addressing them works
+        for line in NPCS[npc_id].lines:
+            if self.met(line.when):
+                self._apply(line.effects)
+                return line.text
+        return "They say nothing."
 
     def _fight(self, args: Sequence[str]) -> str:
-        enemies = self._enemies_here()
+        enemies = self.tile.enemies
         if not enemies:
             return "There's nothing here to fight."
-        enemy_id = _match(args, enemies, ENEMIES) if args else enemies[0]
+        enemy_id = self._match_named(args, enemies, ENEMIES) if args else enemies[0]
         if enemy_id is None:
-            return "That enemy isn't here."
+            return "That isn't here."
         enemy = ENEMIES[enemy_id]
-        self.turn += 1
-
-        if not is_met(enemy.defeat_requires, self.inventory):
+        if not self.met(enemy.defeat_requires):
             self.health -= enemy.damage
             if self.health <= 0:
-                return self._fall(enemy)
+                return self._fall(f"the {enemy.name}")
             return (
-                f"You charge the {enemy.name}, but nothing you have can truly harm it. "
-                f"It drives you back. (-{enemy.damage} health, {self.health} left)"
+                f"You throw yourself at the {enemy.name}, but you have nothing that can hurt "
+                f"it. It drives you back. (-{enemy.damage} health)"
             )
-
         cost = enemy.damage // 2
         self.health -= cost
         if self.health <= 0:
-            return self._fall(enemy)
-        self.tile.enemies.remove(enemy_id)
-        if enemy.boss:
-            self.defeated.add(enemy_id)
-        drops = [i for i in enemy.drops if i not in self.inventory]
-        self.inventory.extend(drops)
+            return self._fall(f"the {enemy.name}")
+        enemies.remove(enemy_id)
+        self.inventory.extend(i for i in enemy.drops if i not in self.inventory)
         self._remember(f"You defeated the {enemy.name} here.")
-        lines = [f"You defeat the {enemy.name}. (-{cost} health, {self.health} left)"]
-        if drops:
-            lines.append("You claim: " + ", ".join(ITEMS[i].name for i in drops) + ".")
-        if enemy_id == content.FINAL_BOSS:
-            lines.append(self._victory())
-        return "\n".join(lines)
+        return f"You defeat the {enemy.name}. (-{cost} health)"
 
     def _carve(self, message: str) -> str:
         message = message.strip()
         if not message:
             return "Carve what?"
-        self.turn += 1
         self._remember(f'Carved here, in your hand: "{message}"')
         return "You carve your words where the next traveler will find them."
 
+    def _wait(self, args: Sequence[str] = ()) -> str:
+        target = next((a for a in args if a in PHASES), None)
+        before = self.turn
+        self.turn = (self.turn // PHASE_TURNS + 1) * PHASE_TURNS
+        if target:
+            while self.phase != target:
+                self.turn += PHASE_TURNS
+        return "Time passes." + self._after_turn(before)
+
     def _rest(self, args: Sequence[str] = ()) -> str:
-        if self._enemies_here():
-            return "You can't rest with enemies nearby."
-        self.turn += 1
+        if self.tile.enemies or any(self.is_here(h.at) for h in HAZARDS):
+            return "You can't rest here. Not with what's circling."
         self.health = MAX_HEALTH
-        return "You rest until your strength returns."
+        return "You rest, and your strength returns. " + self._wait(args)
+
+    def _listen(self) -> str:
+        heard = self._signal_lines()
+        return " ".join(heard) if heard else "You hear only the wind."
 
     def _inventory(self, args: Sequence[str] = ()) -> str:
         if not self.inventory:
@@ -295,15 +391,11 @@ class Game:
         return "You carry:\n" + "\n".join(f"  {ITEMS[i].name}" for i in self.inventory)
 
     def _status(self, args: Sequence[str] = ()) -> str:
-        lines = [f"Health {self.health}/{MAX_HEALTH}   Turn {self.turn}   At {self.tile.name}"]
-        for path in PATHS:
-            held = [ITEMS[i].name for i in self.inventory if ITEMS[i].path == path]
-            if held:
-                lines.append(f"  {path.title()}: {', '.join(held)}")
-        return "\n".join(lines)
+        return f"Health {self.health}/{MAX_HEALTH}. It is {self.phase}. You are at {self.tile.name}."
 
     def _map(self, args: Sequence[str] = ()) -> str:
-        knows_land = "old_map" in self.inventory
+        if "old_map" not in self.inventory:
+            return "You have no map. You'll have to remember the way."
         rows = []
         for y in reversed(range(self.world.size)):
             row = []
@@ -311,20 +403,79 @@ class Game:
                 tile = self.world.tiles[(x, y)]
                 if (x, y) == self.position:
                     row.append("@")
-                elif tile.landmark and (tile.visited or knows_land):
+                elif tile.landmark:
                     row.append("*")
-                elif tile.visited or knows_land:
-                    row.append(BIOME_GLYPHS.get(tile.biome, "?"))
                 else:
-                    row.append(" ")
+                    row.append(BIOME_GLYPHS.get(tile.biome, "?"))
             rows.append(" ".join(row))
-        legend = "@ you   * landmark"
-        if not knows_land:
-            legend += "   (only places you've been -- a map would show more)"
-        return "\n".join(rows) + "\n" + legend
+        return "\n".join(rows) + "\n@ you   * a place someone marked"
 
     def _help(self, args: Sequence[str] = ()) -> str:
         return HELP_TEXT
+
+    # ------------------------------------------------------------------
+    # Story interactions
+    # ------------------------------------------------------------------
+
+    def _try_story(self, verb: str, args: Sequence[str]) -> Optional[str]:
+        """Sequences and interactions take priority over the generic verbs."""
+        for sequence in SEQUENCES.values():
+            if sequence.verb == verb and self.is_here(sequence.at) and self.met(sequence.when):
+                feature_id = self._pick(args, sequence.steps, lambda f: FEATURES[f].words)
+                if isinstance(feature_id, str) and feature_id.startswith("?"):
+                    return feature_id[1:]
+                if feature_id:
+                    return self._sequence_step(sequence, feature_id)
+
+        for interaction in INTERACTIONS.values():
+            if verb not in interaction.verbs or not self.is_here(interaction.at):
+                continue
+            if interaction.once and f"done:{interaction.id}" in self.flags:
+                continue
+            if interaction.item and interaction.item not in self.inventory:
+                continue
+            vocabulary: Set[str] = set()
+            if interaction.feature:
+                feature = FEATURES[interaction.feature]
+                if not self.met(feature.visible_when):
+                    continue
+                vocabulary.update(feature.words)
+            if interaction.item:
+                vocabulary.update(_item_words(interaction.item))
+            if not _all_named(args, vocabulary):
+                continue
+            if not self.met(interaction.when):
+                return interaction.otherwise or "Nothing happens."
+            if interaction.once:
+                self.flags.add(f"done:{interaction.id}")
+            return self._apply(interaction.effects)
+        return None
+
+    def _sequence_step(self, sequence, feature_id: str) -> str:
+        progress = self.sequence_progress.get(sequence.id, 0)
+        note = sequence.notes.get(feature_id, "")
+        if sequence.steps[progress] != feature_id:
+            self.sequence_progress[sequence.id] = 0
+            return f"{note}\n\n{sequence.failure}".strip()
+        progress += 1
+        if progress < len(sequence.steps):
+            self.sequence_progress[sequence.id] = progress
+            return note
+        self.sequence_progress.pop(sequence.id, None)
+        return f"{note}\n\n{self._apply(sequence.success)}"
+
+    def _apply(self, effects: Effects) -> str:
+        apply_effects(effects, self.inventory, self.flags)
+        self.pride += effects.pride
+        if effects.memory:
+            self._remember(effects.memory)
+        message = effects.message
+        if content.SLICE_GOAL in effects.flags:
+            message += (
+                "\n\n~ You have reached the end of what has been written so far. "
+                "Explore as long as you like. ~"
+            )
+        return message
 
     # ------------------------------------------------------------------
     # Description
@@ -332,31 +483,55 @@ class Game:
 
     def describe(self) -> str:
         tile = self.tile
-        lines = [tile.name, tile.description]
+        description = tile.description
+        if tile.landmark:
+            for condition, variant in LANDMARKS[tile.landmark].variants:
+                if self.met(condition):
+                    description = variant
+                    break
+        lines = [tile.name, description]
+
+        extras = [PHASE_LINES[self.phase]] + self._signal_lines()
+        for feature_id in self.features_here():
+            feature = FEATURES[feature_id]
+            if not isinstance(feature.at, str):  # features on ordinary tiles announce themselves
+                extras.append(feature.description)
+        extras = [e for e in extras if e]
+        if extras:
+            lines.append(" ".join(extras))
 
         memories = [m for m in tile.memory if not m.startswith("You first came here")]
         if memories:
             lines.append("")
-            lines.append("You remember: " + " ".join(memories[-MEMORY_SHOWN:]))
+            lines.extend(memories[-MEMORY_SHOWN:])
+            for echo in ECHOES:
+                if echo.at == self.position and echo.clue:
+                    self._see(echo.clue)
 
         lines.append("")
-        if tile.npcs:
-            lines.append("Here: " + ", ".join(NPCS[n].name for n in tile.npcs) + ".")
-        enemies = self._enemies_here()
-        if enemies:
-            lines.append("Danger: " + ", ".join(ENEMIES[e].name for e in enemies) + ".")
+        for npc_id in self.npcs_here():
+            lines.append(f"{NPCS[npc_id].name} is here.")
+        if tile.enemies:
+            lines.append("Nearby: " + ", ".join(ENEMIES[e].name for e in tile.enemies) + ".")
         if tile.items:
             lines.append("You see: " + ", ".join(ITEMS[i].name for i in tile.items) + ".")
-
-        exits = []
-        for direction, pos in self.world.neighbors(self.position).items():
-            neighbor = self.world.tiles[pos]
-            label = neighbor.name
-            if not self.world.can_enter(pos, self.inventory):
-                label += " (barred)"
-            exits.append(f"{direction}: {label}")
+        exits = [f"{d}: {self.world.tiles[p].name}" for d, p in self.world.neighbors(self.position).items()]
         lines.append("Exits -- " + "; ".join(exits))
         return "\n".join(lines)
+
+    def _signal_lines(self) -> List[str]:
+        heard = []
+        for signal in SIGNALS:
+            distance = abs(self.position[0] - signal.target[0]) + abs(self.position[1] - signal.target[1])
+            if (
+                distance < len(signal.by_distance)
+                and self.tile.biome in signal.biomes
+                and self.met(signal.when)
+                and signal.by_distance[distance]
+            ):
+                heard.append(signal.by_distance[distance])
+                self._see(signal.clue)
+        return heard
 
     # ------------------------------------------------------------------
     # Internals
@@ -370,51 +545,69 @@ class Game:
     def _remember(self, text: str) -> None:
         self.tile.memory.append(text)
 
-    def _enemies_here(self) -> List[str]:
-        # No day/night cycle yet, so night-only enemies stay hidden.
-        return [e for e in self.tile.enemies if not ENEMIES[e].night_only]
+    def _see(self, clue: Optional[str]) -> None:
+        if clue:
+            self.flags.add(f"clue:{clue}")
 
-    def _holds_domain_key(self) -> bool:
-        return is_met(LANDMARKS["shadow_domain"].enter_requires, self.inventory)
-
-    def _fall(self, enemy) -> str:
-        self._remember(f"You fell here, fighting the {enemy.name}.")
+    def _fall(self, cause: str) -> str:
+        self._remember(f"You fell here, overcome by {cause}.")
         self.health = MAX_HEALTH
-        self.position = self.world.start
+        self.position = LANDMARKS[content.FALL_LANDMARK].pos
+        self.turn = (self.turn // (PHASE_TURNS * len(PHASES)) + 1) * PHASE_TURNS * len(PHASES)  # next dawn
+        self._arrive()
         return (
-            f"The {enemy.name} overwhelms you. Darkness...\n\n"
-            "You wake among the roots of the Awakening Woods, aching but whole.\n\n"
+            "Darkness takes you...\n\n"
+            "You wake to birdsong and grey dawn light. Someone has carried you to the "
+            "Hermit's grove. The Hermit says nothing, but there's a blanket over your back.\n\n"
             + self.describe()
         )
 
-    def _victory(self) -> str:
-        options = ENEMIES[content.FINAL_BOSS].defeat_requires
-        for option in options:
-            if set(option) <= set(self.inventory):
-                paths = {ITEMS[i].path for i in option}
-                self.won_path = paths.pop() if len(paths) == 1 else "unknown"
-                break
-        else:
-            self.won_path = "unknown"
-        return (
-            f"\nThe Shadow Centaur falls. The barrier that bound you shatters, and your "
-            f"power floods back.\nYou won by the {self.won_path} path in {self.turn} turns."
-        )
+    def _pick(self, args: Sequence[str], candidates: Iterable[str], words_of) -> Optional[str]:
+        """
+        The single candidate the player named. Returns None if nothing matches,
+        or a string starting with '?' asking them to be more specific.
+        """
+        if not args:
+            return None
+        matches = [c for c in candidates if _all_named(args, set(words_of(c)))]
+        if len(matches) > 1:
+            names = sorted({FEATURES[m].name if m in FEATURES else m for m in matches})
+            if len(names) > 1:
+                return "?Which do you mean: " + ", ".join(names[:-1]) + " or " + names[-1] + "?"
+        return matches[0] if matches else None
+
+    def _match_item(self, args: Sequence[str], candidates: Iterable[str]) -> Optional[str]:
+        for item_id in candidates:
+            if _all_named(args, _item_words(item_id)):
+                return item_id
+        return None
+
+    def _match_named(self, args: Sequence[str], candidates: Iterable[str], catalog: Dict) -> Optional[str]:
+        for candidate in candidates:
+            vocabulary = set(re.findall(r"[a-z0-9]+", f"{candidate} {catalog[candidate].name}".lower()))
+            if _all_named(args, vocabulary):
+                return candidate
+        return None
 
 
-def _match(words: Sequence[str], candidates: Sequence[str], catalog: Dict) -> Optional[str]:
-    """Find the candidate whose id or name contains every word the player typed."""
-    wanted = [w.replace("'s", "") for w in words]
-    for candidate in candidates:
-        entry = catalog[candidate]
-        vocabulary = set(re.findall(r"[a-z0-9]+", f"{candidate} {entry.name}".lower().replace("'s", "")))
-        if all(_word_forms(w) & vocabulary for w in wanted):
-            return candidate
-    return None
+def apply_effects(effects: Effects, inventory: List[str], flags: Set[str]) -> None:
+    """The part of applying effects the solver shares with the game."""
+    inventory.extend(i for i in effects.give if i not in inventory)
+    flags.update(effects.flags)
+    flags.update(f"clue:{c}" for c in effects.clues)
+
+
+def _item_words(item_id: str) -> Set[str]:
+    return set(re.findall(r"[a-z0-9]+", f"{item_id} {ITEMS[item_id].name}".lower()))
+
+
+def _all_named(args: Sequence[str], vocabulary: Set[str]) -> bool:
+    return bool(args) and all(_word_forms(w) & vocabulary for w in args)
 
 
 def _word_forms(word: str) -> Set[str]:
-    """The word plus naive singulars, so 'wolves' finds 'wolf' and 'hounds' finds 'hound'."""
+    """The word plus naive singulars, so 'wolves' finds 'wolf' and 'crystals' finds 'crystal'."""
+    word = word.replace("'s", "")
     forms = {word}
     if word.endswith("ves"):
         forms.add(word[:-3] + "f")

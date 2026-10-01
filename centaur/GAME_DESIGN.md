@@ -1,6 +1,6 @@
 # The Last Centaur — Game Design
 
-> Status: **draft for review**. This replaces the three-path design in `DESIGN.md`. Nothing here is built yet.
+> Status: **agreed, building.** This replaces the three-path design in `DESIGN.md`.
 
 ## Decisions so far
 
@@ -12,6 +12,9 @@
 | Input | Classic commands (`look`, `n`, `take`, …) always work directly. The LLM handles everything else. |
 | Combat | Stays as is: win if you have what it takes, get driven back if not |
 | Hints | **Soft.** The world reacts when you're close. There's no hint command. |
+| Endings | All endings are valid. The hardest, trickiest one is the true one: you become **The Last Centaur**. |
+| Choices | Only some encounters offer spare/kill (Valor ward, Phantom Assassin, finale). |
+| Danger | Wolves bite at night in the Awakening Woods. |
 
 ## Design pillars
 
@@ -115,6 +118,7 @@ Fourteen beats across a prologue, three acts and a finale. For each beat: what t
 **13. The Shadow ward** (Forgotten Grove)
 - The Phantom Assassin sees everything, except someone **cloaked, at night**.
 - Slip past and take **Phantom's Edge**, a blade that cuts wards.
+- You can choose to `kill` the Phantom Assassin while unseen (an assassination, which adds pride) or simply slip past.
 - A still pool sits at the grove's heart. `look into pool` at night and your reflection is the **Shadow Centaur's face**. Looking is the test: seeing what you are.
 - Reward: the **Shadow** ward breaks.
 
@@ -192,9 +196,9 @@ Every gated interaction lists the clues that point to it. The solver explores th
 4. **LLM narrator.**
 5. **Delete the old `src/` tree**, the three-path content and the old tests.
 
-## Open questions for you
+## Settled questions
 
-1. **Is the story twist right?** (You started the war; the Shadow Centaur is your split-off power; this has happened before.)
-2. **The three endings**, and the "your carvings carry into the next loop" idea: keep, change or cut?
-3. **Wolves biting at night** in the Prologue: a good early reason to care about time, or too punishing?
-4. **Should each act have a lose-able moment** (like the Valor ward's spare/kill), or should pride come only from the finale?
+- **Story twist:** accepted.
+- **Endings:** all valid; *The Last Centaur* is the hardest, true ending.
+- **Wolves:** bite at night.
+- **Spare/kill:** only some encounters (Valor ward, Phantom Assassin, finale).

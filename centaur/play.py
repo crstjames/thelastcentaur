@@ -1,9 +1,8 @@
 """
 Play The Last Centaur in the terminal.
 
-    python -m centaur.play               # continue your saved game, or start one
-    python -m centaur.play --new         # start over with a random world
-    python -m centaur.play --new --seed 7
+    python -m centaur.play          # continue your saved game, or start one
+    python -m centaur.play --new    # start over
 
 The game autosaves after every command.
 """
@@ -12,53 +11,55 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
 from pathlib import Path
 
 from centaur.game import Game
 
 DEFAULT_SAVE = Path.home() / ".thelastcentaur" / "save.json"
+SAVE_VERSION = 2
 
 INTRO = """\
 THE LAST CENTAUR
 
-You wake on cold earth, stripped of your power by the barrier. Somewhere to
-the north, the last other centaur sits on a stolen throne. Three survivors of
-the old wars wait nearby. Each knows a different way to reach the throne.
+Cold earth. The smell of moss. You open your eyes.
 
-Type 'help' for commands. Ctrl-D or 'quit' to stop -- your game is saved.
+(Type what you want to do. 'quit' or Ctrl-D to stop; your game is saved.)
 """
 
 
-def load(path: Path) -> Game:
-    return Game.from_dict(json.loads(path.read_text()))
+def load(path: Path):
+    try:
+        data = json.loads(path.read_text())
+        if data.get("version") != SAVE_VERSION:
+            return None
+        return Game.from_dict(data["game"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
 
 
 def save(game: Game, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(game.to_dict()))
+    tmp.write_text(json.dumps({"version": SAVE_VERSION, "game": game.to_dict()}))
     tmp.replace(path)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Play The Last Centaur.")
     parser.add_argument("--new", action="store_true", help="start a new game")
-    parser.add_argument("--seed", type=int, help="world seed for a new game")
     parser.add_argument("--save", type=Path, default=DEFAULT_SAVE, help="save file location")
     args = parser.parse_args()
 
-    if args.save.exists() and not args.new:
-        game = load(args.save)
-        print(f"(Continuing your game -- world {game.world.seed}, turn {game.turn}.)\n")
-    else:
-        seed = args.seed if args.seed is not None else random.randrange(1_000_000)
-        game = Game.new(seed)
+    game = None if args.new or not args.save.exists() else load(args.save)
+    if game is None:
+        game = Game.new()
         print(INTRO)
         save(game, args.save)
+    else:
+        print("(Continuing your game.)\n")
 
     print(game.describe())
-    while not game.over:
+    while True:
         try:
             line = input("\n> ")
         except (EOFError, KeyboardInterrupt):
@@ -69,9 +70,6 @@ def main() -> None:
         print()
         print(game.do(line))
         save(game, args.save)
-
-    if game.over:
-        print("\nThanks for playing. Run with --new to begin again.")
 
 
 if __name__ == "__main__":
