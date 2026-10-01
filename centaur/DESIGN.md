@@ -1,5 +1,7 @@
 # The Last Centaur — engine design
 
+> **Superseded:** the three-path design below is being replaced by the single-path design in [`GAME_DESIGN.md`](GAME_DESIGN.md).
+
 `centaur/` is the new engine. It is plain Python with no dependencies. The old `src/` tree stays in place until this replaces it.
 
 | File | Role |
