@@ -86,6 +86,7 @@ class Game:
     turn: int = content.START_TURN
     pride: int = 0
     sequence_progress: Dict[str, int] = field(default_factory=dict)
+    last_scene: Optional[tuple] = field(default=None, repr=False, compare=False)  # not saved
 
     # ------------------------------------------------------------------
     # Construction and persistence
@@ -508,6 +509,23 @@ class Game:
     # ------------------------------------------------------------------
 
     def describe(self) -> str:
+        """The current place as text. Also remembered as `last_scene` so a UI can lay it out."""
+        scene = self.scene()
+        lines = [scene["name"], scene["description"]]
+        if scene["atmosphere"]:
+            lines.append(" ".join(scene["atmosphere"]))
+        if scene["memories"]:
+            lines.append("")
+            lines.extend(scene["memories"])
+        lines.append("")
+        lines.extend(line for _, line in scene["presence"])
+        lines.append("Exits -- " + "; ".join(f"{e['direction']}: {e['name']}" for e in scene["exits"]))
+        text = "\n".join(lines)
+        self.last_scene = (text, scene)
+        return text
+
+    def scene(self) -> dict:
+        """The current place, in parts: name, description, atmosphere, memories, presence, exits."""
         tile = self.tile
         description = tile.description
         if tile.landmark:
@@ -515,35 +533,36 @@ class Game:
                 if self.met(condition):
                     description = variant
                     break
-        lines = [tile.name, description]
 
-        extras = [PHASE_LINES[self.phase]] + self._signal_lines()
+        atmosphere = [PHASE_LINES[self.phase]] + self._signal_lines()
         for feature_id in self.features_here():
             feature = FEATURES[feature_id]
             if not isinstance(feature.at, str):  # features on ordinary tiles announce themselves
-                extras.append(feature.description)
-        extras = [e for e in extras if e]
-        if extras:
-            lines.append(" ".join(extras))
+                atmosphere.append(feature.description)
 
-        memories = [m for m in tile.memory if not m.startswith("You first came here")]
+        memories = [m for m in tile.memory if not m.startswith("You first came here")][-MEMORY_SHOWN:]
         if memories:
-            lines.append("")
-            lines.extend(memories[-MEMORY_SHOWN:])
             for echo in ECHOES:
                 if echo.at == self.position and echo.clue:
                     self._see(echo.clue)
 
-        lines.append("")
-        for npc_id in self.npcs_here():
-            lines.append(f"{NPCS[npc_id].name} is here.")
+        presence = [("person", f"{NPCS[n].name} is here.") for n in self.npcs_here()]
         if tile.enemies:
-            lines.append("Nearby: " + ", ".join(ENEMIES[e].name for e in tile.enemies) + ".")
+            presence.append(("danger", "Nearby: " + ", ".join(ENEMIES[e].name for e in tile.enemies) + "."))
         if tile.items:
-            lines.append("You see: " + ", ".join(ITEMS[i].name for i in tile.items) + ".")
-        exits = [f"{d}: {self.world.tiles[p].name}" for d, p in self.world.neighbors(self.position).items()]
-        lines.append("Exits -- " + "; ".join(exits))
-        return "\n".join(lines)
+            presence.append(("item", "You see: " + ", ".join(ITEMS[i].name for i in tile.items) + "."))
+
+        return {
+            "name": tile.name,
+            "description": description,
+            "atmosphere": [a for a in atmosphere if a],
+            "memories": memories,
+            "presence": presence,
+            "exits": [
+                {"direction": d, "name": self.world.tiles[p].name}
+                for d, p in self.world.neighbors(self.position).items()
+            ],
+        }
 
     def _signal_lines(self) -> List[str]:
         heard = []

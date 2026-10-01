@@ -54,6 +54,19 @@ def _view(game: Game) -> dict:
     }
 
 
+def _block(game: Game, response: str) -> dict:
+    """
+    Split a response into text before the place description, the description
+    itself (as structured parts), and text after it, so the page can lay out
+    the place prominently. Responses without a description are plain text.
+    """
+    if game.last_scene and game.last_scene[0] in response:
+        text, scene = game.last_scene
+        before, after = response.split(text, 1)
+        return {"before": before.strip(), "scene": scene, "after": after.strip()}
+    return {"before": response.strip(), "scene": None, "after": ""}
+
+
 def _load_or_new():
     """Returns (game, is_new). The save file is re-read every request, so the terminal and browser can share it."""
     game = load(SAVE_PATH) if SAVE_PATH.exists() else None
@@ -76,7 +89,8 @@ def state() -> dict:
         description = game.describe()
         save(game, SAVE_PATH)
         fresh = is_new or game.turn == START_TURN
-        return {"description": description, "intro": INTRO if fresh else None, "fresh": fresh, **_view(game)}
+        return {"description": description, "scene": game.scene(), "intro": INTRO if fresh else None,
+                "fresh": fresh, **_view(game)}
 
 
 @app.post("/api/command")
@@ -85,7 +99,7 @@ def command(cmd: Command) -> dict:
         game, _ = _load_or_new()
         response = game.do(cmd.text[:500])
         save(game, SAVE_PATH)
-        return {"response": response, **_view(game)}
+        return {"response": response, "block": _block(game, response), **_view(game)}
 
 
 @app.post("/api/new")
@@ -93,7 +107,7 @@ def new_game() -> dict:
     with _lock:
         game = Game.new()
         save(game, SAVE_PATH)
-        return {"description": game.describe(), "intro": INTRO, "fresh": True, **_view(game)}
+        return {"description": game.describe(), "scene": game.scene(), "intro": INTRO, "fresh": True, **_view(game)}
 
 
 def main() -> None:

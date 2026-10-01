@@ -52,3 +52,21 @@ def test_new_game_starts_over(client):
 def test_page_and_art_are_served(client):
     assert "The Last Centaur" in client.get("/").text
     assert client.get("/assets/images/bg.png").status_code == 200
+
+
+def test_moving_returns_a_structured_scene(client):
+    client.get("/api/state")
+    block = client.post("/api/command", json={"text": "n"}).json()["block"]
+    assert block["scene"]["name"] and block["scene"]["description"]
+    assert {e["direction"] for e in block["scene"]["exits"]} >= {"north", "south"}
+
+
+def test_carvings_come_through_as_memories(client):
+    state = client.get("/api/state").json()
+    assert any("in your hand" in m for m in state["scene"]["memories"])
+
+
+def test_plain_actions_have_no_scene(client):
+    client.get("/api/state")
+    block = client.post("/api/command", json={"text": "examine bark"}).json()["block"]
+    assert block["scene"] is None and "sets of four" in block["before"]

@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The Last Centaur</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%234a3520'/%3E%3Ctext x='8' y='12.5' font-size='12' text-anchor='middle' fill='%23ffd700' font-family='monospace' font-weight='bold'%3EC%3C/text%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
@@ -132,20 +133,72 @@
   @keyframes flicker { 0% { opacity: 0.4; } 50% { opacity: 0.8; } 100% { opacity: 0.5; } }
   @media (prefers-reduced-motion: reduce) { .crt::after { animation: none; } }
 
+  .crt-status {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 14px 36px 12px;
+    border-bottom: 1px solid rgba(153, 102, 51, 0.4);
+    font-family: "Press Start 2P", monospace; font-size: 10px; line-height: 1.6;
+    color: var(--gold);
+  }
+  .crt-status #status-phase { color: var(--dim); white-space: nowrap; }
+
   #log {
+    position: relative;
     flex: 1; min-height: 0;
     overflow-y: auto;
-    padding: 18px 22px 8px;
-    font-size: 22px;
-    line-height: 1.25;
+    padding: 26px 36px 0;
     text-shadow: 0 0 6px rgba(242, 230, 207, 0.25);
     scrollbar-color: var(--bronze) transparent;
   }
-  .entry { white-space: pre-wrap; margin: 0 0 14px; }
-  .entry.cmd { color: var(--gold); margin-bottom: 6px; }
-  .entry.cmd::before { content: "> "; }
-  .entry.system { color: var(--dim); font-style: italic; }
-  .entry.place::first-line { color: var(--amber); }
+
+  /* Each response is a block. The newest is large and fills the screen;
+     older ones shrink and fade above it. Sizes are in em so that works. */
+  .block { font-size: 28px; line-height: 1.3; padding-bottom: 28px; transition: opacity 0.5s; }
+  .block.past { font-size: 18px; opacity: 0.38; padding-bottom: 18px; }
+  .block.past:hover { opacity: 0.7; }
+  .block p { margin: 0 0 0.6em; white-space: pre-wrap; }
+
+  .cmd { color: var(--gold); font-size: 0.72em; margin-bottom: 0.9em; opacity: 0.85; }
+  .cmd::before { content: "> "; }
+  .system { color: var(--dim); font-style: italic; font-size: 0.75em; }
+  .event { color: var(--amber); }
+
+  .scene-name {
+    font-family: "Press Start 2P", monospace;
+    font-size: 0.78em; line-height: 1.5;
+    color: var(--gold);
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+    margin: 0.2em 0 0.8em !important;
+  }
+  .scene-desc { font-size: 1.05em; }
+  .scene-atmos { color: #e9c98a; font-style: italic; }
+  .memory {
+    font-size: 0.88em; font-style: italic;
+    color: #dccba6;
+    border-left: 3px solid var(--bronze);
+    background: rgba(153, 102, 51, 0.1);
+    padding: 0.25em 0 0.25em 0.6em;
+  }
+  .presence.person { color: #a6d8cb; }
+  .presence.danger { color: #ff8f78; }
+  .presence.item { color: var(--amber); }
+
+  .exits { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 0.8em; opacity: 0; pointer-events: none; transition: opacity 0.4s; }
+  .exits.shown { opacity: 1; pointer-events: auto; }
+  .block.past .exits { display: none; }
+  .exit {
+    font-family: "VT323", monospace; font-size: 0.75em;
+    color: var(--parchment);
+    background: rgba(74, 53, 32, 0.55);
+    border: 1px solid var(--bronze);
+    box-shadow: none;
+    padding: 6px 12px;
+  }
+  .exit b { font-family: "Press Start 2P", monospace; font-size: 10px; color: var(--gold); margin-right: 8px; }
+  .exit:hover { background: rgba(153, 102, 51, 0.5); }
+
+  .typing::after { content: "▌"; color: var(--gold); animation: blink 0.8s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
 
   form.prompt {
     display: flex; align-items: center; gap: 10px;
@@ -246,7 +299,10 @@
     aside { overflow: visible; }
     header .logo { height: 40px; }
     header .logo img { height: 64px; }
-    #log { font-size: 20px; padding: 14px 16px 6px; }
+    #log { padding: 16px 18px 0; }
+    .crt-status { padding: 12px 18px 10px; }
+    .block { font-size: 22px; }
+    .block.past { font-size: 16px; }
     form.prompt { padding: 10px 16px 14px; }
   }
 </style>
@@ -274,6 +330,7 @@
 
   <main>
     <section class="crt" id="crt">
+      <div class="crt-status"><span id="status-place"></span><span id="status-phase"></span></div>
       <div id="log" aria-live="polite"></div>
       <form class="prompt" id="prompt" autocomplete="off">
         <span>&gt;</span>
@@ -341,18 +398,102 @@
 
   // ---------------- log ----------------
 
-  function addEntry(text, kind = "") {
-    if (!text) return;
-    const log = $("log");
-    const p = document.createElement("p");
-    p.className = `entry ${kind}`;
-    p.textContent = text;
-    log.appendChild(p);
-    while (log.children.length > 400) log.removeChild(log.firstChild);
-    log.scrollTop = log.scrollHeight;
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const CHARS_PER_FRAME = 2;
+  let typing = null;  // the block currently typing out, if any
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
   }
 
-  function clearLog() { $("log").innerHTML = ""; }
+  // Build a block from its parts. Text elements start empty and are typed out.
+  function buildBlock({ command, system, before, scene, after }) {
+    const block = el("div", "block current");
+    const segments = [];
+    const typed = (tag, className, text) => {
+      if (!text) return;
+      const node = el(tag, className, "");
+      node.hidden = true;            // revealed when the typing reaches it
+      block.appendChild(node);
+      segments.push({ node, text });
+    };
+
+    if (command) block.appendChild(el("div", "cmd", command));
+    typed("p", "system", system);
+    typed("p", "", before);
+    let exits = null;
+    if (scene) {
+      typed("p", "scene-name", scene.name);
+      typed("p", "scene-desc", scene.description);
+      typed("p", "scene-atmos", scene.atmosphere.join(" "));
+      scene.memories.forEach((m) => typed("p", "memory", m));
+      scene.presence.forEach(([kind, line]) => typed("p", `presence ${kind}`, line));
+      exits = el("div", "exits");
+      for (const exit of scene.exits) {
+        const button = el("button", "exit");
+        button.type = "button";
+        button.append(el("b", "", exit.direction[0].toUpperCase()), exit.name);
+        button.title = `Go ${exit.direction}`;
+        button.addEventListener("click", (e) => { e.stopPropagation(); runCommand(exit.direction[0]); });
+        exits.appendChild(button);
+      }
+      block.appendChild(exits);
+    }
+    (after || "").split(/\n\s*\n/).forEach((chunk) => typed("p", "event", chunk.trim()));
+    return { block, segments, exits };
+  }
+
+  function addBlock(parts) {
+    finishTyping();
+    const log = $("log");
+    for (const old of log.querySelectorAll(".block.current")) {
+      old.classList.replace("current", "past");
+      old.style.minHeight = "";
+    }
+    const { block, segments, exits } = buildBlock(parts);
+    log.appendChild(block);
+    while (log.children.length > 200) log.removeChild(log.firstChild);
+    block.style.minHeight = `${log.clientHeight - 26}px`;   // so the newest block can fill the screen
+    log.scrollTo({ top: block.offsetTop - 18, behavior: reduceMotion ? "auto" : "smooth" });
+    typeOut(segments, exits);
+  }
+
+  function typeOut(segments, exits) {
+    const state = { segments, exits, index: 0, chars: 0, done: false };
+    typing = state;
+    const finish = () => {
+      for (const { node, text } of segments) { node.hidden = false; node.textContent = text; node.classList.remove("typing"); }
+      if (exits) exits.classList.add("shown");
+      state.done = true;
+      if (typing === state) typing = null;
+    };
+    state.finish = finish;
+    if (reduceMotion) return finish();
+
+    const step = () => {
+      if (state.done) return;
+      const seg = segments[state.index];
+      if (!seg) return finish();
+      seg.node.hidden = false;
+      seg.node.classList.add("typing");
+      state.chars += CHARS_PER_FRAME;
+      seg.node.textContent = seg.text.slice(0, state.chars);
+      if (state.chars >= seg.text.length) {
+        seg.node.classList.remove("typing");
+        state.index += 1;
+        state.chars = 0;
+      }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function finishTyping() { if (typing) typing.finish(); }
+
+  function clearLog() { finishTyping(); $("log").innerHTML = ""; }
 
   // ---------------- sidebar ----------------
 
@@ -372,6 +513,8 @@
     }
     $("map-wrap").className = `map-wrap phase-${state.phase}`;
     $("place").textContent = state.place;
+    $("status-place").textContent = state.place;
+    $("status-phase").textContent = `${PHASE_ICONS[state.phase]} ${state.phase.toUpperCase()}`;
 
     $("phase-icon").textContent = PHASE_ICONS[state.phase];
     $("phase-name").textContent = state.phase[0].toUpperCase() + state.phase.slice(1);
@@ -423,12 +566,14 @@
   function enter(state, { showIntro }) {
     $("title").classList.add("hidden");
     clearLog();
-    if (showIntro && state.intro) {
-      addEntry(state.intro.replace(/\n*\(Type what.*\)\s*$/s, "").trim());
-    } else if (!showIntro) {
-      addEntry("(You return to where you left off.)", "system");
-    }
-    addEntry(state.description, "place");
+    const intro = showIntro && state.intro
+      ? state.intro.replace(/^THE LAST CENTAUR\s*/, "").replace(/\n*\(Type what.*\)\s*$/s, "").trim()
+      : "";
+    addBlock({
+      system: showIntro ? "" : "(You return to where you left off.)",
+      before: intro,
+      scene: state.scene,
+    });
     render(state);
     if (store.get("music", true)) setMusic(true);
     $("input").focus();
@@ -465,34 +610,37 @@
 
   // ---------------- commands ----------------
 
-  $("prompt").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const input = $("input");
-    const text = input.value.trim();
-    if (!text || busy) return;
-    input.value = "";
-    history.push(text);
-    history = history.slice(-100);
-    historyIndex = history.length;
-    store.set("history", history);
-
+  async function runCommand(text) {
+    if (busy) return;
     if (text.toLowerCase() === "clear") { clearLog(); return; }
-
-    addEntry(text, "cmd");
+    const input = $("input");
     busy = true;
     input.disabled = true;
     try {
       const state = await api("/api/command", { text });
-      const kind = /^[^\n]+\n/.test(state.response) && state.response.includes("Exits --") ? "place" : "";
-      addEntry(state.response, kind);
+      addBlock({ command: text, ...state.block });
       render(state);
     } catch (err) {
-      addEntry(`(The connection to the world wavers: ${err.message}. Is the server still running?)`, "system");
+      addBlock({ command: text, system: `(The connection to the world wavers: ${err.message}. Is the server still running?)` });
     } finally {
       busy = false;
       input.disabled = false;
       input.focus();
     }
+  }
+
+  $("prompt").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = $("input");
+    const text = input.value.trim();
+    if (!text) { finishTyping(); return; }   // Enter on an empty line skips the typing
+    if (busy) return;
+    input.value = "";
+    history.push(text);
+    history = history.slice(-100);
+    historyIndex = history.length;
+    store.set("history", history);
+    runCommand(text);
   });
 
   $("input").addEventListener("keydown", (event) => {
@@ -507,7 +655,19 @@
     }
   });
 
-  $("crt").addEventListener("click", () => { if (!window.getSelection().toString()) $("input").focus(); });
+  $("crt").addEventListener("click", () => {
+    if (window.getSelection().toString()) return;
+    finishTyping();
+    $("input").focus();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (!typing) return;
+    if (event.key === "Escape" || (event.key === " " && !$("input").value)) {
+      event.preventDefault();
+      finishTyping();
+    }
+  });
 
   // ---------------- boot ----------------
 
