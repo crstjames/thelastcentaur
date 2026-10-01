@@ -1,6 +1,6 @@
 # The Last Centaur — engine
 
-`centaur/` is the new engine. It is plain Python with no dependencies. **What the game is** lives in [`GAME_DESIGN.md`](GAME_DESIGN.md); this file is about **how the code is laid out**. The old `src/` tree is untouched and will be deleted once the new engine covers it.
+`centaur/` is the whole game. The engine is plain Python with no dependencies; only the web UI and tests need packages. **What the game is** lives in [`GAME_DESIGN.md`](GAME_DESIGN.md); this file is about **how the code is laid out**.
 
 ```
 venv/bin/python -m centaur.server        # play in the browser at http://localhost:8765
@@ -18,7 +18,7 @@ venv/bin/python -m pytest centaur/tests
 | `game.py` | The generic engine. `Game.do(text)` returns text. It evaluates `Condition`s and applies `Effects`, and knows nothing story-specific. |
 | `solver.py` | Proves the content is **fair**: the goal can be reached by a player who only tries a clue-gated action after seeing one of its clues. |
 | `play.py` | Terminal runner with autosave (`~/.thelastcentaur/save.json`). |
-| `server.py` + `web/index.html` | Browser UI: a small FastAPI wrapper plus one page using the original art, logo, music and CRT look (assets served from `frontend/public/`). It shares the terminal's save file. Add `#play` to the URL to skip the title screen. |
+| `server.py` + `web/index.html` | Browser UI: a small FastAPI wrapper plus one page with the pixel-art background, theme music and CRT look (assets in `web/assets/`). It shares the terminal's save file. Add `#play` to the URL to skip the title screen. |
 
 ## How content works
 

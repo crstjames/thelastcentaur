@@ -1,247 +1,45 @@
 # The Last Centaur
 
-A text-based RPG that combines classic role-playing elements with modern accessibility, allowing players to experience an epic story through web browsers and chat interfaces.
+A text adventure in the spirit of Myst. You wake on cold earth, stripped of your power, with no idea what is going on, and the only way forward is to look closely, notice things, and work it out.
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
-![Python](https://img.shields.io/badge/python-3.8%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+There's no quest log and no one tells you what to do. The world remembers what happens in each place, and some of those memories were there before you arrived.
 
-## Overview
+**Status:** the Prologue and Act I are playable. See [`centaur/GAME_DESIGN.md`](centaur/GAME_DESIGN.md) for the full design. (It contains spoilers.)
 
-The Last Centaur is an immersive text-based RPG where you play as Centaur Prime, the last of your kind, seeking to reclaim your destiny. Navigate through a rich world filled with ancient magic, forgotten lore, and challenging choices.
+## Play
 
-### Key Features
-
-- Three distinct paths to victory:
-  - 🗡️ **Warrior Path**: Master combat and ancient weapons
-  - 🔮 **Mystic Path**: Harness magical powers and forgotten knowledge
-  - 🌑 **Stealth Path**: Master the arts of shadows and deception
-- Rich, dynamic world with:
-  - Detailed environment descriptions
-  - Interactive NPCs with unique stories
-  - Complex item and resource systems
-  - Weather and environmental effects
-- Multiple interface options:
-  - Web browser interface
-  - Chat platform integration
-  - Command-line interface
-  - **NEW: Natural Language Interface** powered by LLMs
-
-## Installation
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/yourusername/thelastcentaur.git
-cd thelastcentaur
-```
-
-### Option 1: Local Installation
-
-2. Create and activate a virtual environment:
+Requires Python 3.9+.
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-
-```bash
+source venv/bin/activate
 pip install -r requirements.txt
+
+python -m centaur.server     # in the browser: http://localhost:8765
+python -m centaur.play       # or in the terminal
 ```
 
-4. Set up PostgreSQL:
+Both use the same save file (`~/.thelastcentaur/save.json`), so you can switch between them mid-game. Use **New game** in the browser, or `python -m centaur.play --new`, to start over.
+
+## Develop
 
 ```bash
-# Install PostgreSQL if you haven't already
-# On macOS: brew install postgresql
-# On Ubuntu: sudo apt install postgresql
-
-# Start PostgreSQL service
-# On macOS: brew services start postgresql
-# On Ubuntu: sudo service postgresql start
-
-# Create a PostgreSQL user (if needed)
-# createuser -P -s postgres
+pytest                          # engine, fairness and web tests
+python -m centaur.solver        # check the content is consistent and every puzzle is fair
+python -m centaur.worldgen      # print the map (spoilers)
 ```
 
-5. Set up environment variables:
+| | |
+|---|---|
+| `centaur/content.py` | All the story: places, characters, items, puzzles, clues |
+| `centaur/game.py` | The engine. Generic: it evaluates conditions and applies effects |
+| `centaur/solver.py` | Proves every puzzle can be solved from clues the player can actually find |
+| `centaur/worldgen.py` | Builds the fixed 10×10 world |
+| `centaur/server.py`, `centaur/web/` | Browser UI |
+| `centaur/play.py` | Terminal UI |
 
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
+See [`centaur/DESIGN.md`](centaur/DESIGN.md) for how the engine works and how to add a puzzle.
 
-The application will automatically create the database and tables on startup if they don't exist.
+## License
 
-### Option 2: Docker Installation (Recommended)
-
-If you prefer to use Docker, we provide several scripts to make Docker management easy:
-
-1. Make sure Docker is installed and running on your system.
-
-2. Use our Docker manager script for a convenient interface:
-
-```bash
-./docker-manager.sh
-```
-
-This interactive script provides options to:
-
-- Start Docker containers
-- Stop Docker containers
-- Restart Docker containers
-- Check Docker container status
-- View Docker logs
-
-For more detailed Docker setup instructions, see [DOCKER.md](DOCKER.md).
-
-## Quick Start
-
-### Using Local Installation
-
-1. Start the game server:
-
-```bash
-python -m src.main
-```
-
-2. Start the frontend development server:
-
-```bash
-cd frontend && npm run dev -- -p 3002
-```
-
-3. Open your web browser and navigate to:
-
-```
-http://localhost:3002
-```
-
-### Using Docker
-
-1. Start all services with a single command:
-
-```bash
-./docker-manager.sh
-```
-
-2. Select option 1 to start Docker containers.
-
-3. Once the containers are running, access the application at:
-
-```
-http://localhost:3002
-```
-
-> **Important**: For details on port configuration and troubleshooting connection issues, see [PORT_CONFIGURATION.md](PORT_CONFIGURATION.md).
-
-### Using the Natural Language Interface
-
-For a more immersive experience, you can use the LLM-powered natural language interface:
-
-1. Make sure you have set up your API keys in the `.env` file:
-
-```
-OPENAI_API_KEY=your_openai_api_key_here
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-```
-
-2. In a separate terminal, run the LLM interface:
-
-```bash
-python play_game.py
-```
-
-3. Follow the prompts to register/login and start playing using natural language!
-
-For more details on the LLM interface, see [README_LLM_INTERFACE.md](README_LLM_INTERFACE.md).
-
-## Testing the Game API
-
-For development and testing purposes, you can interact with the game directly through the API. Follow these steps to test the core functionality:
-
-### 1. Register a New User
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "testuser", "email": "test@example.com", "password": "password123"}'
-```
-
-**Note:** If you encounter a "Username already registered" error, try a different username.
-
-### 2. Login to Get an Access Token
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/auth/login" \
-  -F "username=testuser" \
-  -F "password=password123"
-```
-
-This will return an access token in the format:
-
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
-```
-
-**Important:** Save this token for use in subsequent requests. The token will be valid for 24 hours.
-
-### 3. Create a Game Instance
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/game" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"name": "My Adventure", "max_players": 1, "description": "A test game instance"}'
-```
-
-This will return a game instance ID that you'll need for further commands.
-
-### 4. View the Game Map
-
-```bash
-curl -X GET "http://localhost:8000/api/v1/game/YOUR_GAME_ID/map" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-### 5. Look Around
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "look"}'
-```
-
-### 6. Try Movement Commands
-
-```bash
-# Move north
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "north"}'
-
-# Other directions: south, east, west
-```
-
-### 7. Other Commands to Try
-
-```bash
-# Check inventory
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "inventory"}'
-
-# Attack an enemy
-curl -X POST "http://localhost:8000/api/v1/game/YOUR_GAME_ID/command" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{"command": "attack wolf"}'
-```
+MIT

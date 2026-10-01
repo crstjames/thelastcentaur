@@ -26,7 +26,7 @@ from centaur.content import ITEMS, PHASE_TURNS, PHASES, START_TURN
 from centaur.play import DEFAULT_SAVE, INTRO, load, save
 
 HERE = Path(__file__).parent
-ASSETS = HERE.parent / "frontend" / "public"   # the original art and music
+ASSETS = HERE / "web" / "assets"
 SAVE_PATH = Path(os.environ.get("CENTAUR_SAVE", DEFAULT_SAVE))
 PORT = int(os.environ.get("CENTAUR_PORT", "8765"))
 

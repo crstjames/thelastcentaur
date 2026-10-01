@@ -1,6 +1,0 @@
-openai
-anthropic
-termcolor
-aiohttp
-asyncio
-python-dotenv 

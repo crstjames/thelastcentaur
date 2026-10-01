@@ -194,7 +194,7 @@ Every gated interaction lists the clues that point to it. The solver explores th
 2. **Act II and Act III**: approach gates, lost woods, pride.
 3. **Finale and endings.**
 4. **LLM narrator.**
-5. **Delete the old `src/` tree**, the three-path content and the old tests.
+5. ~~**Delete the old `src/` tree**, the three-path content and the old tests.~~ Done.
 
 ## Settled questions
 
