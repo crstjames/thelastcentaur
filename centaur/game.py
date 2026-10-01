@@ -393,22 +393,48 @@ class Game:
     def _status(self, args: Sequence[str] = ()) -> str:
         return f"Health {self.health}/{MAX_HEALTH}. It is {self.phase}. You are at {self.tile.name}."
 
-    def _map(self, args: Sequence[str] = ()) -> str:
-        if "old_map" not in self.inventory:
-            return "You have no map. You'll have to remember the way."
+    def map_view(self) -> List[List[dict]]:
+        """
+        What the player knows of the map, north row first. You remember places
+        you've been; the Old Map shows the land and marks places, unnamed.
+        """
+        has_map = "old_map" in self.inventory
         rows = []
         for y in reversed(range(self.world.size)):
             row = []
             for x in range(self.world.size):
                 tile = self.world.tiles[(x, y)]
-                if (x, y) == self.position:
-                    row.append("@")
-                elif tile.landmark:
-                    row.append("*")
+                known = tile.visited or has_map
+                row.append({
+                    "x": x,
+                    "y": y,
+                    "known": known,
+                    "biome": tile.biome if known else None,
+                    "marked": bool(tile.landmark) and known,
+                    "name": tile.name if tile.visited else None,
+                    "here": (x, y) == self.position,
+                })
+            rows.append(row)
+        return rows
+
+    def _map(self, args: Sequence[str] = ()) -> str:
+        lines = []
+        for row in self.map_view():
+            glyphs = []
+            for cell in row:
+                if cell["here"]:
+                    glyphs.append("@")
+                elif cell["marked"]:
+                    glyphs.append("*")
+                elif cell["known"]:
+                    glyphs.append(BIOME_GLYPHS.get(cell["biome"], "?"))
                 else:
-                    row.append(BIOME_GLYPHS.get(tile.biome, "?"))
-            rows.append(" ".join(row))
-        return "\n".join(rows) + "\n@ you   * a place someone marked"
+                    glyphs.append(" ")
+            lines.append(" ".join(glyphs))
+        legend = "@ you   * a marked place"
+        if "old_map" not in self.inventory:
+            legend += "   (only where you've been)"
+        return "\n".join(lines) + "\n" + legend
 
     def _help(self, args: Sequence[str] = ()) -> str:
         return HELP_TEXT

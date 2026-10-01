@@ -203,9 +203,14 @@ def test_cannot_rest_with_the_wolves():
 
 def test_the_map_is_found_not_given():
     game = Game.new()
-    assert "no map" in game.do("map")
+    known = lambda: sum(cell["known"] for row in game.map_view() for cell in row)
+    assert known() == 1                      # only where you've been
+    assert "only where you've been" in game.do("map")
     game.do("examine roots")
-    assert "@" in game.do("map")
+    assert known() == content.GRID_SIZE ** 2
+    marked = [cell for row in game.map_view() for cell in row if cell["marked"]]
+    assert len(marked) == len(LANDMARKS)
+    assert all(cell["name"] is None for cell in marked if not cell["here"])  # unnamed until visited
 
 
 def test_the_fallen_warrior_turns_away_until_you_can_read():

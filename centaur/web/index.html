@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Last Centaur</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --gold: #ffd700;
+    --amber: #fbbf24;
+    --amber-deep: #d97706;
+    --bronze: #996633;
+    --wood: #4a3520;
+    --ink: #0c0a08;
+    --panel: rgba(22, 17, 12, 0.9);
+    --parchment: #f2e6cf;
+    --dim: #a8987c;
+    --danger: #c0392b;
+
+    --woods: #2e4a2c;
+    --meadow: #66683a;
+    --highlands: #6c6964;
+    --crystal: #3c6b74;
+    --ruins: #6a4e35;
+    --twilight: #4a3f5e;
+    --blight: #3b3838;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #050605 url("/assets/images/bg.png") center / cover fixed no-repeat;
+    image-rendering: pixelated;
+    color: var(--parchment);
+    font-family: "VT323", monospace;
+    overflow: hidden;
+  }
+  body::before {           /* darken the art so text stays readable */
+    content: "";
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.35), rgba(0,0,0,0.8));
+    pointer-events: none;
+  }
+
+  .pixel { font-family: "Press Start 2P", monospace; }
+  button {
+    font-family: "Press Start 2P", monospace;
+    font-size: 10px;
+    color: var(--parchment);
+    background: var(--wood);
+    border: 2px solid var(--bronze);
+    padding: 10px 14px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #1d140b;
+    transition: transform 0.1s, background 0.15s;
+  }
+  button:hover { background: #5d4429; transform: translateY(-1px); }
+  button:active { transform: translateY(2px); box-shadow: none; }
+  button.primary { background: var(--amber-deep); color: #1a0f04; border-color: var(--amber); }
+  button.primary:hover { background: var(--amber); }
+  button.warn { border-color: var(--danger); color: #ffd2cc; }
+
+  /* ---------- title screen ---------- */
+  #title {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 28px; padding: 16px;
+    background:
+      radial-gradient(ellipse at center, rgba(0,0,0,0.15), rgba(0,0,0,0.75)),
+      #050605 url("/assets/images/bg.png") center / cover no-repeat;
+    transition: opacity 0.6s;
+  }
+  #title.hidden { opacity: 0; pointer-events: none; }
+  #title img { width: min(520px, 86vw); filter: drop-shadow(0 6px 18px rgba(0,0,0,0.8)); }
+  #title .buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  #title .hint { font-size: 20px; color: var(--dim); text-align: center; }
+
+  /* ---------- layout ---------- */
+  #app {
+    position: relative;
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 12px;
+    padding: 12px 16px 16px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  header .logo { height: 54px; overflow: hidden; }   /* the logo art has empty space below the lettering */
+  header .logo img { height: 86px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.9)); }
+  header .controls { display: flex; gap: 8px; }
+
+  main {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 16px;
+  }
+
+  /* ---------- CRT terminal ---------- */
+  .crt {
+    position: relative;
+    min-height: 0;
+    display: flex; flex-direction: column;
+    background: var(--ink);
+    border: 3px solid var(--bronze);
+    outline: 6px solid var(--wood);
+    border-radius: 14px;
+    box-shadow: inset 0 0 60px rgba(255, 190, 90, 0.08), 0 10px 40px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .crt::before {            /* scanlines */
+    content: "";
+    position: absolute; inset: 0; z-index: 2;
+    background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.22) 50%);
+    background-size: 100% 4px;
+    pointer-events: none;
+  }
+  .crt::after {             /* flicker */
+    content: "";
+    position: absolute; inset: 0; z-index: 2;
+    background: rgba(18,16,16,0.06);
+    animation: flicker 0.15s infinite;
+    pointer-events: none;
+  }
+  @keyframes flicker { 0% { opacity: 0.4; } 50% { opacity: 0.8; } 100% { opacity: 0.5; } }
+  @media (prefers-reduced-motion: reduce) { .crt::after { animation: none; } }
+
+  #log {
+    flex: 1; min-height: 0;
+    overflow-y: auto;
+    padding: 18px 22px 8px;
+    font-size: 22px;
+    line-height: 1.25;
+    text-shadow: 0 0 6px rgba(242, 230, 207, 0.25);
+    scrollbar-color: var(--bronze) transparent;
+  }
+  .entry { white-space: pre-wrap; margin: 0 0 14px; }
+  .entry.cmd { color: var(--gold); margin-bottom: 6px; }
+  .entry.cmd::before { content: "> "; }
+  .entry.system { color: var(--dim); font-style: italic; }
+  .entry.place::first-line { color: var(--amber); }
+
+  form.prompt {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 22px 16px;
+    border-top: 1px solid rgba(153, 102, 51, 0.4);
+    font-size: 24px;
+  }
+  form.prompt span { color: var(--gold); }
+  #input {
+    flex: 1;
+    background: transparent; border: none; outline: none;
+    color: var(--parchment);
+    font: inherit;
+    caret-color: var(--gold);
+  }
+  #input:disabled { opacity: 0.5; }
+
+  /* ---------- sidebar ---------- */
+  aside { min-height: 0; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .panel {
+    background: var(--panel);
+    border: 2px solid var(--bronze);
+    outline: 4px solid var(--wood);
+    padding: 14px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  }
+  .panel h2 {
+    margin: 0 0 12px;
+    font-family: "Press Start 2P", monospace;
+    font-size: 10px; letter-spacing: 1px;
+    color: var(--gold);
+  }
+
+  .map-wrap { position: relative; }
+  #map {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+    gap: 2px;
+    aspect-ratio: 1;
+    background: #050505;
+    padding: 2px;
+  }
+  .cell {
+    position: relative;
+    background: #0d0d0d;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Press Start 2P", monospace; font-size: 9px;
+  }
+  .cell.unknown { background: #0d0d0d radial-gradient(circle, #1b1b1b 1px, transparent 1px) center / 6px 6px; }
+  .cell.woods { background: var(--woods); }
+  .cell.meadow { background: var(--meadow); }
+  .cell.highlands { background: var(--highlands); }
+  .cell.crystal { background: var(--crystal); }
+  .cell.ruins { background: var(--ruins); }
+  .cell.twilight { background: var(--twilight); }
+  .cell.blight { background: var(--blight); }
+  .cell.marked::after { content: "★"; color: var(--gold); font-size: 13px; text-shadow: 0 0 4px #000; font-family: sans-serif; }
+  .cell.here { outline: 2px solid var(--gold); outline-offset: -2px; z-index: 1; animation: pulse 1.6s ease-in-out infinite; }
+  .cell.here::after { content: "@"; color: #fff8d6; font-size: 10px; text-shadow: 0 0 6px var(--gold); font-family: "Press Start 2P", monospace; }
+  @keyframes pulse { 50% { box-shadow: 0 0 12px var(--gold); } }
+
+  .tint { position: absolute; inset: 0; pointer-events: none; transition: background 1.2s; }
+  .phase-dawn .tint { background: rgba(255, 210, 170, 0.08); }
+  .phase-day .tint { background: transparent; }
+  .phase-dusk .tint { background: rgba(160, 70, 20, 0.22); }
+  .phase-night .tint { background: rgba(5, 15, 55, 0.5); }
+
+  #place { margin-top: 10px; font-size: 22px; color: var(--amber); min-height: 1.2em; }
+
+  .time { display: flex; align-items: center; gap: 12px; font-size: 24px; }
+  .time .icon { font-size: 26px; width: 30px; text-align: center; }
+  .segments { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 10px; }
+  .segments div { height: 8px; background: #2a2118; border: 1px solid #3d2f1f; position: relative; overflow: hidden; }
+  .segments div span { position: absolute; inset: 0 auto 0 0; background: var(--amber); }
+  .segments div.past span { width: 100%; opacity: 0.35; }
+
+  .bar { height: 14px; background: #2a1414; border: 1px solid #5a2a2a; margin-top: 8px; }
+  .bar > div { height: 100%; background: linear-gradient(#e0b23a, #b4730f); transition: width 0.4s; }
+  .bar.low > div { background: linear-gradient(#e2533f, #8d1f14); }
+  .health-row { display: flex; justify-content: space-between; font-size: 22px; }
+
+  #inventory { list-style: none; padding: 0; margin: 0; font-size: 22px; }
+  #inventory li::before { content: "◆ "; color: var(--bronze); }
+  #inventory .empty { color: var(--dim); }
+  #inventory .empty::before { content: ""; }
+
+  /* ---------- small screens ---------- */
+  @media (max-width: 860px) {
+    body { overflow: auto; }
+    #app { height: auto; min-height: 100%; }
+    #app { padding: 10px 16px 16px; }
+    main { grid-template-columns: minmax(0, 1fr); }
+    .crt { outline-width: 3px; }
+    .panel { outline-width: 2px; }
+    header button { padding: 8px 10px; font-size: 9px; }
+    .crt { height: 70vh; }
+    aside { overflow: visible; }
+    header .logo { height: 40px; }
+    header .logo img { height: 64px; }
+    #log { font-size: 20px; padding: 14px 16px 6px; }
+    form.prompt { padding: 10px 16px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="title">
+  <img src="/assets/images/tlc_logo.png" alt="The Last Centaur" />
+  <div class="buttons">
+    <button id="continue" class="primary" hidden>Continue</button>
+    <button id="begin" class="primary">Begin</button>
+    <button id="title-new" hidden>New game</button>
+  </div>
+  <div class="hint" id="title-hint"></div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="logo"><img src="/assets/images/tlc_logo.png" alt="The Last Centaur" /></div>
+    <div class="controls">
+      <button id="music" title="Music">♪ Off</button>
+      <button id="new">New game</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="crt" id="crt">
+      <div id="log" aria-live="polite"></div>
+      <form class="prompt" id="prompt" autocomplete="off">
+        <span>&gt;</span>
+        <input id="input" spellcheck="false" aria-label="What do you do?" placeholder="" />
+      </form>
+    </section>
+
+    <aside>
+      <div class="panel">
+        <h2>THE LAND</h2>
+        <div class="map-wrap" id="map-wrap">
+          <div id="map"></div>
+          <div class="tint"></div>
+        </div>
+        <div id="place"></div>
+      </div>
+
+      <div class="panel">
+        <h2>THE HOUR</h2>
+        <div class="time"><span class="icon" id="phase-icon"></span><span id="phase-name"></span></div>
+        <div class="segments" id="segments"></div>
+      </div>
+
+      <div class="panel">
+        <h2>STRENGTH</h2>
+        <div class="health-row"><span>Health</span><span id="health-text"></span></div>
+        <div class="bar" id="health-bar"><div></div></div>
+      </div>
+
+      <div class="panel">
+        <h2>CARRIED</h2>
+        <ul id="inventory"></ul>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<audio id="theme" src="/assets/audio/tlfc.mp3" loop preload="none"></audio>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const PHASES = ["dawn", "day", "dusk", "night"];
+  const PHASE_ICONS = { dawn: "◐", day: "☀", dusk: "◑", night: "☾" };
+
+  const store = {
+    get(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+  };
+
+  let history = store.get("history", []);
+  let historyIndex = history.length;
+  let busy = false;
+  let initial = null;
+
+  async function api(path, body) {
+    const options = body === undefined ? {} : {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    };
+    const response = await fetch(path, options);
+    if (!response.ok) throw new Error(`Server error ${response.status}`);
+    return response.json();
+  }
+
+  // ---------------- log ----------------
+
+  function addEntry(text, kind = "") {
+    if (!text) return;
+    const log = $("log");
+    const p = document.createElement("p");
+    p.className = `entry ${kind}`;
+    p.textContent = text;
+    log.appendChild(p);
+    while (log.children.length > 400) log.removeChild(log.firstChild);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function clearLog() { $("log").innerHTML = ""; }
+
+  // ---------------- sidebar ----------------
+
+  function render(state) {
+    const map = $("map");
+    map.innerHTML = "";
+    for (const row of state.map) {
+      for (const cell of row) {
+        const div = document.createElement("div");
+        const classes = ["cell", cell.known ? cell.biome : "unknown"];
+        if (cell.marked) classes.push("marked");
+        if (cell.here) classes.push("here");
+        div.className = classes.join(" ");
+        div.title = cell.name || (cell.marked ? "A place someone marked" : cell.known ? "Somewhere you haven't been" : "");
+        map.appendChild(div);
+      }
+    }
+    $("map-wrap").className = `map-wrap phase-${state.phase}`;
+    $("place").textContent = state.place;
+
+    $("phase-icon").textContent = PHASE_ICONS[state.phase];
+    $("phase-name").textContent = state.phase[0].toUpperCase() + state.phase.slice(1);
+    const segments = $("segments");
+    segments.innerHTML = "";
+    PHASES.forEach((phase, i) => {
+      const seg = document.createElement("div");
+      seg.title = phase;
+      const fill = document.createElement("span");
+      if (i < state.phase_index) seg.className = "past";
+      if (i === state.phase_index) fill.style.width = `${Math.max(8, state.phase_progress * 100)}%`;
+      seg.appendChild(fill);
+      segments.appendChild(seg);
+    });
+
+    const pct = Math.max(0, Math.min(100, (state.health / state.max_health) * 100));
+    $("health-text").textContent = `${state.health} / ${state.max_health}`;
+    $("health-bar").firstElementChild.style.width = `${pct}%`;
+    $("health-bar").classList.toggle("low", pct <= 35);
+
+    const inv = $("inventory");
+    inv.innerHTML = "";
+    if (!state.inventory.length) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "Nothing.";
+      inv.appendChild(li);
+    }
+    for (const name of state.inventory) {
+      const li = document.createElement("li");
+      li.textContent = name;
+      inv.appendChild(li);
+    }
+  }
+
+  // ---------------- music ----------------
+
+  function setMusic(on) {
+    const audio = $("theme");
+    store.set("music", on);
+    $("music").textContent = on ? "♪ On" : "♪ Off";
+    if (on) { audio.volume = 0.35; audio.play().catch(() => {}); } else { audio.pause(); }
+  }
+
+  $("music").addEventListener("click", () => setMusic($("theme").paused));
+
+  // ---------------- starting ----------------
+
+  function enter(state, { showIntro }) {
+    $("title").classList.add("hidden");
+    clearLog();
+    if (showIntro && state.intro) {
+      addEntry(state.intro.replace(/\n*\(Type what.*\)\s*$/s, "").trim());
+    } else if (!showIntro) {
+      addEntry("(You return to where you left off.)", "system");
+    }
+    addEntry(state.description, "place");
+    render(state);
+    if (store.get("music", true)) setMusic(true);
+    $("input").focus();
+  }
+
+  async function newGame() {
+    const state = await api("/api/new", {});
+    history = []; historyIndex = 0; store.set("history", history);
+    enter(state, { showIntro: true });
+  }
+
+  $("begin").addEventListener("click", () => initial.fresh ? enter(initial, { showIntro: true }) : newGame());
+  $("continue").addEventListener("click", () => enter(initial, { showIntro: false }));
+
+  // New game asks twice instead of using a browser dialog.
+  function armNewGame(button, onConfirm) {
+    let armed = false, timer;
+    const label = button.textContent;
+    button.addEventListener("click", () => {
+      if (!armed) {
+        armed = true;
+        button.textContent = "Lose progress?";
+        button.classList.add("warn");
+        timer = setTimeout(() => { armed = false; button.textContent = label; button.classList.remove("warn"); }, 3000);
+        return;
+      }
+      clearTimeout(timer);
+      armed = false; button.textContent = label; button.classList.remove("warn");
+      onConfirm();
+    });
+  }
+  armNewGame($("new"), newGame);
+  armNewGame($("title-new"), newGame);
+
+  // ---------------- commands ----------------
+
+  $("prompt").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = $("input");
+    const text = input.value.trim();
+    if (!text || busy) return;
+    input.value = "";
+    history.push(text);
+    history = history.slice(-100);
+    historyIndex = history.length;
+    store.set("history", history);
+
+    if (text.toLowerCase() === "clear") { clearLog(); return; }
+
+    addEntry(text, "cmd");
+    busy = true;
+    input.disabled = true;
+    try {
+      const state = await api("/api/command", { text });
+      const kind = /^[^\n]+\n/.test(state.response) && state.response.includes("Exits --") ? "place" : "";
+      addEntry(state.response, kind);
+      render(state);
+    } catch (err) {
+      addEntry(`(The connection to the world wavers: ${err.message}. Is the server still running?)`, "system");
+    } finally {
+      busy = false;
+      input.disabled = false;
+      input.focus();
+    }
+  });
+
+  $("input").addEventListener("keydown", (event) => {
+    if (event.key === "ArrowUp" && historyIndex > 0) {
+      historyIndex -= 1;
+      event.target.value = history[historyIndex];
+      event.preventDefault();
+    } else if (event.key === "ArrowDown") {
+      historyIndex = Math.min(history.length, historyIndex + 1);
+      event.target.value = history[historyIndex] || "";
+      event.preventDefault();
+    }
+  });
+
+  $("crt").addEventListener("click", () => { if (!window.getSelection().toString()) $("input").focus(); });
+
+  // ---------------- boot ----------------
+
+  api("/api/state").then((state) => {
+    initial = state;
+    if (location.hash === "#play") return enter(state, { showIntro: state.fresh });  // skip the title screen
+    if (!state.fresh) {
+      $("continue").hidden = false;
+      $("begin").hidden = true;
+      $("title-new").hidden = false;
+      $("title-hint").textContent = `You were at ${state.place}.`;
+    }
+  }).catch(() => {
+    $("title-hint").textContent = "Can't reach the game server. Start it with: python -m centaur.server";
+  });
+</script>
+</body>
+</html>

@@ -3,7 +3,8 @@
 `centaur/` is the new engine. It is plain Python with no dependencies. **What the game is** lives in [`GAME_DESIGN.md`](GAME_DESIGN.md); this file is about **how the code is laid out**. The old `src/` tree is untouched and will be deleted once the new engine covers it.
 
 ```
-venv/bin/python -m centaur.play          # play (add --new to start over)
+venv/bin/python -m centaur.server        # play in the browser at http://localhost:8765
+venv/bin/python -m centaur.play          # play in the terminal (add --new to start over)
 venv/bin/python -m centaur.worldgen      # print the map
 venv/bin/python -m centaur.solver        # check content + fairness
 venv/bin/python -m pytest centaur/tests
@@ -17,6 +18,7 @@ venv/bin/python -m pytest centaur/tests
 | `game.py` | The generic engine. `Game.do(text)` returns text. It evaluates `Condition`s and applies `Effects`, and knows nothing story-specific. |
 | `solver.py` | Proves the content is **fair**: the goal can be reached by a player who only tries a clue-gated action after seeing one of its clues. |
 | `play.py` | Terminal runner with autosave (`~/.thelastcentaur/save.json`). |
+| `server.py` + `web/index.html` | Browser UI: a small FastAPI wrapper plus one page using the original art, logo, music and CRT look (assets served from `frontend/public/`). It shares the terminal's save file. Add `#play` to the URL to skip the title screen. |
 
 ## How content works
 
