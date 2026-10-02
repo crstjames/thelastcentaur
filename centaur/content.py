@@ -825,6 +825,14 @@ _INTERACTIONS = [
         ),
     ),
     Interaction(
+        id="mountain_crystals_rooted", verbs=("take", "strike"), at="mystic_mountains",
+        feature="mountain_crystals", once=False,
+        effects=Effects(message=(
+            "These crystals are rooted deep in the cliff, and they don't ring when you touch "
+            "them. Whatever is singing up here, it isn't these."
+        )),
+    ),
+    Interaction(
         id="find_focus", verbs=("examine", "take", "strike", "use"), at=FOCUS_TILE,
         feature="singing_crystal",
         when=when(phases="dawn"),
