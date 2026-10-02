@@ -190,8 +190,8 @@ Every gated interaction lists the clues that point to it. The solver explores th
 
 ## Build order
 
-1. **Mechanics plus the Prologue and Act I**, playable: clock, features, interactions, signals, echoes, abilities. Walkthrough and fairness tests.
-2. **Act II and Act III**: approach gates, lost woods, pride.
+1. ~~**Mechanics plus the Prologue and Act I**, playable: clock, features, interactions, signals, echoes, abilities. Walkthrough and fairness tests.~~ Done.
+2. ~~**Act II and Act III**: approach gates, lost woods, pride.~~ Done.
 3. **Finale and endings.**
 4. **LLM narrator.**
 5. ~~**Delete the old `src/` tree**, the three-path content and the old tests.~~ Done.

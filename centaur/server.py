@@ -47,7 +47,7 @@ def _view(game: Game) -> dict:
         "phase_index": PHASES.index(game.phase),
         "health": game.health,
         "max_health": MAX_HEALTH,
-        "inventory": [ITEMS[i].name for i in game.inventory],
+        "inventory": [{"name": ITEMS[i].name, "quest": ITEMS[i].quest} for i in game.inventory],
         "map": game.map_view(),
         "turn": game.turn,
         "slice_complete": game.slice_complete,

@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from typing import List, Set
 
 from centaur.content import (
-    ECHOES, ENEMIES, FEATURES, INTERACTIONS, ITEMS, LANDMARKS, NPCS, PHASES, SEQUENCES,
+    ECHOES, ENEMIES, FEATURES, INTERACTIONS, ITEMS, LANDMARKS, MAZES, NPCS, PHASES, SEQUENCES,
     SIGNALS, Place, Pos, is_met,
 )
-from centaur.game import apply_effects
+from centaur.game import apply_effects, can_enter, is_at
 from centaur.worldgen import World, build_world
 
 
@@ -40,9 +40,7 @@ def solve(require_clues: bool = True, world: World = None) -> SolveResult:
     flags: Set[str] = set()
 
     def at(place: Place, pos: Pos) -> bool:
-        if isinstance(place, str):
-            return world.tiles[pos].landmark == place
-        return tuple(place) == pos
+        return is_at(world, place, pos)
 
     def clued(clues) -> bool:
         return not require_clues or not clues or any(f"clue:{c}" in flags for c in clues)
@@ -64,6 +62,7 @@ def solve(require_clues: bool = True, world: World = None) -> SolveResult:
             met = lambda condition: is_met(condition, inventory, flags, phase)
             for pos in reached:
                 tile = world.tiles[pos]
+                inventory.extend(i for i in tile.items if i not in inventory)
                 for signal in SIGNALS:
                     distance = abs(pos[0] - signal.target[0]) + abs(pos[1] - signal.target[1])
                     if (distance < len(signal.by_distance) and tile.biome in signal.biomes
@@ -88,12 +87,20 @@ def solve(require_clues: bool = True, world: World = None) -> SolveResult:
                         if interaction.once:
                             flags.add(f"done:{interaction.id}")
                         apply_effects(interaction.effects, inventory, flags)
+                for maze in MAZES.values():
+                    # every clue holds part of the path, so all of them are needed
+                    seen_all = not require_clues or all(f"clue:{c}" in flags for c in maze.clues)
+                    if at(maze.at, pos) and maze.solved_flag not in flags and seen_all:
+                        flags.add(maze.solved_flag)
+                        apply_effects(maze.success, inventory, flags)
                 for sequence in SEQUENCES.values():
                     if at(sequence.at, pos) and met(sequence.when) and clued(sequence.clues):
                         apply_effects(sequence.success, inventory, flags)
                 for enemy_id in tile.enemies:
-                    if met(ENEMIES[enemy_id].defeat_requires):
-                        inventory.extend(i for i in ENEMIES[enemy_id].drops if i not in inventory)
+                    enemy = ENEMIES[enemy_id]
+                    if met(enemy.defeat_requires):
+                        inventory.extend(i for i in enemy.drops if i not in inventory)
+                        apply_effects(enemy.on_defeat, inventory, flags)
 
         changed = (len(inventory), len(flags)) != before
 
@@ -101,16 +108,12 @@ def solve(require_clues: bool = True, world: World = None) -> SolveResult:
 
 
 def _reachable(world: World, inventory, flags) -> Set[Pos]:
-    def can_enter(pos: Pos) -> bool:
-        landmark_id = world.tiles[pos].landmark
-        return landmark_id is None or is_met(LANDMARKS[landmark_id].enter_when, inventory, flags)
-
     seen = {world.start}
     queue = deque([world.start])
     while queue:
         pos = queue.popleft()
         for target in world.neighbors(pos).values():
-            if target not in seen and can_enter(target):
+            if target not in seen and can_enter(world, target, pos, inventory, flags):
                 seen.add(target)
                 queue.append(target)
     return seen

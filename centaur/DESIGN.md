@@ -26,6 +26,15 @@ venv/bin/python -m pytest centaur/tests
 - **Effects** are what happens: message, items given, flags set, clues seen, tile memory written, pride.
 - A **Feature** is something examinable in a place. An **Interaction** is *verb + feature/item + place + condition → effects*, and it lists the **clues** that point to it. A **Sequence** is an ordered set of interactions (the crystal chord).
 - An **Echo** is a past-self carving, already in a tile's memory. A **Signal** is a hot/cold cue by distance. A **Hazard** hurts you for spending a turn somewhere.
+- A **place** is a landmark id, a tile `(x, y)`, or `"near:<landmark>"` for any tile beside a landmark (e.g. blowing the horn at the valley mouth).
+- A landmark can have `approach_from`: it can only be entered from a neighbour on those sides (the ruins, from the north).
+- An enemy with `yields=True` doesn't die when beaten. It kneels, and interactions (`spare`, or `fight` again) decide what happens. `Effects.remove_enemies` takes it off the tile.
+- An interaction's `words` add names for its target, and `bare=True` lets the verb alone match ("spare"). If its condition fails and it has no `otherwise` text, the command falls through to the normal verb.
+- A hazard can be tied to an enemy, so it stops once that enemy is gone (the wolves).
+- A **Maze** is a landmark you get lost in: until solved, moving from it walks a hidden path. The right steps reach its heart; a wrong one puts you back where you came in. Its clues are *all* required, because each holds part of the path.
+- A landmark's `blocked_variants` give a different "you can't go in" message depending on what's missing (no cloak vs. too much light).
+- `DERIVED` flags follow from others whatever order they were earned in: all three wards → `barrier_down`.
+- Saves hold the whole world. Bump `SAVE_VERSION` in `play.py` whenever content adds or moves things in it.
 - Time: a day is 4 phases × 6 turns. Looking and examining are free; doing things takes a turn.
 
 ## Adding a puzzle

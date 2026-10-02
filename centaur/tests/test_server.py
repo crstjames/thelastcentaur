@@ -32,7 +32,7 @@ def test_commands_update_the_sidebar(client):
     client.get("/api/state")
     state = client.post("/api/command", json={"text": "examine roots"}).json()
     assert "map" in state["response"].lower()
-    assert state["inventory"] == ["Old Map"]
+    assert state["inventory"] == [{"name": "Old Map", "quest": False}]
     assert known_tiles(state) == 100
 
 
@@ -70,3 +70,9 @@ def test_plain_actions_have_no_scene(client):
     client.get("/api/state")
     block = client.post("/api/command", json={"text": "examine bark"}).json()["block"]
     assert block["scene"] is None and "sets of four" in block["before"]
+
+
+def test_quest_items_are_marked(client):
+    from centaur.content import ITEMS
+    quest = {i.id for i in ITEMS.values() if i.quest}
+    assert quest == {"crystal_focus", "ancient_sword", "war_horn", "stealth_cloak", "phantom_dagger"}
