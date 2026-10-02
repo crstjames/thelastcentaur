@@ -388,7 +388,8 @@ def test_the_fallen_warrior_turns_away_until_you_can_read():
         ("look at the bark", "sets of four"),
         ("x roots", "map"),
         ("talk to the old druid", "Again"),   # any way of addressing the one person here
-        ("dance", "not sure how"),
+        ("dance", "Nothing happens"),
+        ("teleport to the throne", "not sure how"),
         ("", "Say something"),
         ("go", "Go where"),
         ("raise the old map", "Nothing happens"),

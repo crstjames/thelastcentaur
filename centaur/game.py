@@ -23,39 +23,11 @@ from centaur.content import (
     DERIVED, ECHOES, ENEMIES, FEATURES, HAZARDS, INTERACTIONS, ITEMS, LANDMARKS, MAZES, NPCS,
     PHASES, PHASE_TURNS, SEQUENCES, SIGNALS, Effects, Place, Pos, is_met,
 )
+from centaur.phrasebook import DIRECTION_ALIASES, interpret
 from centaur.worldgen import BIOME_GLYPHS, DIRECTIONS, Tile, World, build_world
 
 MAX_HEALTH = 100
 MEMORY_SHOWN = 4
-
-DIRECTION_ALIASES = {"n": "north", "s": "south", "e": "east", "w": "west"}
-DIRECTION_ALIASES.update({d: d for d in DIRECTIONS})
-
-STOPWORDS = {"the", "a", "an", "to", "with", "at", "on", "up", "of", "my", "it", "in", "from", "around", "for",
-             "him", "her", "them", "into", "toward", "towards"}
-
-VERBS = {
-    "look": ("look", "l"),
-    "examine": ("examine", "x", "inspect", "search", "study", "check", "feel", "dig", "listen"),
-    "read": ("read",),
-    "take": ("take", "get", "grab", "pick", "pull", "loosen", "free"),
-    "use": ("use", "raise", "hold", "lift", "show", "point", "shine", "wave"),
-    "strike": ("strike", "hit", "tap", "ring", "knock", "kick"),
-    "go": ("go", "move", "walk", "run", "head", "travel"),
-    "drop": ("drop", "leave"),
-    "talk": ("talk", "speak", "ask", "greet"),
-    "fight": ("fight", "attack", "kill", "slay", "finish"),
-    "spare": ("spare", "mercy", "forgive", "release", "sheathe", "lower"),
-    "blow": ("blow", "sound", "play", "toot"),
-    "inventory": ("inventory", "inv", "i"),
-    "status": ("status", "stats", "health"),
-    "map": ("map", "m"),
-    "carve": ("carve", "write", "mark", "scratch"),
-    "rest": ("rest", "sleep"),
-    "wait": ("wait", "z"),
-    "help": ("help", "h", "?"),
-}
-VERB_LOOKUP = {alias: verb for verb, aliases in VERBS.items() for alias in aliases}
 
 # Actions that let time pass. Looking and examining are free.
 TIMED_VERBS = {"take", "use", "strike", "go", "drop", "talk", "fight", "carve", "spare", "blow"}
@@ -167,29 +139,24 @@ class Game:
     # ------------------------------------------------------------------
 
     def do(self, text: str) -> str:
-        words = re.findall(r"[a-z0-9']+", text.lower())
-        if not words:
+        parsed = interpret(text)
+        verb, args = parsed.verb, parsed.args
+        if verb == "empty":
             return "Say something, or type 'help'."
-        first, rest = words[0], words[1:]
-
-        if first in DIRECTION_ALIASES:
-            return self._timed("go", lambda: self._go(DIRECTION_ALIASES[first]))
-
-        verb = VERB_LOOKUP.get(first)
-        if verb == "look" and rest:
-            # "look at X" examines; "look through X" uses it
-            verb = "use" if rest[0] == "through" else "examine"
-        if verb == "examine" and first == "listen" and not rest:
+        if verb == "unknown":
+            return f"You're not sure how to '{args[0]}'."
+        if verb == "flavor":
+            return parsed.message
+        if verb == "listen":
             return self._listen()
-        if verb is None:
-            return f"You're not sure how to '{first}'."
-
+        if verb == "go":
+            if not args:
+                return "Go where? North, south, east or west."
+            return self._timed("go", lambda: self._go(args[0]))
         if verb == "carve":
-            message = text.strip().split(None, 1)[1] if len(text.split()) > 1 else ""
-            return self._timed(verb, lambda: self._carve(message))
+            return self._timed(verb, lambda: self._carve(parsed.message))
 
-        args = [w for w in rest if w not in STOPWORDS]
-        handler = getattr(self, "_go_words" if verb == "go" else f"_{verb}")
+        handler = getattr(self, f"_{verb}")
         if verb in TIMED_VERBS:
             return self._timed(verb, lambda: handler(args))
         return handler(args)
@@ -276,11 +243,6 @@ class Game:
         self._arrive()
         return maze.failure + "\n\n" + self.describe()
 
-    def _go_words(self, args: Sequence[str]) -> str:
-        if not args or args[0] not in DIRECTION_ALIASES:
-            return "Go where? North, south, east or west."
-        return self._go(DIRECTION_ALIASES[args[0]])
-
     def _examine(self, args: Sequence[str]) -> str:
         if not args:
             return self.describe()
@@ -354,6 +316,8 @@ class Game:
             return feature_id[1:]
         if feature_id:
             return f"You strike {FEATURES[feature_id].name}. Nothing happens."
+        if self._match_named(args, self.tile.enemies, ENEMIES):
+            return self._fight(args)             # striking an enemy is fighting it
         return "You don't see that here."
 
     def _drop(self, args: Sequence[str]) -> str:
