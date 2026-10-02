@@ -31,7 +31,8 @@ MEMORY_SHOWN = 4
 DIRECTION_ALIASES = {"n": "north", "s": "south", "e": "east", "w": "west"}
 DIRECTION_ALIASES.update({d: d for d in DIRECTIONS})
 
-STOPWORDS = {"the", "a", "an", "to", "with", "at", "on", "up", "of", "my", "it", "in", "from", "around", "for"}
+STOPWORDS = {"the", "a", "an", "to", "with", "at", "on", "up", "of", "my", "it", "in", "from", "around", "for",
+             "him", "her", "them", "into", "toward", "towards"}
 
 VERBS = {
     "look": ("look", "l"),
@@ -43,7 +44,9 @@ VERBS = {
     "go": ("go", "move", "walk", "run", "head", "travel"),
     "drop": ("drop", "leave"),
     "talk": ("talk", "speak", "ask", "greet"),
-    "fight": ("fight", "attack", "kill"),
+    "fight": ("fight", "attack", "kill", "slay", "finish"),
+    "spare": ("spare", "mercy", "forgive", "release", "sheathe", "lower"),
+    "blow": ("blow", "sound", "play", "toot"),
     "inventory": ("inventory", "inv", "i"),
     "status": ("status", "stats", "health"),
     "map": ("map", "m"),
@@ -55,7 +58,7 @@ VERBS = {
 VERB_LOOKUP = {alias: verb for verb, aliases in VERBS.items() for alias in aliases}
 
 # Actions that let time pass. Looking and examining are free.
-TIMED_VERBS = {"take", "use", "strike", "go", "drop", "talk", "fight", "carve"}
+TIMED_VERBS = {"take", "use", "strike", "go", "drop", "talk", "fight", "carve", "spare", "blow"}
 
 PHASE_LINES = {
     "dawn": "Pale light is creeping up from the east.",
@@ -141,16 +144,14 @@ class Game:
         return content.SLICE_GOAL in self.flags
 
     def is_here(self, place: Place) -> bool:
-        if isinstance(place, str):
-            return self.tile.landmark == place
-        return tuple(place) == self.position
+        return is_at(self.world, place, self.position)
 
     def met(self, condition) -> bool:
         return is_met(condition, self.inventory, self.flags, self.phase)
 
-    def can_enter(self, pos: Pos) -> bool:
-        landmark_id = self.world.tiles[pos].landmark
-        return landmark_id is None or self.met(LANDMARKS[landmark_id].enter_when)
+    def can_enter(self, pos: Pos, origin: Optional[Pos] = None) -> bool:
+        """Whether you could step into `pos` from `origin` (default: where you are)."""
+        return can_enter(self.world, pos, origin or self.position, self.inventory, self.flags, self.phase)
 
     def features_here(self) -> List[str]:
         return [f.id for f in FEATURES.values() if self.is_here(f.at) and self.met(f.visible_when)]
@@ -205,6 +206,8 @@ class Game:
         if self.phase != previous_phase:
             notes.append(PHASE_CHANGES[self.phase])
         for hazard in HAZARDS:
+            if hazard.enemy and hazard.enemy not in self.tile.enemies:
+                continue
             if self.is_here(hazard.at) and self.met(hazard.when):
                 self.health -= hazard.damage
                 notes.append(hazard.message)
@@ -224,7 +227,7 @@ class Game:
         target = self.world.neighbors(self.position).get(direction)
         if target is None:
             return "The land ends there. You can't go that way."
-        if not self.can_enter(target):
+        if not self.can_enter(target, self.position):
             return LANDMARKS[self.world.tiles[target].landmark].blocked_message
         self.position = target
         self._arrive()
@@ -336,6 +339,9 @@ class Game:
         return "They say nothing."
 
     def _fight(self, args: Sequence[str]) -> str:
+        handled = self._try_story("fight", args)   # e.g. finishing an enemy that has yielded
+        if handled is not None:
+            return handled
         enemies = self.tile.enemies
         if not enemies:
             return "There's nothing here to fight."
@@ -351,14 +357,31 @@ class Game:
                 f"You throw yourself at the {enemy.name}, but you have nothing that can hurt "
                 f"it. It drives you back. (-{enemy.damage} health)"
             )
+        if enemy.yields and f"yielded:{enemy_id}" in self.flags:
+            return f"The {enemy.name} is already beaten. It waits to learn what you'll do."
         cost = enemy.damage // 2
         self.health -= cost
         if self.health <= 0:
             return self._fall(f"the {enemy.name}")
-        enemies.remove(enemy_id)
+        if not enemy.yields:
+            enemies.remove(enemy_id)
+            self._remember(f"You defeated the {enemy.name} here.")
         self.inventory.extend(i for i in enemy.drops if i not in self.inventory)
-        self._remember(f"You defeated the {enemy.name} here.")
-        return f"You defeat the {enemy.name}. (-{cost} health)"
+        message = self._apply(enemy.on_defeat) or f"You defeat the {enemy.name}."
+        return f"{message} (-{cost} health)"
+
+    def _spare(self, args: Sequence[str]) -> str:
+        handled = self._try_story("spare", args)
+        return handled if handled is not None else "There's no one here to spare."
+
+    def _blow(self, args: Sequence[str]) -> str:
+        handled = self._try_story("blow", args)
+        if handled is not None:
+            return handled
+        item_id = next((i for i in self.inventory if any(_word_forms(a) & _item_words(i) for a in args)), None)
+        if item_id:
+            return f"You blow the {ITEMS[item_id].name}. The note fades, and nothing answers."
+        return "You have nothing to blow."
 
     def _carve(self, message: str) -> str:
         message = message.strip()
@@ -369,6 +392,8 @@ class Game:
 
     def _wait(self, args: Sequence[str] = ()) -> str:
         target = next((a for a in args if a in PHASES), None)
+        if target == self.phase:
+            return f"It's already {target}."
         before = self.turn
         self.turn = (self.turn // PHASE_TURNS + 1) * PHASE_TURNS
         if target:
@@ -461,7 +486,7 @@ class Game:
                 continue
             if interaction.item and interaction.item not in self.inventory:
                 continue
-            vocabulary: Set[str] = set()
+            vocabulary: Set[str] = set(interaction.words)
             if interaction.feature:
                 feature = FEATURES[interaction.feature]
                 if not self.met(feature.visible_when):
@@ -469,10 +494,12 @@ class Game:
                 vocabulary.update(feature.words)
             if interaction.item:
                 vocabulary.update(_item_words(interaction.item))
-            if not _all_named(args, vocabulary):
+            if not (_all_named(args, vocabulary) or (interaction.bare and not args)):
                 continue
             if not self.met(interaction.when):
-                return interaction.otherwise or "Nothing happens."
+                if interaction.otherwise:
+                    return interaction.otherwise
+                continue
             if interaction.once:
                 self.flags.add(f"done:{interaction.id}")
             return self._apply(interaction.effects)
@@ -494,6 +521,9 @@ class Game:
     def _apply(self, effects: Effects) -> str:
         apply_effects(effects, self.inventory, self.flags)
         self.pride += effects.pride
+        for enemy_id in effects.remove_enemies:
+            if enemy_id in self.tile.enemies:
+                self.tile.enemies.remove(enemy_id)
         if effects.memory:
             self._remember(effects.memory)
         message = effects.message
@@ -537,7 +567,8 @@ class Game:
         atmosphere = [PHASE_LINES[self.phase]] + self._signal_lines()
         for feature_id in self.features_here():
             feature = FEATURES[feature_id]
-            if not isinstance(feature.at, str):  # features on ordinary tiles announce themselves
+            if not isinstance(feature.at, str) or feature.at.startswith("near:"):
+                # features on ordinary tiles, or seen from beside a place, announce themselves
                 atmosphere.append(feature.description)
 
         memories = [m for m in tile.memory if not m.startswith("You first came here")][-MEMORY_SHOWN:]
@@ -548,7 +579,12 @@ class Game:
 
         presence = [("person", f"{NPCS[n].name} is here.") for n in self.npcs_here()]
         if tile.enemies:
-            presence.append(("danger", "Nearby: " + ", ".join(ENEMIES[e].name for e in tile.enemies) + "."))
+            for enemy_id in tile.enemies:
+                enemy = ENEMIES[enemy_id]
+                if enemy.yields and f"yielded:{enemy_id}" in self.flags:
+                    presence.append(("person", enemy.yielded_text))
+                else:
+                    presence.append(("danger", f"Nearby: {enemy.name}."))
         if tile.items:
             presence.append(("item", "You see: " + ", ".join(ITEMS[i].name for i in tile.items) + "."))
 
@@ -633,6 +669,30 @@ class Game:
             if _all_named(args, vocabulary):
                 return candidate
         return None
+
+
+def is_at(world: World, place: Place, pos: Pos) -> bool:
+    """Whether `pos` is `place`: a landmark id, "near:<landmark id>", or a tile."""
+    if isinstance(place, str):
+        if place.startswith("near:"):
+            target = LANDMARKS[place[len("near:"):]].pos
+            return abs(pos[0] - target[0]) + abs(pos[1] - target[1]) == 1
+        return world.tiles[pos].landmark == place
+    return tuple(place) == tuple(pos)
+
+
+def can_enter(world: World, pos: Pos, origin: Pos, inventory, flags, phase=None) -> bool:
+    """Whether a player at `origin` can step into the neighbouring tile `pos`."""
+    landmark_id = world.tiles[pos].landmark
+    if landmark_id is None:
+        return True
+    landmark = LANDMARKS[landmark_id]
+    if not is_met(landmark.enter_when, inventory, flags, phase):
+        return False
+    if landmark.approach_from:
+        side = next((d for d, (dx, dy) in DIRECTIONS.items() if (pos[0] + dx, pos[1] + dy) == tuple(origin)), None)
+        return side in landmark.approach_from
+    return True
 
 
 def apply_effects(effects: Effects, inventory: List[str], flags: Set[str]) -> None:

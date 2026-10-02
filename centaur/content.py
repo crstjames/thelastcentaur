@@ -24,10 +24,10 @@ PHASES = ("dawn", "day", "dusk", "night")
 PHASE_TURNS = 6         # turns per phase; a full day is 24 turns
 START_TURN = PHASE_TURNS  # the game begins at the start of "day"
 
-SLICE_GOAL = "ward_insight"   # the end of what's playable so far
+SLICE_GOAL = "ward_valor"     # the end of what's playable so far
 
 Pos = Tuple[int, int]
-Place = Union[str, Pos]       # a landmark id, or a specific tile
+Place = Union[str, Pos]       # a landmark id, "near:<landmark id>" (any tile beside it), or a tile
 
 
 # --------------------------------------------------------------------------
@@ -41,14 +41,15 @@ class Condition:
     flags: Tuple[str, ...] = ()       # all of these flags are set
     not_flags: Tuple[str, ...] = ()   # none of these flags are set
     phases: Tuple[str, ...] = ()      # time of day is one of these
+    not_items: Tuple[str, ...] = ()   # carrying none of these
 
 
 ALWAYS = Condition()
 
 
-def when(items=(), flags=(), not_flags=(), phases=()) -> Condition:
+def when(items=(), flags=(), not_flags=(), phases=(), not_items=()) -> Condition:
     as_tuple = lambda v: (v,) if isinstance(v, str) else tuple(v)
-    return Condition(as_tuple(items), as_tuple(flags), as_tuple(not_flags), as_tuple(phases))
+    return Condition(as_tuple(items), as_tuple(flags), as_tuple(not_flags), as_tuple(phases), as_tuple(not_items))
 
 
 def is_met(condition: Condition, inventory: Iterable[str], flags: Iterable[str],
@@ -57,6 +58,7 @@ def is_met(condition: Condition, inventory: Iterable[str], flags: Iterable[str],
     inventory, flags = set(inventory), set(flags)
     return (
         inventory.issuperset(condition.items)
+        and not inventory.intersection(condition.not_items)
         and flags.issuperset(condition.flags)
         and not flags.intersection(condition.not_flags)
         and (phase is None or not condition.phases or phase in condition.phases)
@@ -71,6 +73,7 @@ class Effects:
     clues: Tuple[str, ...] = ()       # clues the player has now seen
     memory: str = ""                  # written into this tile's memory
     pride: int = 0
+    remove_enemies: Tuple[str, ...] = ()  # taken off this tile
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,9 @@ class Enemy:
     damage: int
     defeat_requires: Condition = ALWAYS
     drops: Tuple[str, ...] = ()
+    on_defeat: Effects = Effects()
+    yields: bool = False              # beaten, it stays and waits: an interaction decides its fate
+    yielded_text: str = ""            # how it's described once it has yielded
 
 
 @dataclass(frozen=True)
@@ -136,9 +142,11 @@ class Interaction:
     item: Optional[str] = None        # must be carried
     when: Condition = ALWAYS
     effects: Effects = Effects()
-    otherwise: str = ""               # shown if named correctly but the condition fails
+    otherwise: str = ""               # shown if named correctly but the condition fails (empty: fall through)
     once: bool = True
     clues: Tuple[str, ...] = ()       # fairness: at least one must be seen first (empty = self-evident)
+    words: Tuple[str, ...] = ()       # extra names for the target, e.g. an enemy's
+    bare: bool = False                # also matches the verb alone ("spare")
 
 
 @dataclass(frozen=True)
@@ -181,6 +189,7 @@ class Hazard:
     when: Condition
     damage: int
     message: str
+    enemy: Optional[str] = None       # only while this enemy is still here
 
 
 @dataclass(frozen=True)
@@ -193,6 +202,7 @@ class Landmark:
     variants: Tuple[Tuple[Condition, str], ...] = ()   # first match replaces description
     enter_when: Condition = ALWAYS
     blocked_message: str = ""
+    approach_from: Tuple[str, ...] = ()   # if set, can only be entered from a neighbour on these sides
     items: Tuple[str, ...] = ()
     enemies: Tuple[str, ...] = ()
 
@@ -265,18 +275,44 @@ _LANDMARKS = [
             "A sheltered hollow where ancient warriors once made camp. A cairn of stacked "
             "stones stands at its centre."
         ),
+        variants=(
+            (when(items="ancient_sword", not_flags="horn_found"),
+             "A sheltered hollow where ancient warriors once made camp. At its centre stands a "
+             "cairn of stacked stones, and the runes on its top stone are glowing a cold blue."),
+        ),
     ),
     Landmark(
         id="ancient_ruins", name="The Ancient Ruins", pos=(8, 4), biome="ruins",
-        description="Crumbling ruins of a mighty centaur stronghold, echoing with memories of battle.",
-        enter_when=when(flags="act2_open"),
-        blocked_message="Collapsed walls and rubble. There's no way in from here.",
+        description=(
+            "The crumbling heart of a centaur stronghold. You came in by a gap in the north wall "
+            "that you'd never have found without knowing it was there. In a hall open to the sky, "
+            "a sword lies across a stone bier, as if someone set it down and meant to come back."
+        ),
+        variants=(
+            (when(items="ancient_sword"),
+             "The crumbling heart of a centaur stronghold, open to the sky. The stone bier where "
+             "the sword lay is empty now, and somehow the hall feels more abandoned for it."),
+        ),
+        enter_when=when(flags="warrior_trust"),
+        approach_from=("north",),
+        blocked_message="Collapsed walls and rubble. There's no way in from this side.",
+        items=("ancient_sword",),
     ),
     Landmark(
         id="enchanted_valley", name="The Enchanted Valley", pos=(8, 7), biome="meadow",
-        description="A valley of old battlefields, where the spirits of fallen warriors still linger.",
-        enter_when=when(flags="act2_open"),
+        description=(
+            "A long valley of old battlefields. Rusted blades stand in the grass like grave "
+            "markers, and the air is thick with the dead: you can't see them, but you can feel "
+            "them watching."
+        ),
+        variants=(
+            (when(flags="ward_valor"),
+             "A long valley of old battlefields, quiet now. The wind moves through the grass "
+             "like a breath let out after a very long time."),
+        ),
+        enter_when=when(flags="valley_open"),
         blocked_message="Spectral winds howl out of the valley mouth and drive you back.",
+        enemies=("shadow_guardian",),
     ),
     Landmark(
         id="forgotten_grove", name="The Forgotten Grove", pos=(5, 7), biome="twilight",
@@ -328,6 +364,24 @@ _ITEMS = [
         ),
         clue="focus_lore",
     ),
+    Item(
+        id="ancient_sword", name="Ancient Sword",
+        description="A blade that remembers the first centaur wars. Its edge has never dulled.",
+        lore=(
+            "Wielded, they say, by the warrior-sage Chiron when the herds first turned on each "
+            "other. The pommel bears the mark of the First Herd. Along the blade runs a line of "
+            "runes, and now you can read them: \"Valor is the strength to stop.\""
+        ),
+        clue="valor_stop",
+    ),
+    Item(
+        id="war_horn", name="Horn of the Fallen",
+        description=(
+            "A battered war horn bound in bronze. The Honor Guard sounded it to call the fallen "
+            "back to the line, at the hour when the dead are closest."
+        ),
+        clue="horn_lore",
+    ),
 ]
 ITEMS: Dict[str, Item] = {i.id: i for i in _ITEMS}
 
@@ -339,7 +393,27 @@ _ENEMIES = [
             "distance. You don't like to think about the night."
         ),
         health=60, damage=15,
-        defeat_requires=when(items="ancient_sword"),  # not obtainable yet: you can't win this
+        defeat_requires=when(items="ancient_sword"),
+        on_defeat=Effects(message="The pack breaks and scatters into the trees. They won't be back."),
+    ),
+    Enemy(
+        id="shadow_guardian", name="Shadow Guardian",
+        description=(
+            "A towering shape of armour and shadow, bound to guard the valley. It moves like a "
+            "soldier who has been on watch for a very long time."
+        ),
+        health=150, damage=40,
+        defeat_requires=when(items="ancient_sword"),
+        yields=True,
+        yielded_text="The Shadow Guardian kneels before you, waiting.",
+        on_defeat=Effects(
+            message=(
+                "The Ancient Sword bites where nothing else could. The Shadow Guardian staggers "
+                "and falls to one knee. Its helm cracks, and beneath it, for a moment, you see a "
+                "centaur's face: tired, and very young. It bows its head and waits for the blow."
+            ),
+            flags=("yielded:shadow_guardian",),
+        ),
     ),
 ]
 ENEMIES: Dict[str, Enemy] = {e.id: e for e in _ENEMIES}
@@ -383,6 +457,35 @@ _NPCS = [
         id="fallen_warrior", name="The Fallen Warrior", at="warriors_camp",
         description="Scarred, grey at the muzzle, and very obviously not pleased to see you.",
         lines=(
+            Line(
+                when(flags="killed_guardian"),
+                "The Fallen Warrior looks at the sword, then at you, for a long moment. \"So. "
+                "Nothing has changed.\" They turn back to the cold fire. \"The last ward is the "
+                "Scout's. Find them where the light runs out, at the crossroads, when the day "
+                "ends. Maybe they'll see something in you that I can't.\"",
+                Effects(clues=("scout_dusk",)),
+            ),
+            Line(
+                when(flags="spared_guardian"),
+                "\"You let him go.\" The Fallen Warrior is quiet for a long while. \"He was the "
+                "youngest of us. I could never have done it.\" They set down the whetstone. "
+                "\"The last ward is the Scout's. Find them where the light runs out, at the "
+                "crossroads, when the day ends.\"",
+                Effects(clues=("scout_dusk",)),
+            ),
+            Line(
+                when(flags="warrior_trust"),
+                "\"From where the sun never reaches,\" the Fallen Warrior repeats, without "
+                "looking up. \"Go.\"",
+            ),
+            Line(
+                when(flags=("insight", "clue:standards_names")),
+                "The Fallen Warrior watches you read the standards to the end, to the place "
+                "where a lord's name was cut away. \"So you remember,\" they say quietly. \"Then "
+                "you know the ruins. Enter them as we did, the night we left: from where the sun "
+                "never reaches.\"",
+                Effects(flags=("warrior_trust",), clues=("ruins_north",)),
+            ),
             Line(
                 when(flags="insight"),
                 "The Fallen Warrior's blade stops. \"You can read them now, can't you? The "
@@ -456,12 +559,51 @@ _FEATURES = [
             "been cut away."
         ),
         visible_when=when(flags="insight"),
+        clue="standards_names",
     ),
     # --- Warriors' Rest -------------------------------------------------------
     Feature(
         id="cairn", name="the cairn", at="warriors_rest",
-        words=("cairn", "stones", "stone", "pile"),
+        words=("cairn", "stones", "stone", "pile", "runes"),
         description="A cairn of stacked stones. Old runes on the top stone are dark and cold.",
+        visible_when=when(not_items="ancient_sword", not_flags="horn_found"),
+    ),
+    Feature(
+        id="cairn_glowing", name="the glowing cairn", at="warriors_rest",
+        words=("cairn", "stones", "stone", "pile", "runes", "glowing", "glow"),
+        description=(
+            "The runes on the cairn's top stone are glowing, a cold blue that pulses in time with "
+            "something. It takes you a moment to realise it's the sword at your side. Between the "
+            "stones, something bronze catches the light."
+        ),
+        visible_when=when(items="ancient_sword", not_flags="horn_found"),
+    ),
+    Feature(
+        id="cairn_opened", name="the cairn", at="warriors_rest",
+        words=("cairn", "stones", "stone", "pile", "runes"),
+        description="The cairn, a few stones shifted where you took the horn. The runes are dark again.",
+        visible_when=when(flags="horn_found"),
+    ),
+    # --- Enchanted Valley, seen from beside it ---------------------------------
+    Feature(
+        id="valley_winds", name="the spectral winds", at="near:enchanted_valley",
+        words=("winds", "wind", "valley", "mouth", "spirits", "spectral"),
+        description=(
+            "Out of the valley mouth comes a wind with no weather in it. It howls without "
+            "moving the grass."
+        ),
+        visible_when=when(not_flags="valley_open", phases=("dawn", "day", "night")),
+    ),
+    Feature(
+        id="valley_winds_dusk", name="the spectral winds", at="near:enchanted_valley",
+        words=("winds", "wind", "valley", "mouth", "spirits", "spectral", "figures", "shapes"),
+        description=(
+            "Out of the valley mouth comes a wind with no weather in it. In the failing light it "
+            "has shapes: centaurs in old armour, ranks of them, turning to look your way and "
+            "coming apart again. The dead are close at dusk."
+        ),
+        visible_when=when(not_flags="valley_open", phases="dusk"),
+        clue="dusk_winds",
     ),
     # --- Mystic Mountains -----------------------------------------------------
     Feature(
@@ -590,6 +732,73 @@ _INTERACTIONS = [
         otherwise="You raise the Crystal Focus, but it's dark and cold in your hand. It needs a light you don't have right now.",
         clues=("focus_lore", "focus_sun", "sunlight_echo"),
     ),
+    Interaction(
+        id="find_horn", verbs=("examine", "take"), at="warriors_rest", feature="cairn_glowing",
+        effects=Effects(
+            message=(
+                "You lift away the glowing stones. Beneath them, wrapped in rotted cloth, is a "
+                "battered war horn bound in bronze. As your hand closes on it the runes go dark, "
+                "their work done. The Horn of the Fallen."
+            ),
+            give=("war_horn",),
+            flags=("horn_found",),
+            memory="The cairn's runes woke for the old steel, and you took the Horn of the Fallen from it.",
+        ),
+        clues=("old_steel",),
+    ),
+    Interaction(
+        id="open_valley", verbs=("blow", "use"), at="near:enchanted_valley",
+        item="war_horn", words=("winds", "wind", "valley", "mouth", "spirits"),
+        when=when(phases="dusk"),
+        effects=Effects(
+            message=(
+                "You set the horn to your lips and blow. The note rolls down into the valley and "
+                "the shapes in the wind stop. Then, rank by rank, they turn toward the sound, and "
+                "the howling falls away into silence. The way into the valley is open."
+            ),
+            flags=("valley_open",),
+            memory="At dusk you sounded the Horn of the Fallen here, and the dead let you pass.",
+        ),
+        otherwise=(
+            "The horn's note rolls into the valley and is swallowed by the wind. Nothing answers. "
+            "Perhaps the dead aren't listening at this hour."
+        ),
+        clues=("horn_lore", "dusk_winds", "dusk_echo"),
+    ),
+    Interaction(
+        id="spare_guardian", verbs=("spare",), at="enchanted_valley",
+        words=("guardian", "shadow", "spirit", "sword", "blade", "weapon"), bare=True,
+        when=when(flags="yielded:shadow_guardian", not_flags="ward_valor"),
+        effects=Effects(
+            message=(
+                "You lower the Ancient Sword. The Guardian looks up, not understanding. Then the "
+                "shadow streams out of it like smoke, and what is left is a young centaur in the "
+                "faded colours of the Honor Guard. \"You stopped,\" he says, wondering. \"He "
+                "never stopped.\" He bows to you, and is gone.\n\nSomething that was taken from "
+                "you comes back: a steadiness in your chest, like a hand laid flat on a table. The "
+                "Valor ward is broken."
+            ),
+            flags=("ward_valor", "valor", "spared_guardian"),
+            remove_enemies=("shadow_guardian",),
+            memory="Here you spared the Shadow Guardian, and the Valor ward broke.",
+        ),
+    ),
+    Interaction(
+        id="kill_guardian", verbs=("fight",), at="enchanted_valley",
+        words=("guardian", "shadow", "spirit"), bare=True,
+        when=when(flags="yielded:shadow_guardian", not_flags="ward_valor"),
+        effects=Effects(
+            message=(
+                "You bring the sword down. The Guardian comes apart like smoke in a high wind, "
+                "without a sound. The Valor ward breaks; you feel it go. But something else breaks "
+                "with it, somewhere behind your ribs, and it doesn't heal."
+            ),
+            flags=("ward_valor", "valor", "killed_guardian"),
+            remove_enemies=("shadow_guardian",),
+            memory="Here you killed the Shadow Guardian as it knelt, and the Valor ward broke.",
+            pride=1,
+        ),
+    ),
 ]
 INTERACTIONS: Dict[str, Interaction] = {i.id: i for i in _INTERACTIONS}
 
@@ -636,6 +845,8 @@ ECHOES = [
     Echo(at=(5, 3), text=carved("Three of them. Three wards. Three tests. I failed the last one.")),
     Echo(at=(1, 4), text=carved("The stones only sing for the early riser."), clue="crystal_dawn"),
     Echo(at=(2, 6), text=carved("Sunlight, not torchlight. The Focus remembers the sun."), clue="sunlight_echo"),
+    Echo(at=(8, 5), text=carved("The old steel wakes the old stones."), clue="old_steel"),
+    Echo(at=(6, 6), text=carved("The dead walk at dusk. Even the ones who keep the gates."), clue="dusk_echo"),
 ]
 
 SIGNALS = [
@@ -656,6 +867,7 @@ HAZARDS = [
     Hazard(
         at="awakening_woods", when=when(phases="night"), damage=20,
         message="In the dark, the wolves close in and snap at your flanks. (-20 health)",
+        enemy="wolf_pack",
     ),
 ]
 
@@ -689,9 +901,13 @@ def validate_content() -> list:
         flags_set.update(interaction.effects.flags)
     for sequence in SEQUENCES.values():
         flags_set.update(sequence.success.flags)
+    for enemy in ENEMIES.values():
+        flags_set.update(enemy.on_defeat.flags)
 
     def check_place(where: str, place: Place) -> None:
         if isinstance(place, str):
+            if place.startswith("near:"):
+                place = place[len("near:"):]
             if place not in LANDMARKS:
                 problems.append(f"{where}: unknown landmark '{place}'")
         elif not (0 <= place[0] < GRID_SIZE and 0 <= place[1] < GRID_SIZE):
@@ -699,7 +915,7 @@ def validate_content() -> list:
 
     def check_items(where: str, item_ids) -> None:
         for item_id in item_ids:
-            if item_id not in ITEMS and item_id != "ancient_sword":  # Act II, not written yet
+            if item_id not in ITEMS:
                 problems.append(f"{where}: unknown item '{item_id}'")
 
     positions = {}
@@ -719,6 +935,10 @@ def validate_content() -> list:
         check_place(f"feature {feature.id}", feature.at)
     for enemy in ENEMIES.values():
         check_items(f"enemy {enemy.id}", enemy.defeat_requires.items + enemy.drops)
+    for hazard in HAZARDS:
+        check_place("hazard", hazard.at)
+        if hazard.enemy and hazard.enemy not in ENEMIES:
+            problems.append(f"hazard at {hazard.at}: unknown enemy '{hazard.enemy}'")
 
     produced = _clues_produced()
     for interaction in INTERACTIONS.values():

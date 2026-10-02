@@ -1,4 +1,4 @@
-"""Tests for the playable slice: the Prologue and Act I (Insight)."""
+"""Tests for the playable slice: the Prologue, Act I (Insight) and Act II (Valor)."""
 
 import dataclasses
 import json
@@ -24,7 +24,7 @@ def walk_to(game: Game, goal) -> None:
         if pos == goal:
             break
         for direction, target in game.world.neighbors(pos).items():
-            if target not in came_from and game.can_enter(target):
+            if target not in came_from and game.can_enter(target, pos):
                 came_from[target] = (pos, direction)
                 queue.append(target)
     assert goal in came_from, f"no route to {goal}"
@@ -38,7 +38,7 @@ def walk_to(game: Game, goal) -> None:
     assert game.position == goal
 
 
-def play_slice(game: Game) -> None:
+def play_act_one(game: Game) -> None:
     assert "Don't trust the crown" in game.do("look")
     assert "map" in game.do("examine the roots").lower()
 
@@ -64,6 +64,33 @@ def play_slice(game: Game) -> None:
     assert "you can read them" in result
     assert "I learned. It wasn't enough." in game.do("read the runes")
 
+
+def play_act_two(game: Game, mercy: bool = True) -> None:
+    walk_to(game, "warriors_camp")
+    assert "I know what you are" not in game.do("talk to the warrior")
+    assert "Fell at the valley" in game.do("read the standards")
+    assert "from where the sun never reaches" in game.do("talk to the warrior")
+
+    walk_to(game, (8, 5))                     # north of the ruins
+    assert "old steel" in game.do("look")
+    game.do("s")
+    assert game.tile.landmark == "ancient_ruins"
+    game.do("take the sword")
+    assert "Valor is the strength to stop" in game.do("examine the sword")
+
+    walk_to(game, "warriors_rest")
+    assert "glowing" in game.do("look")
+    assert "Horn of the Fallen" in game.do("examine the glowing cairn")
+
+    walk_to(game, (8, 6))                     # the valley mouth
+    if game.phase != "dusk":
+        game.do("wait until dusk")
+    assert "shapes" in game.do("look")
+    assert "way into the valley is open" in game.do("blow the horn")
+    game.do("n")
+    assert game.tile.landmark == "enchanted_valley"
+    assert "one knee" in game.do("fight the guardian")
+    assert "Valor ward" in game.do("spare him" if mercy else "kill the guardian")
 
 # --------------------------------------------------------------------------
 # Content, world and fairness
@@ -111,9 +138,108 @@ def test_solver_catches_a_puzzle_without_a_findable_clue(monkeypatch):
 
 def test_the_slice_can_be_played_to_the_end():
     game = Game.new()
-    play_slice(game)
+    play_act_one(game)
+    assert "insight" in game.flags and not game.slice_complete
+    play_act_two(game)
     assert game.slice_complete
-    assert "insight" in game.flags
+    assert {"valor", "spared_guardian"} <= game.flags
+    assert game.pride == 0
+    walk_to(game, "warriors_camp")
+    assert "You let him go" in game.do("talk")
+
+
+def test_killing_the_kneeling_guardian_breaks_the_ward_but_costs_pride():
+    game = Game.new()
+    play_act_one(game)
+    play_act_two(game, mercy=False)
+    assert game.slice_complete
+    assert "killed_guardian" in game.flags and game.pride == 1
+    assert "shadow_guardian" not in game.tile.enemies
+    walk_to(game, "warriors_camp")
+    assert "Nothing has changed" in game.do("talk")
+
+
+# --------------------------------------------------------------------------
+# Act II details
+# --------------------------------------------------------------------------
+
+def act_two_ready() -> Game:
+    game = Game.new()
+    game.flags.update({"insight", "ward_insight", "warrior_trust"})
+    return game
+
+
+def test_the_ruins_only_open_from_the_north():
+    game = act_two_ready()
+    for side in [(7, 4), (9, 4), (8, 3)]:
+        walk_to(game, side)
+        direction = {(7, 4): "e", (9, 4): "w", (8, 3): "n"}[side]
+        assert "no way in from this side" in game.do(direction)
+        assert game.position == side
+    walk_to(game, (8, 5))
+    game.do("s")
+    assert game.tile.landmark == "ancient_ruins"
+
+
+def test_the_ruins_stay_shut_without_the_warriors_trust():
+    game = Game.new()
+    walk_to(game, (8, 5))
+    assert "no way in" in game.do("s")
+
+
+def test_the_cairn_only_wakes_for_the_sword():
+    game = act_two_ready()
+    walk_to(game, "warriors_rest")
+    assert "dark and cold" in game.do("examine cairn")
+    assert "war_horn" not in game.inventory
+    game.inventory.append("ancient_sword")
+    assert "glowing" in game.do("look")
+
+
+def test_the_horn_only_works_at_dusk_and_at_the_valley():
+    game = act_two_ready()
+    game.inventory.extend(["ancient_sword", "war_horn"])
+    walk_to(game, (5, 5))
+    game.do("wait until dusk")
+    assert "nothing answers" in game.do("blow horn")        # nowhere near the valley
+    walk_to(game, (8, 6))
+    game.do("wait until night")
+    assert "swallowed by the wind" in game.do("blow horn")
+    assert "valley_open" not in game.flags
+    game.do("wait until dusk")
+    assert "open" in game.do("sound the horn")
+
+
+def test_the_guardian_cannot_be_beaten_without_the_sword():
+    game = act_two_ready()
+    game.flags.add("valley_open")
+    walk_to(game, "enchanted_valley")
+    assert "drives you back" in game.do("fight guardian")
+    assert "yielded:shadow_guardian" not in game.flags
+
+
+def test_sparing_before_the_fight_does_nothing():
+    game = act_two_ready()
+    game.flags.add("valley_open")
+    walk_to(game, "enchanted_valley")
+    assert game.do("spare") == "There's no one here to spare."
+
+
+def test_the_sword_finally_deals_with_the_wolves():
+    game = Game.new()
+    game.inventory.append("ancient_sword")
+    assert "scatter" in game.do("fight the wolves")
+    assert not game.tile.enemies
+    game.do("wait until night")
+    game.do("carve safe now")
+    assert game.health > MAX_HEALTH - 20                    # nothing bit you
+
+
+def test_waiting_for_the_current_phase_does_not_skip_a_day():
+    game = Game.new()
+    turn = game.turn
+    assert game.do("wait until day") == "It's already day."
+    assert game.turn == turn
 
 
 def test_save_and_resume_mid_slice():
