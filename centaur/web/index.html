@@ -75,6 +75,17 @@
     transition: opacity 0.6s;
   }
   #title.hidden { opacity: 0; pointer-events: none; }
+  #title > :not(.fx) { position: relative; z-index: 2; }
+  /* Weather: rain and lightning are drawn at half resolution for chunky pixels. */
+  #title .fx { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+  #title canvas.fx { image-rendering: pixelated; }
+  #title #bolt { opacity: 0; }
+  #title .flash {
+    opacity: 0;
+    background: radial-gradient(ellipse at 50% 15%, rgba(225, 245, 255, 0.85), rgba(150, 195, 225, 0.45) 55%, rgba(90, 130, 170, 0.25));
+    mix-blend-mode: screen;
+  }
+  #title .sound { position: absolute; top: 16px; right: 16px; z-index: 3; }
   /* The title is text, in the CRT pixel font, so it can sit and scale anywhere. */
   .wordmark {
     margin: 0;
@@ -324,6 +335,10 @@
 <body>
 
 <div id="title">
+  <canvas class="fx" id="rain" aria-hidden="true"></canvas>
+  <canvas class="fx" id="bolt" aria-hidden="true"></canvas>
+  <div class="fx flash" id="flash" aria-hidden="true"></div>
+  <button class="music-toggle sound" title="Music">♪ Off</button>
   <h1 class="wordmark"><span class="small">The</span>Last Centaur</h1>
   <div class="buttons">
     <button id="continue" class="primary" hidden>Continue</button>
@@ -337,7 +352,7 @@
   <header>
     <div class="wordmark"><span class="small">The </span>Last Centaur</div>
     <div class="controls">
-      <button id="music" title="Music">♪ Off</button>
+      <button class="music-toggle" title="Music">♪ Off</button>
       <button id="new">New game</button>
     </div>
   </header>
@@ -382,7 +397,7 @@
   </main>
 </div>
 
-<audio id="theme" src="/assets/audio/tlfc.mp3" loop preload="none"></audio>
+<audio id="theme" src="/assets/audio/tlfc.mp3" loop preload="auto"></audio>
 
 <script>
   const $ = (id) => document.getElementById(id);
@@ -569,16 +584,142 @@
   function setMusic(on) {
     const audio = $("theme");
     store.set("music", on);
-    $("music").textContent = on ? "♪ On" : "♪ Off";
+    for (const button of document.querySelectorAll(".music-toggle")) button.textContent = on ? "♪ On" : "♪ Off";
     if (on) { audio.volume = 0.35; audio.play().catch(() => {}); } else { audio.pause(); }
   }
 
-  $("music").addEventListener("click", () => setMusic($("theme").paused));
+  for (const button of document.querySelectorAll(".music-toggle")) {
+    button.addEventListener("click", (event) => { event.stopPropagation(); setMusic($("theme").paused); });
+  }
+
+  // Browsers block sound until the visitor interacts with the page. Try right
+  // away; if that's blocked, start on the first click or keypress instead.
+  function startMusicOnFirstInteraction(event) {
+    if (event.target.closest && event.target.closest(".music-toggle")) return;  // the toggle handles itself
+    removeEventListener("pointerdown", startMusicOnFirstInteraction, true);
+    removeEventListener("keydown", startMusicOnFirstInteraction, true);
+    if (store.get("music", true) && $("theme").paused) setMusic(true);
+  }
+  addEventListener("pointerdown", startMusicOnFirstInteraction, true);
+  addEventListener("keydown", startMusicOnFirstInteraction, true);
+
+  // ---------------- weather (title screen) ----------------
+
+  const weather = (() => {
+    const SCALE = 2;                       // draw at half resolution, so pixels read as pixels
+    const rain = $("rain"), bolt = $("bolt"), flash = $("flash");
+    const rainCtx = rain.getContext("2d"), boltCtx = bolt.getContext("2d");
+    let drops = [], frame = null, timer = null, w = 0, h = 0;
+
+    function newDrop(anywhere) {
+      const depth = Math.random();         // 0 = far away, 1 = close
+      return {
+        x: Math.random() * (w + 80) - 40,
+        y: anywhere ? Math.random() * h : -Math.random() * h * 0.3,
+        len: 4 + depth * 9,
+        speed: 4 + depth * 6,
+        alpha: 0.12 + depth * 0.33,
+      };
+    }
+
+    function resize() {
+      w = Math.ceil(innerWidth / SCALE);
+      h = Math.ceil(innerHeight / SCALE);
+      for (const canvas of [rain, bolt]) { canvas.width = w; canvas.height = h; }
+      const density = reduceMotion ? 2600 : 900;
+      drops = Array.from({ length: Math.round((w * h) / density) }, () => newDrop(true));
+    }
+
+    function tick() {
+      rainCtx.clearRect(0, 0, w, h);
+      rainCtx.lineWidth = 1;
+      for (const d of drops) {
+        const speed = reduceMotion ? d.speed * 0.5 : d.speed;
+        d.y += speed;
+        d.x += speed * 0.18;
+        if (d.y - d.len > h) Object.assign(d, newDrop(false));
+        rainCtx.strokeStyle = `rgba(185, 215, 225, ${d.alpha})`;
+        rainCtx.beginPath();
+        rainCtx.moveTo(Math.round(d.x), Math.round(d.y));
+        rainCtx.lineTo(Math.round(d.x - d.len * 0.18), Math.round(d.y - d.len));
+        rainCtx.stroke();
+      }
+      frame = requestAnimationFrame(tick);
+    }
+
+    function drawBolt() {
+      boltCtx.clearRect(0, 0, w, h);
+      if (Math.random() < 0.35) return;    // sometimes it's only sheet lightning in the clouds
+      // strike in the left or right part of the sky, so bolts frame the title rather than cross it
+      const side = Math.random() < 0.5 ? 0.06 : 0.7;
+      let x = w * (side + Math.random() * 0.24), y = 0;
+      const end = h * (0.2 + Math.random() * 0.14);   // stay in the sky, above the title
+      const branches = [];
+      boltCtx.strokeStyle = "#f4fbff";
+      boltCtx.shadowColor = "rgba(190, 230, 255, 0.9)";
+      boltCtx.shadowBlur = 8;
+      boltCtx.lineWidth = 2;
+      boltCtx.beginPath();
+      boltCtx.moveTo(x, y);
+      while (y < end) {
+        y += 4 + Math.random() * 8;
+        x += (Math.random() - 0.5) * 12;
+        boltCtx.lineTo(Math.round(x), Math.round(y));
+        if (Math.random() < 0.12) branches.push([x, y]);
+      }
+      boltCtx.stroke();
+      boltCtx.lineWidth = 1;
+      for (let [bx, by] of branches) {
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        boltCtx.beginPath();
+        boltCtx.moveTo(bx, by);
+        for (let i = 0, n = 4 + Math.random() * 5; i < n; i++) {
+          by += 3 + Math.random() * 6;
+          bx += dir * (2 + Math.random() * 6);
+          boltCtx.lineTo(Math.round(bx), Math.round(by));
+        }
+        boltCtx.stroke();
+      }
+    }
+
+    // One strike is at most two pulses, well under the 3-flashes-a-second safety limit.
+    function strike() {
+      if (reduceMotion) return;
+      drawBolt();
+      flash.animate(
+        [{ opacity: 0 }, { opacity: 0.55, offset: 0.06 }, { opacity: 0.08, offset: 0.18 },
+         { opacity: 0.35, offset: 0.3 }, { opacity: 0 }],
+        { duration: 1000, easing: "ease-out" },
+      );
+      bolt.animate([{ opacity: 1 }, { opacity: 1, offset: 0.25 }, { opacity: 0 }], { duration: 750 });
+    }
+
+    function schedule(delay) {
+      timer = setTimeout(() => { strike(); schedule(6000 + Math.random() * 9000); }, delay);
+    }
+
+    function start() {
+      resize();
+      if (!frame) tick();
+      if (!timer && !reduceMotion) schedule(2500);
+    }
+
+    function stop() {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      frame = timer = null;
+    }
+
+    addEventListener("resize", () => { if (frame) resize(); });
+    return { start, stop, strike };
+  })();
+  window.lightning = weather.strike;       // handy from the console when tuning
 
   // ---------------- starting ----------------
 
   function enter(state, { showIntro }) {
     $("title").classList.add("hidden");
+    setTimeout(weather.stop, 700);         // after the title fades out
     clearLog();
     const intro = showIntro && state.intro
       ? state.intro.replace(/^THE LAST CENTAUR\s*/, "").replace(/\n*\(Type what.*\)\s*$/s, "").trim()
@@ -684,6 +825,9 @@
   });
 
   // ---------------- boot ----------------
+
+  weather.start();
+  if (store.get("music", true)) setMusic(true);   // may be blocked until the first click
 
   api("/api/state").then((state) => {
     initial = state;
