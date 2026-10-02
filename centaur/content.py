@@ -83,6 +83,7 @@ class Item:
     description: str
     lore: str = ""
     clue: Optional[str] = None        # seen when the player examines this item
+    quest: bool = False               # a story-critical find (the UI celebrates it)
 
 
 @dataclass(frozen=True)
@@ -399,7 +400,7 @@ _ITEMS = [
         description="A fold of oiled hide marked with faded ink. The marks look like your own hand.",
     ),
     Item(
-        id="crystal_focus", name="Crystal Focus",
+        id="crystal_focus", quest=True, name="Crystal Focus",
         description="A crystalline lens, cut and polished. It channels the energies of the land.",
         lore=(
             "Made by the druid circles that once mediated between the warring herds. Within its "
@@ -409,7 +410,7 @@ _ITEMS = [
         clue="focus_lore",
     ),
     Item(
-        id="ancient_sword", name="Ancient Sword",
+        id="ancient_sword", quest=True, name="Ancient Sword",
         description="A blade that remembers the first centaur wars. Its edge has never dulled.",
         lore=(
             "Wielded, they say, by the warrior-sage Chiron when the herds first turned on each "
@@ -419,7 +420,7 @@ _ITEMS = [
         clue="valor_stop",
     ),
     Item(
-        id="war_horn", name="Horn of the Fallen",
+        id="war_horn", quest=True, name="Horn of the Fallen",
         description=(
             "A battered war horn bound in bronze. The Honor Guard sounded it to call the fallen "
             "back to the line, at the hour when the dead are closest."
@@ -427,7 +428,7 @@ _ITEMS = [
         clue="horn_lore",
     ),
     Item(
-        id="stealth_cloak", name="Cloak of Shadows",
+        id="stealth_cloak", quest=True, name="Cloak of Shadows",
         description="A cloak that seems to drink the light around it.",
         lore=(
             "Woven by the Shadow Weavers, who believed true power lay in remaining unseen. Its "
@@ -437,7 +438,7 @@ _ITEMS = [
         clue="cloak_dark",
     ),
     Item(
-        id="phantom_dagger", name="Phantom's Edge",
+        id="phantom_dagger", quest=True, name="Phantom's Edge",
         description="A blade so thin it is almost not there. It is said to cut through wards.",
     ),
 ]

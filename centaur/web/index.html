@@ -309,6 +309,12 @@
 
   #inventory { list-style: none; padding: 0; margin: 0; font-size: 22px; }
   #inventory li::before { content: "◆ "; color: var(--bronze); }
+  #inventory li.quest::before { color: var(--gold); }
+  #inventory li.new { animation: found 2.4s ease-out; }
+  @keyframes found {
+    0%, 20% { color: var(--gold); text-shadow: 0 0 10px var(--gold), 0 0 22px var(--amber-deep); }
+    100% { color: inherit; text-shadow: none; }
+  }
   #inventory .empty { color: var(--dim); }
   #inventory .empty::before { content: ""; }
 
@@ -572,12 +578,51 @@
       li.textContent = "Nothing.";
       inv.appendChild(li);
     }
-    for (const name of state.inventory) {
+    const gained = lastInventory ? state.inventory.filter((i) => !lastInventory.includes(i.name)) : [];
+    for (const item of state.inventory) {
       const li = document.createElement("li");
-      li.textContent = name;
+      li.textContent = item.name;
+      if (item.quest) li.classList.add("quest");
+      if (gained.includes(item)) li.classList.add("new");
       inv.appendChild(li);
     }
+    if (gained.some((i) => i.quest)) ding();
+    lastInventory = state.inventory.map((i) => i.name);
   }
+
+  // ---------------- sound effects ----------------
+
+  let lastInventory = null;   // null until the first render, so loading a save doesn't chime
+  let audioCtx = null;
+
+  // A bright two-note chime for finding a quest item, synthesized (no sound file).
+  function ding() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const now = audioCtx.currentTime;
+      const master = audioCtx.createGain();
+      master.gain.value = 0.22;
+      master.connect(audioCtx.destination);
+      // E6 then A6, each built from bell-like partials that fade at different rates
+      for (const [freq, delay] of [[1318.5, 0], [1760, 0.11]]) {
+        [[1, 1, 1.4], [2.76, 0.32, 0.6], [5.4, 0.1, 0.3]].forEach(([ratio, peak, length]) => {
+          const t = now + delay;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq * ratio;
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(peak, t + 0.006);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(t);
+          osc.stop(t + length + 0.05);
+        });
+      }
+    } catch {}  // no audio available: the glow still shows it
+  }
+  window.ding = ding;          // try it from the console
 
   // ---------------- music ----------------
 
@@ -736,6 +781,7 @@
 
   async function newGame() {
     const state = await api("/api/new", {});
+    lastInventory = null;
     history = []; historyIndex = 0; store.set("history", history);
     enter(state, { showIntro: true });
   }
