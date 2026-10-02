@@ -31,6 +31,10 @@ venv/bin/python -m pytest centaur/tests
 - An enemy with `yields=True` doesn't die when beaten. It kneels, and interactions (`spare`, or `fight` again) decide what happens. `Effects.remove_enemies` takes it off the tile.
 - An interaction's `words` add names for its target, and `bare=True` lets the verb alone match ("spare"). If its condition fails and it has no `otherwise` text, the command falls through to the normal verb.
 - A hazard can be tied to an enemy, so it stops once that enemy is gone (the wolves).
+- A **Maze** is a landmark you get lost in: until solved, moving from it walks a hidden path. The right steps reach its heart; a wrong one puts you back where you came in. Its clues are *all* required, because each holds part of the path.
+- A landmark's `blocked_variants` give a different "you can't go in" message depending on what's missing (no cloak vs. too much light).
+- `DERIVED` flags follow from others whatever order they were earned in: all three wards → `barrier_down`.
+- Saves hold the whole world. Bump `SAVE_VERSION` in `play.py` whenever content adds or moves things in it.
 - Time: a day is 4 phases × 6 turns. Looking and examining are free; doing things takes a turn.
 
 ## Adding a puzzle

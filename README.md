@@ -4,7 +4,7 @@ A text adventure in the spirit of Myst. You wake on cold earth, stripped of your
 
 There's no quest log and no one tells you what to do. The world remembers what happens in each place, and some of those memories were there before you arrived.
 
-**Status:** the Prologue, Act I (Insight) and Act II (Valor) are playable. See [`centaur/GAME_DESIGN.md`](centaur/GAME_DESIGN.md) for the full design. (It contains spoilers.)
+**Status:** the Prologue and all three acts (Insight, Valor, Shadow) are playable, up to the barrier falling. The finale is next. See [`centaur/GAME_DESIGN.md`](centaur/GAME_DESIGN.md) for the full design. (It contains spoilers.)
 
 ## Play
 

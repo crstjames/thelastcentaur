@@ -20,8 +20,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set
 
 from centaur import content
 from centaur.content import (
-    ECHOES, ENEMIES, FEATURES, HAZARDS, INTERACTIONS, ITEMS, LANDMARKS, NPCS, PHASES,
-    PHASE_TURNS, SEQUENCES, SIGNALS, Effects, Place, Pos, is_met,
+    DERIVED, ECHOES, ENEMIES, FEATURES, HAZARDS, INTERACTIONS, ITEMS, LANDMARKS, MAZES, NPCS,
+    PHASES, PHASE_TURNS, SEQUENCES, SIGNALS, Effects, Place, Pos, is_met,
 )
 from centaur.worldgen import BIOME_GLYPHS, DIRECTIONS, Tile, World, build_world
 
@@ -88,7 +88,8 @@ class Game:
     health: int = MAX_HEALTH
     turn: int = content.START_TURN
     pride: int = 0
-    sequence_progress: Dict[str, int] = field(default_factory=dict)
+    sequence_progress: Dict[str, int] = field(default_factory=dict)   # sequences and mazes
+    maze_origin: Optional[Pos] = None     # where you walked into the maze you're lost in
     last_scene: Optional[tuple] = field(default=None, repr=False, compare=False)  # not saved
 
     # ------------------------------------------------------------------
@@ -112,6 +113,7 @@ class Game:
             "turn": self.turn,
             "pride": self.pride,
             "sequence_progress": dict(self.sequence_progress),
+            "maze_origin": list(self.maze_origin) if self.maze_origin else None,
         }
 
     @classmethod
@@ -125,6 +127,7 @@ class Game:
             turn=data["turn"],
             pride=data["pride"],
             sequence_progress=dict(data["sequence_progress"]),
+            maze_origin=tuple(data["maze_origin"]) if data.get("maze_origin") else None,
         )
 
     # ------------------------------------------------------------------
@@ -194,8 +197,9 @@ class Game:
     def _timed(self, verb: str, action) -> str:
         """Run an action that takes a turn, then let the world respond."""
         before = (self.position, self.turn)
+        self._maze_step_taken = False
         response = action()
-        if verb == "go" and self.position == before[0]:
+        if verb == "go" and self.position == before[0] and not self._maze_step_taken:
             return response  # you didn't actually go anywhere
         self.turn += 1
         return response + self._after_turn(before[1])
@@ -224,14 +228,53 @@ class Game:
         return self.describe()
 
     def _go(self, direction: str) -> str:
+        maze = self._active_maze()
+        if maze:
+            return self._maze_step(maze, direction)
         target = self.world.neighbors(self.position).get(direction)
         if target is None:
             return "The land ends there. You can't go that way."
         if not self.can_enter(target, self.position):
-            return LANDMARKS[self.world.tiles[target].landmark].blocked_message
+            return self._blocked_message(LANDMARKS[self.world.tiles[target].landmark])
+        origin = self.position
         self.position = target
+        maze = self._active_maze()
+        if maze:                              # you've just walked into it
+            self.maze_origin = origin
+            self.sequence_progress.pop(maze.id, None)
         self._arrive()
         return self.describe()
+
+    def _blocked_message(self, landmark) -> str:
+        for condition, message in landmark.blocked_variants:
+            if self.met(condition):
+                return message
+        return landmark.blocked_message
+
+    def _active_maze(self):
+        """The maze you're lost in right now, if any."""
+        return next(
+            (m for m in MAZES.values() if self.is_here(m.at) and m.solved_flag not in self.flags),
+            None,
+        )
+
+    def _maze_step(self, maze, direction: str) -> str:
+        self._maze_step_taken = True
+        progress = self.sequence_progress.get(maze.id, 0)
+        if direction == maze.path[progress]:
+            progress += 1
+            if progress < len(maze.path):
+                self.sequence_progress[maze.id] = progress
+                return maze.step_text
+            self.sequence_progress.pop(maze.id, None)
+            self.flags.add(maze.solved_flag)
+            return self._apply(maze.success) + "\n\n" + self.describe()
+        self.sequence_progress.pop(maze.id, None)
+        landmark_pos = LANDMARKS[maze.at].pos
+        self.position = self.maze_origin or (landmark_pos[0], landmark_pos[1] - 1)
+        self.maze_origin = None
+        self._arrive()
+        return maze.failure + "\n\n" + self.describe()
 
     def _go_words(self, args: Sequence[str]) -> str:
         if not args or args[0] not in DIRECTION_ALIASES:
@@ -519,6 +562,7 @@ class Game:
         return f"{note}\n\n{self._apply(sequence.success)}"
 
     def _apply(self, effects: Effects) -> str:
+        reached_goal_before = content.SLICE_GOAL in self.flags
         apply_effects(effects, self.inventory, self.flags)
         self.pride += effects.pride
         for enemy_id in effects.remove_enemies:
@@ -527,7 +571,7 @@ class Game:
         if effects.memory:
             self._remember(effects.memory)
         message = effects.message
-        if content.SLICE_GOAL in effects.flags:
+        if content.SLICE_GOAL in self.flags and not reached_goal_before:
             message += (
                 "\n\n~ You have reached the end of what has been written so far. "
                 "Explore as long as you like. ~"
@@ -588,6 +632,7 @@ class Game:
         if tile.items:
             presence.append(("item", "You see: " + ", ".join(ITEMS[i].name for i in tile.items) + "."))
 
+        in_maze = self._active_maze() is not None
         return {
             "name": tile.name,
             "description": description,
@@ -595,7 +640,7 @@ class Game:
             "memories": memories,
             "presence": presence,
             "exits": [
-                {"direction": d, "name": self.world.tiles[p].name}
+                {"direction": d, "name": "Twilight" if in_maze else self.world.tiles[p].name}
                 for d, p in self.world.neighbors(self.position).items()
             ],
         }
@@ -700,6 +745,9 @@ def apply_effects(effects: Effects, inventory: List[str], flags: Set[str]) -> No
     inventory.extend(i for i in effects.give if i not in inventory)
     flags.update(effects.flags)
     flags.update(f"clue:{c}" for c in effects.clues)
+    for condition, flag in DERIVED:
+        if is_met(condition, inventory, flags):
+            flags.add(flag)
 
 
 def _item_words(item_id: str) -> Set[str]:

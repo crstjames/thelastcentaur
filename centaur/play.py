@@ -19,7 +19,7 @@ DEFAULT_SAVE = Path.home() / ".thelastcentaur" / "save.json"
 # Saves hold the whole world, including what lies where. Bump this whenever a
 # content change adds or moves things in the world, so older saves start fresh
 # instead of silently missing pieces.
-SAVE_VERSION = 3
+SAVE_VERSION = 4
 
 INTRO = """\
 THE LAST CENTAUR

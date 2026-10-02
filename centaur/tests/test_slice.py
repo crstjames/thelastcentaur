@@ -1,4 +1,4 @@
-"""Tests for the playable slice: the Prologue, Act I (Insight) and Act II (Valor)."""
+"""Tests for the playable slice: the Prologue and Acts I-III (Insight, Valor, Shadow)."""
 
 import dataclasses
 import json
@@ -24,6 +24,10 @@ def walk_to(game: Game, goal) -> None:
         if pos == goal:
             break
         for direction, target in game.world.neighbors(pos).items():
+            lost_in = game.world.tiles[target].landmark
+            unsolved_maze = any(m.at == lost_in and m.solved_flag not in game.flags for m in content.MAZES.values())
+            if unsolved_maze and target != goal:
+                continue                      # walking through would get you lost
             if target not in came_from and game.can_enter(target, pos):
                 came_from[target] = (pos, direction)
                 queue.append(target)
@@ -92,6 +96,34 @@ def play_act_two(game: Game, mercy: bool = True) -> None:
     assert "one knee" in game.do("fight the guardian")
     assert "Valor ward" in game.do("spare him" if mercy else "kill the guardian")
 
+
+def play_act_three(game: Game, assassinate: bool = False) -> None:
+    walk_to(game, "trials_path")
+    if game.phase != "dusk":
+        game.do("wait until dusk")
+    assert "cold star" in game.do("talk to the scout")
+    walk_to(game, (3, 5))
+    assert "once toward sunset" in game.do("look")
+    walk_to(game, (5, 5))
+    assert "cold star one last time" in game.do("look")
+
+    game.do("w")                              # into the glade
+    for step in ["n", "n", "w"]:
+        assert "push on" in game.do(step)
+    assert "Cloak of Shadows" in game.do("n")
+    assert "stealth_cloak" in game.inventory
+
+    walk_to(game, (5, 6))
+    assert "Never one without the other" in game.do("look")
+    if game.phase != "night":
+        game.do("wait until night")
+    game.do("n")
+    assert game.tile.landmark == "forgotten_grove"
+    game.do("take the dagger")
+    if assassinate:
+        assert "never knew you were there" in game.do("kill the assassin")
+    assert "it isn't yours" in game.do("look into the pool")
+
 # --------------------------------------------------------------------------
 # Content, world and fairness
 # --------------------------------------------------------------------------
@@ -141,18 +173,20 @@ def test_the_slice_can_be_played_to_the_end():
     play_act_one(game)
     assert "insight" in game.flags and not game.slice_complete
     play_act_two(game)
-    assert game.slice_complete
     assert {"valor", "spared_guardian"} <= game.flags
-    assert game.pride == 0
     walk_to(game, "warriors_camp")
     assert "You let him go" in game.do("talk")
+    play_act_three(game)
+    assert game.slice_complete
+    assert {"ward_insight", "ward_valor", "ward_shadow", "barrier_down"} <= game.flags
+    assert game.pride == 0
 
 
 def test_killing_the_kneeling_guardian_breaks_the_ward_but_costs_pride():
     game = Game.new()
     play_act_one(game)
     play_act_two(game, mercy=False)
-    assert game.slice_complete
+    assert "ward_valor" in game.flags
     assert "killed_guardian" in game.flags and game.pride == 1
     assert "shadow_guardian" not in game.tile.enemies
     walk_to(game, "warriors_camp")
@@ -379,3 +413,108 @@ def test_examining_is_free_but_moving_takes_time():
     assert game.turn == turn + 1
     game.do("wait")
     assert game.turn % PHASE_TURNS == 0
+
+
+
+# --------------------------------------------------------------------------
+# Act III details
+# --------------------------------------------------------------------------
+
+def act_three_ready() -> Game:
+    game = act_two_ready()
+    game.flags.update({"valor", "ward_valor"})
+    return game
+
+
+def test_the_scout_only_appears_at_dusk_after_valor():
+    game = act_two_ready()
+    walk_to(game, "trials_path")
+    game.do("wait until dusk")
+    assert "Scout" not in game.do("look")             # not before the Valor ward
+    game.flags.update({"valor", "ward_valor"})
+    assert "The Shadow Scout is here" in game.do("look")
+    game.do("wait until night")
+    assert "Scout" not in game.do("look")
+
+
+def test_a_wrong_step_in_the_glade_puts_you_back_where_you_came_in():
+    game = act_three_ready()
+    walk_to(game, (4, 4))                             # south of the glade
+    game.do("n")
+    assert "Twilight" in game.do("look")              # every exit looks the same
+    game.do("n")
+    assert "walk out of the twilight" in game.do("s")
+    assert game.position == (4, 4)
+    assert "stealth_cloak" not in game.inventory
+
+
+def test_the_glade_path_works_from_any_entrance_and_takes_time():
+    game = act_three_ready()
+    walk_to(game, (3, 5))
+    game.do("e")
+    turn = game.turn
+    for step in "nnwn":
+        game.do(step)
+    assert "stealth_cloak" in game.inventory
+    assert game.turn == turn + 4
+    assert "From here the paths out are plain" in game.do("look")
+    game.do("n")
+    assert game.position == (4, 6)                    # once solved, it's an ordinary place
+
+
+def test_the_grove_turns_you_away_without_the_cloak_or_the_dark():
+    game = act_three_ready()
+    walk_to(game, (5, 6))
+    game.do("wait until night")
+    assert "already seen you" in game.do("n")
+    game.inventory.append("stealth_cloak")
+    game.do("wait until day")
+    assert "seen in this light" in game.do("n")
+    game.do("wait until night")
+    game.do("n")
+    assert game.tile.landmark == "forgotten_grove"
+
+
+def test_dawn_in_the_grove_is_deadly():
+    game = act_three_ready()
+    game.inventory.append("stealth_cloak")
+    walk_to(game, (5, 6))
+    game.do("wait until night")
+    game.do("n")
+    response = game.do("wait")                        # into the dawn
+    assert "Phantom Assassin" in response and game.health == MAX_HEALTH - 50
+
+
+def test_the_pool_only_shows_the_truth_at_night_and_breaks_the_last_ward():
+    game = act_three_ready()
+    game.inventory.append("stealth_cloak")
+    walk_to(game, (5, 6))
+    game.do("wait until night")
+    game.do("n")
+    response = game.do("look into the pool")
+    assert "it isn't yours" in response
+    assert "end of what has been written" in response
+    assert {"ward_shadow", "barrier_down"} <= game.flags
+
+
+def test_assassinating_the_phantom_costs_pride():
+    game = Game.new()
+    play_act_one(game)
+    play_act_two(game)
+    play_act_three(game, assassinate=True)
+    assert game.pride == 1
+    assert game.slice_complete
+
+
+def test_the_barrier_falls_whatever_order_the_wards_break_in():
+    game = Game.new()
+    game.flags.update({"ward_shadow", "ward_valor"})
+    game._apply(content.Effects(flags=("ward_insight",)))
+    assert "barrier_down" in game.flags
+
+
+def test_the_domain_stays_shut_until_the_finale_is_written():
+    game = Game.new()
+    game.flags.add("barrier_down")
+    walk_to(game, (5, 8))
+    assert "hasn't been written yet" in game.do("n")

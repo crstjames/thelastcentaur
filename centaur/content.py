@@ -24,7 +24,7 @@ PHASES = ("dawn", "day", "dusk", "night")
 PHASE_TURNS = 6         # turns per phase; a full day is 24 turns
 START_TURN = PHASE_TURNS  # the game begins at the start of "day"
 
-SLICE_GOAL = "ward_valor"     # the end of what's playable so far
+SLICE_GOAL = "barrier_down"   # the end of what's playable so far
 
 Pos = Tuple[int, int]
 Place = Union[str, Pos]       # a landmark id, "near:<landmark id>" (any tile beside it), or a tile
@@ -164,6 +164,23 @@ class Sequence:
 
 
 @dataclass(frozen=True)
+class Maze:
+    """
+    A landmark you get lost in. While unsolved, moving from it walks a hidden
+    path instead of the map: the right steps lead to its heart, a wrong one puts
+    you back where you came in.
+    """
+    id: str
+    at: str                           # landmark id
+    path: Tuple[str, ...]             # directions, in order
+    step_text: str                    # after each right step but the last
+    failure: str                      # after a wrong step, before you're put back
+    success: Effects
+    solved_flag: str
+    clues: Tuple[str, ...]            # fairness: ALL must be seen (each holds part of the path)
+
+
+@dataclass(frozen=True)
 class Echo:
     """A note your past self carved, already in a tile's memory when the game begins."""
     at: Pos
@@ -202,6 +219,7 @@ class Landmark:
     variants: Tuple[Tuple[Condition, str], ...] = ()   # first match replaces description
     enter_when: Condition = ALWAYS
     blocked_message: str = ""
+    blocked_variants: Tuple[Tuple[Condition, str], ...] = ()   # first match replaces blocked_message
     approach_from: Tuple[str, ...] = ()   # if set, can only be entered from a neighbour on these sides
     items: Tuple[str, ...] = ()
     enemies: Tuple[str, ...] = ()
@@ -265,9 +283,16 @@ _LANDMARKS = [
     ),
     Landmark(
         id="twilight_glade", name="The Twilight Glade", pos=(4, 5), biome="twilight",
-        description="A clearing where twilight seems to linger whatever the hour.",
-        enter_when=when(flags="act3_open"),
-        blocked_message="You walk toward the glade, and somehow find yourself back where you started.",
+        description=(
+            "Twilight closes around you like water. The trees are pale and close together, and "
+            "every way you look is the same way. You are not sure which direction you came in by."
+        ),
+        variants=(
+            (when(flags="glade_solved"),
+             "The heart of the Twilight Glade: a ring of pale trees around a patch of soft "
+             "grass, where the light never quite decides what hour it is. From here the paths "
+             "out are plain enough."),
+        ),
     ),
     Landmark(
         id="warriors_rest", name="Warriors' Rest", pos=(6, 6), biome="ruins",
@@ -316,17 +341,36 @@ _LANDMARKS = [
     ),
     Landmark(
         id="forgotten_grove", name="The Forgotten Grove", pos=(5, 7), biome="twilight",
-        description="A grove where shadows move with purpose.",
-        enter_when=when(flags="act3_open"),
-        blocked_message="Shadows thick as smoke swirl across the way. Something in them is watching.",
+        description=(
+            "A grove where the shadows move with purpose. Something stands among the trees, "
+            "tall and still and looking for you, and its gaze slides over you without catching. "
+            "Beneath the largest tree lies a still black pool."
+        ),
+        enter_when=when(items="stealth_cloak", phases="night"),
+        blocked_message=(
+            "Even wrapped in the cloak, you'd be seen in this light. Something in the shadows is "
+            "waiting for you to be careless."
+        ),
+        blocked_variants=(
+            (when(not_items="stealth_cloak"),
+             "Shadows thick as smoke swirl across the way. Something in them is watching, and "
+             "it has already seen you. You back away."),
+        ),
+        items=("phantom_dagger",),
+        enemies=("phantom_assassin",),
     ),
     Landmark(
         id="shadow_domain", name="The Shadow Domain", pos=(5, 9), biome="blight",
         description="A realm of perpetual twilight, where reality wavers like a mirage.",
-        enter_when=when(flags="barrier_down"),
+        enter_when=when(flags=("barrier_down", "finale_written")),   # the finale isn't written yet
         blocked_message=(
             "The air hardens into an invisible wall. Pressing against it is like pressing "
             "against your own reflection."
+        ),
+        blocked_variants=(
+            (when(flags="barrier_down"),
+             "The barrier is gone; you felt it fall. But the Domain's gates are still shut, and "
+             "what waits beyond them hasn't been written yet."),
         ),
     ),
 ]
@@ -382,6 +426,20 @@ _ITEMS = [
         ),
         clue="horn_lore",
     ),
+    Item(
+        id="stealth_cloak", name="Cloak of Shadows",
+        description="A cloak that seems to drink the light around it.",
+        lore=(
+            "Woven by the Shadow Weavers, who believed true power lay in remaining unseen. Its "
+            "pattern never looks the same twice. In daylight it only blurs you; in true dark, "
+            "the wearer all but disappears."
+        ),
+        clue="cloak_dark",
+    ),
+    Item(
+        id="phantom_dagger", name="Phantom's Edge",
+        description="A blade so thin it is almost not there. It is said to cut through wards.",
+    ),
 ]
 ITEMS: Dict[str, Item] = {i.id: i for i in _ITEMS}
 
@@ -413,6 +471,24 @@ _ENEMIES = [
                 "centaur's face: tired, and very young. It bows its head and waits for the blow."
             ),
             flags=("yielded:shadow_guardian",),
+        ),
+    ),
+    Enemy(
+        id="phantom_assassin", name="Phantom Assassin",
+        description=(
+            "A deadly spirit that guards the secret paths. It sees everything that the dark "
+            "doesn't hide."
+        ),
+        health=80, damage=50,
+        defeat_requires=when(items=("stealth_cloak", "phantom_dagger"), phases="night"),
+        on_defeat=Effects(
+            message=(
+                "You come at it out of the dark it can't see into. Phantom's Edge goes in without "
+                "a sound, and the Assassin is simply gone, like a candle pinched out. It never "
+                "knew you were there. You tell yourself that makes it cleaner."
+            ),
+            memory="Here, unseen, you killed the Phantom Assassin.",
+            pride=1,
         ),
     ),
 ]
@@ -495,6 +571,41 @@ _NPCS = [
             Line(
                 ALWAYS,
                 "The Fallen Warrior turns their back on you. \"I know what you are.\"",
+            ),
+        ),
+    ),
+    NPC(
+        id="shadow_scout", name="The Shadow Scout", at="trials_path",
+        description="Lean and quiet, with eyes that never quite settle. They were here all along.",
+        present_when=when(flags="ward_valor", phases="dusk"),
+        lines=(
+            Line(
+                when(flags="ward_shadow"),
+                "The Scout studies you for a long moment. \"So now you've seen it. The face in "
+                "the water.\" They don't look away. \"Whatever you do next, do it knowing.\"",
+            ),
+            Line(
+                when(not_flags="met_scout"),
+                "A figure steps out of the dusk exactly where the hoofprints end. \"Not all "
+                "victories need bloodshed, clever one,\" the Scout says. \"The Hermit gave you "
+                "back your sight. The old soldier gave you back your nerve. My gift is harder: "
+                "I'm going to show you what you are.\" They nod toward the twilight in the "
+                "north. \"The glade will try to turn you around. Walk it like this: twice toward "
+                "the cold star that never moves. The rest you wrote down yourself, last time. "
+                "Look where the twilight lingers.\"",
+                Effects(flags=("met_scout",), clues=("scout_way",)),
+            ),
+            Line(
+                when(items="stealth_cloak"),
+                "\"It suits you,\" the Scout says of the cloak. \"The grove's watcher sees "
+                "everything but the dark. Go at night, and go wrapped.\"",
+                Effects(clues=("grove_night",)),
+            ),
+            Line(
+                ALWAYS,
+                "\"Twice toward the cold star,\" the Scout repeats. \"The rest is in your own "
+                "hand, in the twilight either side of the glade.\"",
+                Effects(clues=("scout_way",)),
             ),
         ),
     ),
@@ -680,6 +791,19 @@ _FEATURES = [
         ),
         visible_when=when(flags="insight"),
     ),
+    # --- Forgotten Grove ---------------------------------------------------
+    Feature(
+        id="still_pool", name="the still pool", at="forgotten_grove",
+        words=("pool", "water", "reflection", "still", "black"),
+        description="A still black pool beneath the largest tree. Not a ripple moves on it.",
+        visible_when=when(not_flags="ward_shadow"),
+    ),
+    Feature(
+        id="still_pool_after", name="the still pool", at="forgotten_grove",
+        words=("pool", "water", "reflection", "still", "black"),
+        description="The pool shows you your own face now, and nothing else. It's enough.",
+        visible_when=when(flags="ward_shadow"),
+    ),
 ]
 FEATURES: Dict[str, Feature] = {f.id: f for f in _FEATURES}
 
@@ -731,6 +855,21 @@ _INTERACTIONS = [
         ),
         otherwise="You raise the Crystal Focus, but it's dark and cold in your hand. It needs a light you don't have right now.",
         clues=("focus_lore", "focus_sun", "sunlight_echo"),
+    ),
+    Interaction(
+        id="look_into_pool", verbs=("examine",), at="forgotten_grove", feature="still_pool",
+        when=when(phases="night"),
+        effects=Effects(
+            message=(
+                "You lean over the pool. In the black water your reflection looks back: and it "
+                "isn't yours. It's the face from the mural, the face on the throne. Crowned. "
+                "Proud. It is your face, and it smiles when you don't.\n\nYou don't look away. "
+                "Somewhere very far off, something gives, like a held breath let go. The Shadow "
+                "ward is broken, and with it, the last of the barrier. You feel it fall."
+            ),
+            flags=("ward_shadow", "shadow"),
+            memory="Here, in the still pool, you saw whose face the shadow wears.",
+        ),
     ),
     Interaction(
         id="find_horn", verbs=("examine", "take"), at="warriors_rest", feature="cairn_glowing",
@@ -831,6 +970,35 @@ _SEQUENCES = [
 ]
 SEQUENCES: Dict[str, Sequence] = {s.id: s for s in _SEQUENCES}
 
+_MAZES = [
+    Maze(
+        id="twilight_glade", at="twilight_glade",
+        path=("north", "north", "west", "north"),
+        step_text="You push on. The pale trees close in behind you, and everything ahead looks the same.",
+        failure=(
+            "The trees turn you gently around. A few steps later you walk out of the twilight "
+            "exactly where you walked in."
+        ),
+        success=Effects(
+            message=(
+                "One last step, and the trees open onto a ring of soft grass at the heart of the "
+                "glade. Hanging from a low branch, as if left for you, is a cloak that drinks in "
+                "the light. You take down the Cloak of Shadows."
+            ),
+            give=("stealth_cloak",),
+            memory="You found your way to the heart of the glade, and the Cloak of Shadows.",
+        ),
+        solved_flag="glade_solved",
+        clues=("scout_way", "glade_sunset", "glade_last"),
+    ),
+]
+MAZES: Dict[str, Maze] = {m.id: m for m in _MAZES}
+
+# Flags that follow from other flags, whatever order they were earned in.
+DERIVED = [
+    (when(flags=("ward_insight", "ward_valor", "ward_shadow")), "barrier_down"),
+]
+
 
 # --------------------------------------------------------------------------
 # Echoes, signals, hazards
@@ -847,6 +1015,9 @@ ECHOES = [
     Echo(at=(2, 6), text=carved("Sunlight, not torchlight. The Focus remembers the sun."), clue="sunlight_echo"),
     Echo(at=(8, 5), text=carved("The old steel wakes the old stones."), clue="old_steel"),
     Echo(at=(6, 6), text=carved("The dead walk at dusk. Even the ones who keep the gates."), clue="dusk_echo"),
+    Echo(at=(3, 5), text=carved("In the glade, when the Scout's steps run out: once toward sunset."), clue="glade_sunset"),
+    Echo(at=(5, 5), text=carved("And after sunset, the cold star one last time. Then you're through."), clue="glade_last"),
+    Echo(at=(5, 6), text=carved("Night and the cloak. Never one without the other."), clue="grove_night"),
 ]
 
 SIGNALS = [
@@ -868,6 +1039,14 @@ HAZARDS = [
         at="awakening_woods", when=when(phases="night"), damage=20,
         message="In the dark, the wolves close in and snap at your flanks. (-20 health)",
         enemy="wolf_pack",
+    ),
+    Hazard(
+        at="forgotten_grove", when=when(phases=("dawn", "day", "dusk")), damage=50,
+        message=(
+            "The light finds you, and so does the Phantom Assassin. Something cold passes "
+            "through your side. (-50 health)"
+        ),
+        enemy="phantom_assassin",
     ),
 ]
 
@@ -903,6 +1082,9 @@ def validate_content() -> list:
         flags_set.update(sequence.success.flags)
     for enemy in ENEMIES.values():
         flags_set.update(enemy.on_defeat.flags)
+    for maze in MAZES.values():
+        flags_set.update(maze.success.flags + (maze.solved_flag,))
+    flags_set.update(flag for _, flag in DERIVED)
 
     def check_place(where: str, place: Place) -> None:
         if isinstance(place, str):
@@ -961,6 +1143,16 @@ def validate_content() -> list:
         if not sequence.clues:
             problems.append(f"{where}: has no clues pointing to the order")
         for clue in sequence.clues:
+            if clue not in produced:
+                problems.append(f"{where}: clue '{clue}' is never shown to the player")
+
+    for maze in MAZES.values():
+        where = f"maze {maze.id}"
+        check_place(where, maze.at)
+        check_items(where, maze.success.give)
+        if not maze.clues:
+            problems.append(f"{where}: has no clues pointing to the path")
+        for clue in maze.clues:
             if clue not in produced:
                 problems.append(f"{where}: clue '{clue}' is never shown to the player")
 

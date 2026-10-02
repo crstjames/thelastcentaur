@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import List, Set
 
 from centaur.content import (
-    ECHOES, ENEMIES, FEATURES, INTERACTIONS, ITEMS, LANDMARKS, NPCS, PHASES, SEQUENCES,
+    ECHOES, ENEMIES, FEATURES, INTERACTIONS, ITEMS, LANDMARKS, MAZES, NPCS, PHASES, SEQUENCES,
     SIGNALS, Place, Pos, is_met,
 )
 from centaur.game import apply_effects, can_enter, is_at
@@ -87,6 +87,12 @@ def solve(require_clues: bool = True, world: World = None) -> SolveResult:
                         if interaction.once:
                             flags.add(f"done:{interaction.id}")
                         apply_effects(interaction.effects, inventory, flags)
+                for maze in MAZES.values():
+                    # every clue holds part of the path, so all of them are needed
+                    seen_all = not require_clues or all(f"clue:{c}" in flags for c in maze.clues)
+                    if at(maze.at, pos) and maze.solved_flag not in flags and seen_all:
+                        flags.add(maze.solved_flag)
+                        apply_effects(maze.success, inventory, flags)
                 for sequence in SEQUENCES.values():
                     if at(sequence.at, pos) and met(sequence.when) and clued(sequence.clues):
                         apply_effects(sequence.success, inventory, flags)
