@@ -1,4 +1,4 @@
-"""Tests for the playable slice: the Prologue and Acts I-III (Insight, Valor, Shadow)."""
+"""Tests for the playable slice: the Prologue and Acts I-III (the spear, the shield, the armor)."""
 
 import dataclasses
 import json
@@ -43,11 +43,11 @@ def walk_to(game: Game, goal) -> None:
 
 
 def play_act_one(game: Game) -> None:
-    assert "Don't trust the crown" in game.do("look")
+    assert "Ixion lives" in game.do("look")
     assert "map" in game.do("examine the roots").lower()
 
-    walk_to(game, "druids_grove")
-    assert "Again" in game.do("talk to the hermit")
+    walk_to(game, "melias_grove")
+    assert "Not as you left" in game.do("talk to melia")
 
     walk_to(game, "mystic_mountains")
     assert "early riser" in game.do("look")
@@ -65,26 +65,29 @@ def play_act_one(game: Game) -> None:
     game.do("strike the white crystal")
     game.do("strike the amber crystal")
     result = game.do("strike the violet crystal")
-    assert "you can read them" in result
-    assert "I learned. It wasn't enough." in game.do("read the runes")
+    assert "You led them" in result and "you can read them" in result
+    assert "ash_spear" in game.inventory
+    assert "Bridle-King" in game.do("read the runes")
 
 
 def play_act_two(game: Game, mercy: bool = True) -> None:
-    walk_to(game, "warriors_camp")
-    assert "I know what you are" not in game.do("talk to the warrior")
+    walk_to(game, "lapith_camp")
+    assert "I know what you are" not in game.do("talk to caeneus")
     assert "Fell at the valley" in game.do("read the standards")
-    assert "from where the sun never reaches" in game.do("talk to the warrior")
+    assert "from where the sun never reaches" in game.do("talk to caeneus")
 
-    walk_to(game, (8, 5))                     # north of the ruins
-    assert "old steel" in game.do("look")
+    walk_to(game, (8, 5))                     # north of the stronghold
+    assert "old spear" in game.do("look")
     game.do("s")
-    assert game.tile.landmark == "ancient_ruins"
-    game.do("take the sword")
-    assert "Valor is the strength to stop" in game.do("examine the sword")
+    assert game.tile.landmark == "ruined_stronghold"
+    assert "stopping of his spear" in game.do("read the bier")
+    game.do("take the horn")
+    assert "war_horn" in game.inventory
 
     walk_to(game, "warriors_rest")
     assert "glowing" in game.do("look")
-    assert "Horn of the Fallen" in game.do("examine the glowing cairn")
+    assert "You are the last of them" in game.do("examine the glowing cairn")
+    assert "bronze_shield" in game.inventory
 
     walk_to(game, (8, 6))                     # the valley mouth
     if game.phase != "dusk":
@@ -94,14 +97,14 @@ def play_act_two(game: Game, mercy: bool = True) -> None:
     game.do("n")
     assert game.tile.landmark == "enchanted_valley"
     assert "one knee" in game.do("fight the guardian")
-    assert "Valor ward" in game.do("spare him" if mercy else "kill the guardian")
+    assert "free" in game.do("spare him" if mercy else "kill the guardian")
 
 
 def play_act_three(game: Game, assassinate: bool = False) -> None:
-    walk_to(game, "trials_path")
+    walk_to(game, "crossroads")
     if game.phase != "dusk":
         game.do("wait until dusk")
-    assert "cold star" in game.do("talk to the scout")
+    assert "cold star" in game.do("talk to silenus")
     walk_to(game, (3, 5))
     assert "once toward sunset" in game.do("look")
     walk_to(game, (5, 5))
@@ -110,8 +113,8 @@ def play_act_three(game: Game, assassinate: bool = False) -> None:
     game.do("w")                              # into the glade
     for step in ["n", "n", "w"]:
         assert "push on" in game.do(step)
-    assert "Cloak of Shadows" in game.do("n")
-    assert "stealth_cloak" in game.inventory
+    assert "Cloak of Nyx" in game.do("n")
+    assert "cloak_of_nyx" in game.inventory
 
     walk_to(game, (5, 6))
     assert "Never one without the other" in game.do("look")
@@ -119,10 +122,11 @@ def play_act_three(game: Game, assassinate: bool = False) -> None:
         game.do("wait until night")
     game.do("n")
     assert game.tile.landmark == "forgotten_grove"
-    game.do("take the dagger")
+    assert "A stranger looks back" in game.do("look into the pool")
+    assert "Ixion, the Bridle-King" in game.do("put on the armor")
     if assassinate:
-        assert "never knew you were there" in game.do("kill the assassin")
-    assert "it isn't yours" in game.do("look into the pool")
+        assert "never knew you were there" in game.do("kill the ker")
+    assert "Centaur Prime, who never knelt" in game.do("look into the pool")
 
 # --------------------------------------------------------------------------
 # Content, world and fairness
@@ -171,26 +175,27 @@ def test_solver_catches_a_puzzle_without_a_findable_clue(monkeypatch):
 def test_the_slice_can_be_played_to_the_end():
     game = Game.new()
     play_act_one(game)
-    assert "insight" in game.flags and not game.slice_complete
+    assert "runes" in game.flags and not game.slice_complete
     play_act_two(game)
-    assert {"valor", "spared_guardian"} <= game.flags
-    walk_to(game, "warriors_camp")
-    assert "You let him go" in game.do("talk")
+    assert {"spirits_freed", "spared_guardian"} <= game.flags
+    walk_to(game, "lapith_camp")
+    assert "You let them go" in game.do("talk")
     play_act_three(game)
     assert game.slice_complete
-    assert {"ward_insight", "ward_valor", "ward_shadow", "barrier_down"} <= game.flags
+    assert {"memory_spear", "memory_shield", "memory_armor", "bridle_broken"} <= game.flags
+    assert {"ash_spear", "bronze_shield", "bronze_armor"} <= set(game.inventory)
     assert game.pride == 0
 
 
-def test_killing_the_kneeling_guardian_breaks_the_ward_but_costs_pride():
+def test_killing_the_kneeling_guardian_frees_the_valley_but_costs_pride():
     game = Game.new()
     play_act_one(game)
     play_act_two(game, mercy=False)
-    assert "ward_valor" in game.flags
+    assert "spirits_freed" in game.flags
     assert "killed_guardian" in game.flags and game.pride == 1
-    assert "shadow_guardian" not in game.tile.enemies
-    walk_to(game, "warriors_camp")
-    assert "Nothing has changed" in game.do("talk")
+    assert "bound_guardian" not in game.tile.enemies
+    walk_to(game, "lapith_camp")
+    assert "A beast" in game.do("talk")
 
 
 # --------------------------------------------------------------------------
@@ -199,11 +204,12 @@ def test_killing_the_kneeling_guardian_breaks_the_ward_but_costs_pride():
 
 def act_two_ready() -> Game:
     game = Game.new()
-    game.flags.update({"insight", "ward_insight", "warrior_trust"})
+    game.flags.update({"runes", "memory_spear", "caeneus_trust"})
+    game.inventory.append("ash_spear")
     return game
 
 
-def test_the_ruins_only_open_from_the_north():
+def test_the_stronghold_only_opens_from_the_north():
     game = act_two_ready()
     for side in [(7, 4), (9, 4), (8, 3)]:
         walk_to(game, side)
@@ -212,27 +218,41 @@ def test_the_ruins_only_open_from_the_north():
         assert game.position == side
     walk_to(game, (8, 5))
     game.do("s")
-    assert game.tile.landmark == "ancient_ruins"
+    assert game.tile.landmark == "ruined_stronghold"
 
 
-def test_the_ruins_stay_shut_without_the_warriors_trust():
+def test_the_stronghold_stays_shut_without_caeneus_trust():
     game = Game.new()
     walk_to(game, (8, 5))
     assert "no way in" in game.do("s")
 
 
-def test_the_cairn_only_wakes_for_the_sword():
+def test_the_cairn_only_wakes_for_the_spear():
     game = act_two_ready()
+    game.inventory.remove("ash_spear")
     walk_to(game, "warriors_rest")
     assert "dark and cold" in game.do("examine cairn")
-    assert "war_horn" not in game.inventory
-    game.inventory.append("ancient_sword")
+    assert "bronze_shield" not in game.inventory
+    game.inventory.append("ash_spear")
     assert "glowing" in game.do("look")
+    game.do("take the glowing cairn")
+    assert {"bronze_shield"} <= set(game.inventory) and "memory_shield" in game.flags
+
+
+def test_caeneus_explains_the_shield_once_he_trusts_you():
+    game = act_two_ready()
+    game.flags.discard("caeneus_trust")
+    game.inventory.append("bronze_shield")
+    walk_to(game, "lapith_camp")
+    assert "tell me you don't remember" in game.do("talk")
+    game.do("read the standards")
+    assert "from where the sun never reaches" in game.do("talk")
+    assert "gave it back to your dead" in game.do("talk")
 
 
 def test_the_horn_only_works_at_dusk_and_at_the_valley():
     game = act_two_ready()
-    game.inventory.extend(["ancient_sword", "war_horn"])
+    game.inventory.extend(["bronze_shield", "war_horn"])
     walk_to(game, (5, 5))
     game.do("wait until dusk")
     assert "nothing answers" in game.do("blow horn")        # nowhere near the valley
@@ -244,12 +264,12 @@ def test_the_horn_only_works_at_dusk_and_at_the_valley():
     assert "open" in game.do("sound the horn")
 
 
-def test_the_guardian_cannot_be_beaten_without_the_sword():
+def test_the_guardian_cannot_be_beaten_without_the_shield():
     game = act_two_ready()
     game.flags.add("valley_open")
     walk_to(game, "enchanted_valley")
     assert "drives you back" in game.do("fight guardian")
-    assert "yielded:shadow_guardian" not in game.flags
+    assert "yielded:bound_guardian" not in game.flags
 
 
 def test_sparing_before_the_fight_does_nothing():
@@ -259,9 +279,9 @@ def test_sparing_before_the_fight_does_nothing():
     assert game.do("spare") == "There's no one here to spare."
 
 
-def test_the_sword_finally_deals_with_the_wolves():
+def test_the_spear_finally_deals_with_the_wolves():
     game = Game.new()
-    game.inventory.append("ancient_sword")
+    game.inventory.append("ash_spear")
     assert "scatter" in game.do("fight the wolves")
     assert not game.tile.enemies
     game.do("wait until night")
@@ -279,8 +299,8 @@ def test_waiting_for_the_current_phase_does_not_skip_a_day():
 def test_save_and_resume_mid_slice():
     game = Game.new()
     game.do("examine roots")
-    walk_to(game, "druids_grove")
-    game.do("talk hermit")
+    walk_to(game, "melias_grove")
+    game.do("talk melia")
     game.do("carve I was here")
 
     resumed = Game.from_dict(json.loads(json.dumps(game.to_dict())))
@@ -331,8 +351,8 @@ def test_wrong_order_resets_the_chord():
     game.do("strike white crystal")
     assert "Discord" in game.do("strike violet crystal")
     game.do("strike amber crystal")
-    assert "ward_insight" not in game.flags
-    assert game.sequence_progress.get("insight_ward", 0) == 0
+    assert "memory_spear" not in game.flags
+    assert game.sequence_progress.get("spear_chord", 0) == 0
 
 
 def test_ambiguous_crystal_asks_which():
@@ -350,7 +370,7 @@ def test_wolves_bite_at_night_and_you_wake_in_the_grove():
         response = game.do("examine roots") if bites == 0 else game.do("carve help")
         bites += 1
         assert bites < 20
-    assert game.position == LANDMARKS["druids_grove"].pos
+    assert game.position == LANDMARKS["melias_grove"].pos
     assert game.health == MAX_HEALTH
     assert game.phase == "dawn"
     assert any("overcome by" in m for m in game.world.tiles[game.world.start].memory)
@@ -373,12 +393,12 @@ def test_the_map_is_found_not_given():
     assert all(cell["name"] is None for cell in marked if not cell["here"])  # unnamed until visited
 
 
-def test_the_fallen_warrior_turns_away_until_you_can_read():
+def test_caeneus_turns_away_until_you_can_read():
     game = Game.new()
-    walk_to(game, "warriors_camp")
+    walk_to(game, "lapith_camp")
     assert "I know what you are" in game.do("talk")
     assert "can't read" in game.do("read the standards")
-    game.flags.add("insight")
+    game.flags.add("runes")
     assert "Fell at the valley" in game.do("read the standards")
 
 
@@ -387,7 +407,7 @@ def test_the_fallen_warrior_turns_away_until_you_can_read():
     [
         ("look at the bark", "sets of four"),
         ("x roots", "map"),
-        ("talk to the old druid", "Again"),   # any way of addressing the one person here
+        ("talk to the old dryad", "Not as you left"),   # any way of addressing the one person here
         ("dance", "Nothing happens"),
         ("teleport to the throne", "not sure how"),
         ("", "Say something"),
@@ -397,8 +417,8 @@ def test_the_fallen_warrior_turns_away_until_you_can_read():
 )
 def test_parser(command, expected):
     game = Game.new()
-    if "druid" in command:
-        walk_to(game, "druids_grove")
+    if "dryad" in command:
+        walk_to(game, "melias_grove")
     if "raise" in command:
         game.inventory.append("old_map")
     assert expected in game.do(command)
@@ -423,19 +443,20 @@ def test_examining_is_free_but_moving_takes_time():
 
 def act_three_ready() -> Game:
     game = act_two_ready()
-    game.flags.update({"valor", "ward_valor"})
+    game.inventory.append("bronze_shield")
+    game.flags.update({"memory_shield", "spirits_freed"})
     return game
 
 
-def test_the_scout_only_appears_at_dusk_after_valor():
+def test_silenus_only_appears_at_dusk_once_the_valley_is_free():
     game = act_two_ready()
-    walk_to(game, "trials_path")
+    walk_to(game, "crossroads")
     game.do("wait until dusk")
-    assert "Scout" not in game.do("look")             # not before the Valor ward
-    game.flags.update({"valor", "ward_valor"})
-    assert "The Shadow Scout is here" in game.do("look")
+    assert "Silenus" not in game.do("look")           # not before the valley
+    game.flags.add("spirits_freed")
+    assert "Silenus is here" in game.do("look")
     game.do("wait until night")
-    assert "Scout" not in game.do("look")
+    assert "Silenus" not in game.do("look")
 
 
 def test_a_wrong_step_in_the_glade_puts_you_back_where_you_came_in():
@@ -446,7 +467,7 @@ def test_a_wrong_step_in_the_glade_puts_you_back_where_you_came_in():
     game.do("n")
     assert "walk out of the twilight" in game.do("s")
     assert game.position == (4, 4)
-    assert "stealth_cloak" not in game.inventory
+    assert "cloak_of_nyx" not in game.inventory
 
 
 def test_the_glade_path_works_from_any_entrance_and_takes_time():
@@ -456,7 +477,7 @@ def test_the_glade_path_works_from_any_entrance_and_takes_time():
     turn = game.turn
     for step in "nnwn":
         game.do(step)
-    assert "stealth_cloak" in game.inventory
+    assert "cloak_of_nyx" in game.inventory
     assert game.turn == turn + 4
     assert "From here the paths out are plain" in game.do("look")
     game.do("n")
@@ -468,7 +489,7 @@ def test_the_grove_turns_you_away_without_the_cloak_or_the_dark():
     walk_to(game, (5, 6))
     game.do("wait until night")
     assert "already seen you" in game.do("n")
-    game.inventory.append("stealth_cloak")
+    game.inventory.append("cloak_of_nyx")
     game.do("wait until day")
     assert "seen in this light" in game.do("n")
     game.do("wait until night")
@@ -478,27 +499,30 @@ def test_the_grove_turns_you_away_without_the_cloak_or_the_dark():
 
 def test_dawn_in_the_grove_is_deadly():
     game = act_three_ready()
-    game.inventory.append("stealth_cloak")
+    game.inventory.append("cloak_of_nyx")
     walk_to(game, (5, 6))
     game.do("wait until night")
     game.do("n")
     response = game.do("wait")                        # into the dawn
-    assert "Phantom Assassin" in response and game.health == MAX_HEALTH - 50
+    assert "Ker" in response and game.health == MAX_HEALTH - 50
 
 
-def test_the_pool_only_shows_the_truth_at_night_and_breaks_the_last_ward():
+def test_the_pool_only_shows_the_prime_once_you_wear_the_armor():
     game = act_three_ready()
-    game.inventory.append("stealth_cloak")
+    game.inventory.append("cloak_of_nyx")
     walk_to(game, (5, 6))
     game.do("wait until night")
     game.do("n")
+    assert "A stranger looks back" in game.do("look into the pool")
+    assert "memory_armor" not in game.flags
+    assert "You know where he is" in game.do("take the armor")
     response = game.do("look into the pool")
-    assert "it isn't yours" in response
+    assert "Centaur Prime" in response
     assert "end of what has been written" in response
-    assert {"ward_shadow", "barrier_down"} <= game.flags
+    assert {"memory_armor", "bridle_broken"} <= game.flags
 
 
-def test_assassinating_the_phantom_costs_pride():
+def test_killing_the_ker_costs_pride():
     game = Game.new()
     play_act_one(game)
     play_act_two(game)
@@ -507,15 +531,21 @@ def test_assassinating_the_phantom_costs_pride():
     assert game.slice_complete
 
 
-def test_the_barrier_falls_whatever_order_the_wards_break_in():
+def test_the_bridle_breaks_whatever_order_the_memories_return_in():
     game = Game.new()
-    game.flags.update({"ward_shadow", "ward_valor"})
-    game._apply(content.Effects(flags=("ward_insight",)))
-    assert "barrier_down" in game.flags
+    game.flags.update({"memory_armor", "memory_shield"})
+    game._apply(content.Effects(flags=("memory_spear",)))
+    assert "bridle_broken" in game.flags
 
 
-def test_the_domain_stays_shut_until_the_finale_is_written():
+def test_ixions_hold_turns_you_back_until_the_bridle_breaks():
     game = Game.new()
-    game.flags.add("barrier_down")
+    walk_to(game, (5, 8))
+    assert "a rein you can't see" in game.do("n")
+
+
+def test_ixions_hold_stays_shut_until_the_finale_is_written():
+    game = Game.new()
+    game.flags.add("bridle_broken")
     walk_to(game, (5, 8))
     assert "hasn't been written yet" in game.do("n")

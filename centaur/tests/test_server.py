@@ -28,6 +28,14 @@ def test_a_new_player_gets_the_intro(client):
     assert known_tiles(state) == 1
 
 
+def test_the_prologue_opens_every_visit(client):
+    state = client.get("/api/state").json()
+    assert state["prologue"][-1].endswith("You are...")
+    client.post("/api/command", json={"text": "n"})
+    assert client.get("/api/state").json()["prologue"] == state["prologue"]
+    assert client.post("/api/new").json()["prologue"] == state["prologue"]
+
+
 def test_commands_update_the_sidebar(client):
     client.get("/api/state")
     state = client.post("/api/command", json={"text": "examine roots"}).json()
@@ -75,4 +83,4 @@ def test_plain_actions_have_no_scene(client):
 def test_quest_items_are_marked(client):
     from centaur.content import ITEMS
     quest = {i.id for i in ITEMS.values() if i.quest}
-    assert quest == {"crystal_focus", "ancient_sword", "war_horn", "stealth_cloak", "phantom_dagger"}
+    assert quest == {"crystal_focus", "ash_spear", "war_horn", "bronze_shield", "cloak_of_nyx", "bronze_armor"}

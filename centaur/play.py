@@ -11,15 +11,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+import textwrap
+import time
 from pathlib import Path
 
+from centaur.content import PROLOGUE, PROLOGUE_TITLE
 from centaur.game import Game
 
 DEFAULT_SAVE = Path.home() / ".thelastcentaur" / "save.json"
 # Saves hold the whole world, including what lies where. Bump this whenever a
 # content change adds or moves things in the world, so older saves start fresh
 # instead of silently missing pieces.
-SAVE_VERSION = 4
+SAVE_VERSION = 5
 
 INTRO = """\
 THE LAST CENTAUR
@@ -47,6 +51,25 @@ def save(game: Game, path: Path) -> None:
     tmp.replace(path)
 
 
+def tell_prologue() -> None:
+    """The opening crawl: one paragraph at a time, then Enter to begin."""
+    print()
+    for paragraph in PROLOGUE:
+        print(textwrap.fill(paragraph, 72) + "\n")
+        if sys.stdin.isatty():
+            time.sleep(1.2)
+    title = "  ".join(PROLOGUE_TITLE.upper())        # T H E   L A S T ...
+    red = sys.stdout.isatty()
+    if red:
+        time.sleep(1.5)
+    print(("\033[1;31m" if red else "") + title.center(72).rstrip() + ("\033[0m" if red else "") + "\n")
+    try:
+        input("(Press Enter.)")
+    except (EOFError, KeyboardInterrupt):
+        pass
+    print()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Play The Last Centaur.")
     parser.add_argument("--new", action="store_true", help="start a new game")
@@ -56,6 +79,7 @@ def main() -> None:
     game = None if args.new or not args.save.exists() else load(args.save)
     if game is None:
         game = Game.new()
+        tell_prologue()
         print(INTRO)
         save(game, args.save)
     else:

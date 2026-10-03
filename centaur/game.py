@@ -647,8 +647,7 @@ class Game:
         self._arrive()
         return (
             "Darkness takes you...\n\n"
-            "You wake to birdsong and grey dawn light. Someone has carried you to the "
-            "Hermit's grove. The Hermit says nothing, but there's a blanket over your back.\n\n"
+            + content.FALL_MESSAGE + "\n\n"
             + self.describe()
         )
 

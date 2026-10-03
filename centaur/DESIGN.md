@@ -18,7 +18,7 @@ venv/bin/python -m pytest centaur/tests
 | `game.py` | The generic engine. `Game.do(text)` returns text. It evaluates `Condition`s and applies `Effects`, and knows nothing story-specific. |
 | `solver.py` | Proves the content is **fair**: the goal can be reached by a player who only tries a clue-gated action after seeing one of its clues. |
 | `play.py` | Terminal runner with autosave (`~/.thelastcentaur/save.json`). |
-| `server.py` + `web/index.html` | Browser UI: a small FastAPI wrapper plus one page with the pixel-art background, theme music and CRT look (assets in `web/assets/`). It shares the terminal's save file. Add `#play` to the URL to skip the title screen. |
+| `server.py` + `web/index.html` | Browser UI: a small FastAPI wrapper plus one page with the pixel-art background, theme music and CRT look (assets in `web/assets/`). It shares the terminal's save file. The browser opens on the prologue crawl (`content.PROLOGUE`, after a "press any key" so music can play), which ends by revealing the title; the title is the start screen. Music: `assets/audio/prologue.mp3` for the crawl (optional), `tlfc.mp3` from the title on. The terminal shows the crawl on a new game. Add `#play` to the URL to skip straight into the game. |
 
 ## How content works
 

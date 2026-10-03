@@ -39,7 +39,7 @@ VERBS = {
         "work",                                                  # "work the crystal loose"
     ),
     "use": ("use", "raise", "hold", "lift", "show", "point", "shine", "brandish", "aim",
-            "present", "wield"),
+            "present", "wield", "wear", "don"),
     "strike": ("strike", "hit", "tap", "ring", "knock", "kick", "smack", "bang", "thump", "whack",
                "chime", "ding", "bash"),
     "go": (
@@ -86,6 +86,8 @@ PHRASES = {
     ("peer", "into"): "examine",
     ("peer", "through"): "use",
     ("hold", "up"): "use",
+    ("put", "on"): "use",
+    ("strap", "on"): "use",
     ("put", "down"): "drop",
     ("set", "down"): "drop",
     ("let", "go", "of"): "drop",

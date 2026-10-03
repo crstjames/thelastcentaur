@@ -62,9 +62,9 @@ PHRASINGS = [
     ("decipher the standards", "read", ["standards"]),
     # --- taking -------------------------------------------------------------
     ("take crystal", "take", ["crystal"]),
-    ("get the sword", "take", ["sword"]),
-    ("grab the sword", "take", ["sword"]),
-    ("pick up the sword", "take", ["sword"]),
+    ("get the spear", "take", ["spear"]),
+    ("grab the spear", "take", ["spear"]),
+    ("pick up the spear", "take", ["spear"]),
     ("yank the crystal", "take", ["crystal"]),
     ("rip out the crystal", "take", ["crystal"]),
     ("rip the crystal out", "take", ["crystal"]),
@@ -77,7 +77,7 @@ PHRASINGS = [
     ("collect the mushrooms", "take", ["mushrooms"]),
     ("gather some mushrooms", "take", ["mushrooms"]),
     ("harvest the mushrooms", "take", ["mushrooms"]),
-    ("wrench the sword free", "take", ["sword", "free"]),
+    ("wrench the spear free", "take", ["spear", "free"]),
     ("dig up the roots", "take", ["roots"]),
     ("I'd like to carefully rip out the crystal", "take", ["crystal"]),
     # --- using --------------------------------------------------------------
@@ -86,7 +86,7 @@ PHRASINGS = [
     ("hold the focus up to the wall", "use", ["focus", "wall"]),
     ("look through the focus", "use", ["focus"]),
     ("peer through the focus", "use", ["focus"]),
-    ("brandish the sword", "use", ["sword"]),
+    ("brandish the spear", "use", ["spear"]),
     ("use the focus on the wall", "use", ["focus", "wall"]),
     # --- striking -----------------------------------------------------------
     ("strike the white crystal", "strike", ["white", "crystal"]),
@@ -95,18 +95,21 @@ PHRASINGS = [
     ("ring the white crystal", "strike", ["white", "crystal"]),
     ("whack the amber crystal", "strike", ["amber", "crystal"]),
     # --- the horn -----------------------------------------------------------
+    ("wear the armor", "use", ["armor"]),
+    ("put on the armor", "use", ["armor"]),
+    ("don the armour", "use", ["armour"]),
     ("blow the horn", "blow", ["horn"]),
     ("sound the horn", "blow", ["horn"]),
     ("play the horn", "blow", ["horn"]),
     ("blow into the horn", "blow", ["horn"]),
     ("toot the horn", "blow", ["horn"]),
     # --- talking ------------------------------------------------------------
-    ("talk to the hermit", "talk", ["hermit"]),
-    ("speak with the druid", "talk", ["druid"]),
-    ("ask the scout", "talk", ["scout"]),
-    ("chat with the warrior", "talk", ["warrior"]),
-    ("greet the hermit", "talk", ["hermit"]),
-    ("say hello to the hermit", "talk", ["hermit"]),
+    ("talk to melia", "talk", ["melia"]),
+    ("speak with the dryad", "talk", ["dryad"]),
+    ("ask the satyr", "talk", ["satyr"]),
+    ("chat with the lapith", "talk", ["lapith"]),
+    ("greet melia", "talk", ["melia"]),
+    ("say hello to melia", "talk", ["melia"]),
     ("hello", "talk", []),
     # --- fighting and mercy -------------------------------------------------
     ("fight the guardian", "fight", ["guardian"]),
@@ -119,16 +122,16 @@ PHRASINGS = [
     ("spare him", "spare", []),
     ("spare the guardian", "spare", ["guardian"]),
     ("show mercy", "spare", []),
-    ("lower my sword", "spare", ["sword"]),
-    ("sheathe the sword", "spare", ["sword"]),
-    ("put away my sword", "spare", ["sword"]),
+    ("lower my spear", "spare", ["spear"]),
+    ("sheathe my blade", "spare", ["blade"]),
+    ("put away my spear", "spare", ["spear"]),
     ("let him go", "spare", []),
     ("stand down", "spare", []),
     ("stop", "spare", []),
     # --- everything else ----------------------------------------------------
     ("drop the map", "drop", ["map"]),
     ("put down the map", "drop", ["map"]),
-    ("set down the sword", "drop", ["sword"]),
+    ("set down the spear", "drop", ["spear"]),
     ("i", "inventory", []),
     ("inventory", "inventory", []),
     ("check my bag", "examine", ["bag"]),
@@ -188,8 +191,8 @@ def test_act_one_with_different_words():
     """Play Act I again, saying everything differently."""
     game = Game.new()
     assert "map" in game.do("I'd like to dig around in the roots").lower()
-    walk_to(game, "druids_grove")
-    assert "Again" in game.do("say hello to the old druid")
+    walk_to(game, "melias_grove")
+    assert "Not as you left" in game.do("say hello to the dryad")
     walk_to(game, "mystic_mountains")
     game.do("linger until dawn")
     assert "singing" in game.do("listen")
@@ -201,3 +204,4 @@ def test_act_one_with_different_words():
     game.do("tap the white crystal")
     game.do("hit the amber crystal")
     assert "you can read them" in game.do("ring the violet crystal")
+    assert "ash_spear" in game.inventory

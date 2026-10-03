@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from centaur.game import MAX_HEALTH, Game
-from centaur.content import ITEMS, PHASE_TURNS, PHASES, START_TURN
+from centaur.content import ITEMS, PHASE_TURNS, PHASES, PROLOGUE, START_TURN
 from centaur.play import DEFAULT_SAVE, INTRO, load, save
 
 HERE = Path(__file__).parent
@@ -90,7 +90,7 @@ def state() -> dict:
         save(game, SAVE_PATH)
         fresh = is_new or game.turn == START_TURN
         return {"description": description, "scene": game.scene(), "intro": INTRO if fresh else None,
-                "fresh": fresh, **_view(game)}
+                "prologue": list(PROLOGUE), "fresh": fresh, **_view(game)}
 
 
 @app.post("/api/command")
@@ -107,7 +107,7 @@ def new_game() -> dict:
     with _lock:
         game = Game.new()
         save(game, SAVE_PATH)
-        return {"description": game.describe(), "scene": game.scene(), "intro": INTRO, "fresh": True, **_view(game)}
+        return {"description": game.describe(), "scene": game.scene(), "intro": INTRO, "prologue": list(PROLOGUE), "fresh": True, **_view(game)}
 
 
 def main() -> None:
