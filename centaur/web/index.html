@@ -528,15 +528,21 @@
   let busy = false;
   let initial = null;
 
-  async function api(path, body) {
-    const options = body === undefined ? {} : {
+  // When the server keeps no save file (as when hosted), the game lives here
+  // in the browser: it goes with every request and comes back updated. Held in
+  // memory too, so a browser that blocks storage can still play this visit.
+  let saved = store.get("save", null);
+
+  async function api(path, body = {}) {
+    const response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    };
-    const response = await fetch(path, options);
+      body: JSON.stringify({ ...body, save: saved }),
+    });
     if (!response.ok) throw new Error(`Server error ${response.status}`);
-    return response.json();
+    const state = await response.json();
+    if (state.save) { saved = state.save; store.set("save", saved); }
+    return state;
   }
 
   // ---------------- log ----------------
@@ -1100,7 +1106,7 @@
   }
 
   async function freshGame() {
-    const state = await api("/api/new", {});
+    const state = await api("/api/new");
     lastInventory = null;
     history = []; historyIndex = 0; store.set("history", history);
     initial = state;
@@ -1150,7 +1156,7 @@
       addBlock({ command: text, ...state.block });
       render(state);
     } catch (err) {
-      addBlock({ command: text, system: `(The connection to the world wavers: ${err.message}. Is the server still running?)` });
+      addBlock({ command: text, system: `(The connection to the world wavers: ${err.message}. Try again in a moment.)` });
     } finally {
       busy = false;
       input.disabled = false;

@@ -15,6 +15,7 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from typing import Optional
 
 from centaur.content import PROLOGUE, PROLOGUE_TITLE
 from centaur.game import Game
@@ -34,20 +35,34 @@ Cold earth. The smell of moss. You open your eyes.
 """
 
 
-def load(path: Path):
+def to_save_data(game: Game) -> dict:
+    """The save format: what goes in the save file, or in the browser when the web game keeps no files."""
+    return {"version": SAVE_VERSION, "game": game.to_dict()}
+
+
+def from_save_data(data) -> Optional[Game]:
+    """The game in a save, or None if it's from an older version or isn't a valid save."""
     try:
-        data = json.loads(path.read_text())
         if data.get("version") != SAVE_VERSION:
             return None
-        return Game.from_dict(data["game"])
-    except (OSError, ValueError, KeyError, TypeError):
+        game = Game.from_dict(data["game"])
+        game.tile  # a save pointing somewhere off the map is no save at all
+        return game
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return None
+
+
+def load(path: Path) -> Optional[Game]:
+    try:
+        return from_save_data(json.loads(path.read_text()))
+    except (OSError, ValueError):
         return None
 
 
 def save(game: Game, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"version": SAVE_VERSION, "game": game.to_dict()}))
+    tmp.write_text(json.dumps(to_save_data(game)))
     tmp.replace(path)
 
 

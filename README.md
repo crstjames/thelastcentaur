@@ -21,6 +21,12 @@ python -m centaur.play       # or in the terminal
 
 Both use the same save file (`~/.thelastcentaur/save.json`), so you can switch between them mid-game. Use **New game** in the browser, or `python -m centaur.play --new`, to start over.
 
+## Deploy
+
+The repo deploys to [Vercel](https://vercel.com) as is: import it as a new project (no settings to change), or run `vercel` from the repo root. `api/index.py` serves the game and `vercel.json` sends every path to it.
+
+Hosted, the server keeps no files. Each player's game is saved in their own browser, so every visitor has their own game with no login or database. A hosted game doesn't share a save with the terminal game, and clearing the browser's site data loses it.
+
 ## Develop
 
 ```bash
@@ -36,6 +42,7 @@ python -m centaur.worldgen      # print the map (spoilers)
 | `centaur/solver.py` | Proves every puzzle can be solved from clues the player can actually find |
 | `centaur/worldgen.py` | Builds the fixed 10×10 world |
 | `centaur/server.py`, `centaur/web/` | Browser UI |
+| `api/index.py`, `vercel.json` | Vercel deployment |
 | `centaur/play.py` | Terminal UI |
 
 See [`centaur/DESIGN.md`](centaur/DESIGN.md) for how the engine works and how to add a puzzle.
