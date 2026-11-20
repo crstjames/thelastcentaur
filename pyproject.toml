@@ -1,0 +1,14 @@
+[project]
+name = "thelastcentaur"
+version = "0.1.0"
+description = "A text adventure in the spirit of Myst."
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+]
+
+# Vercel serves this FastAPI app. Hosted, the server keeps no files:
+# each player's game is saved in their own browser (see centaur/server.py).
+[tool.vercel]
+entrypoint = "centaur.server:app"

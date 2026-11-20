@@ -9,7 +9,7 @@ Where the game is kept depends on how the server is run:
 
 - Run locally (`python -m centaur.server`), it reads and writes the same save
   file as the terminal game, so you can switch between the two mid-game.
-- Run by a host that imports `app` (such as Vercel, via api/index.py), it
+- Run by a host that imports `app` (such as Vercel, via pyproject.toml), it
   keeps no files. Each browser keeps its own save and sends it with every
   request; the response carries the updated save back. So every visitor has
   their own game, with no login or database. Set CENTAUR_SAVE to use a file

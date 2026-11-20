@@ -142,9 +142,9 @@ def test_local_server_keeps_no_save_in_the_browser(client):
 
 
 def test_vercel_entry_point_serves_the_game(hosted):
-    import importlib.util
+    tomllib = pytest.importorskip("tomllib")  # Python 3.11+
     from pathlib import Path
-    spec = importlib.util.spec_from_file_location("vercel_index", Path(__file__).parents[2] / "api" / "index.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    assert "The Last Centaur" in TestClient(module.app).get("/").text
+    config = tomllib.loads((Path(__file__).parents[2] / "pyproject.toml").read_text())
+    module, name = config["tool"]["vercel"]["entrypoint"].split(":")
+    app = getattr(importlib.import_module(module), name)
+    assert "The Last Centaur" in TestClient(app).get("/").text
